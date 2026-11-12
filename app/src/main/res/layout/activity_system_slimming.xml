@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- System Slimming (fork only, v3): the on-TV manual debloat screen. Same visual
+     language as the web-settings screen: dark background, 72dp side padding,
+     34sp title, grey 16sp secondary text. The list is two RecyclerViews side
+     by side below the header: recommended on the left, optional on the right.
+     D-pad walks the rows, Back leaves.
+     v6: the whole screen scrolls (the header alone is ~92% of a 540dp screen, so
+     a weight-1 list got ~0dp and no row was ever visible). The RecyclerView is
+     wrap_content with nested scrolling off, so it lays out every row and the
+     ScrollView carries the scrolling; the first row still takes focus on load. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF101419"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="72dp"
+        android:paddingEnd="72dp"
+        android:paddingTop="38dp"
+        android:paddingBottom="38dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/system_slimming"
+        android:textColor="#FFFFFFFF"
+        android:textSize="34sp" />
+
+    <TextView
+        android:id="@+id/slimDevice"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:textColor="#FFACB8C1"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/slimList"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:textColor="#FFFFFFFF"
+        android:textSize="20sp" />
+
+    <TextView
+        android:id="@+id/slimSource"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:textColor="#FFACB8C1"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/slimStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:textColor="#FFFFFFFF"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/slimNotes"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:textColor="#FFACB8C1"
+        android:textSize="14sp"
+        android:maxLines="4"
+        android:ellipsize="end"
+        android:visibility="gone" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="@string/slimming_note"
+        android:textColor="#FFACB8C1"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/slimDailyChoice"
+        style="@style/SettingsRow"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_marginTop="18dp"
+        android:focusable="true"
+        android:clickable="true" />
+
+    <TextView
+        android:id="@+id/slimPickChoice"
+        style="@style/SettingsRow"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_marginTop="10dp"
+        android:focusable="true"
+        android:clickable="true"
+        android:text="@string/slimming_pick"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/slimRetryChoice"
+        style="@style/SettingsRow"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_marginTop="10dp"
+        android:focusable="true"
+        android:clickable="true"
+        android:text="@string/slimming_retry"
+        android:visibility="gone" />
+
+    <!-- Two columns: recommended (left) and optional (right). Each column is
+         its own RecyclerView, wrap_content with nested scrolling off, so the
+         ScrollView carries the scrolling exactly as the single list did. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingEnd="8dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/slimming_recommended"
+                android:textColor="#FFFFFFFF"
+                android:textSize="20sp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/slimRowsRec"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false"
+                android:layout_marginTop="10dp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingStart="8dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/slimming_optional"
+                android:textColor="#FFFFFFFF"
+                android:textSize="20sp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/slimRowsOpt"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false"
+                android:layout_marginTop="10dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

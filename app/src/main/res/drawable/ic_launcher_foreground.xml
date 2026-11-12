@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive-icon foreground (v5): the approved v4 artwork's TV outline, as a vector so it stays
+     sharp at every density. Geometry sampled from the approved source
+     (media-generation-cleanyourtv-launcher-icon-v3, 1600px): the screen outline spans x 470-1130,
+     y 586-1010 (fractions 0.294-0.706 x 0.366-0.631) with a small stand bar centred under it at
+     x 662-937, y 1013-1030. In the 108dp adaptive-icon viewport that is a 44x28dp rounded screen
+     at (32,40)-(76,68) and a stand line at y 69. The outline sits inside the 72dp safe zone
+     (18-90dp), so no mask shape (circle, squircle, teardrop) crops it. The source stroke's bright
+     core is ~0.34dp; 1dp keeps it legible at launcher sizes. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:pathData="M34,40 H74 Q76,40 76,42 V66 Q76,68 74,68 H34 Q32,68 32,66 V42 Q32,40 34,40 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:pathData="M45,69 H63" />
+</vector>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive-icon background (v5): the approved v4 artwork's gradient, full-bleed. Sampled from the
+     approved source (media-generation-cleanyourtv-launcher-icon-v3): teal at the top, indigo at the
+     bottom, (14,49,85) at the centre, i.e. a vertical linear gradient. No panel, no frame: the
+     background layer must reach every edge, or a mask shape leaves a white tile behind it (v4). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:type="linear"
+        android:angle="270"
+        android:startColor="#025559"
+        android:centerColor="#0E3155"
+        android:endColor="#1E0E55" />
+</shape>

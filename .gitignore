@@ -1,0 +1,20 @@
+# Gradle / Android build outputs
+.gradle/
+build/
+app/build/
+tests/build/
+
+# Local config (SDK path, machine-specific)
+local.properties
+
+# Android Studio
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+
+# Misc
+/captures
+.externalNativeBuild/
+.cxx/
