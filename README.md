@@ -29,7 +29,7 @@
 | **安装** | 安装 APK | 安装 APK | 自己编译后装；社区有预编译 APK |
 | **包名** | com.gathin.slimtv | app.orchard.tv | com.gathin.tvhome |
 | **更新** | 软件内更新 | 覆盖安装 | — |
-| **二维码（官网设置）** | ❌ 已砍 | ✅ | — |
+| **二维码（官网设置）** | ❌ 已砍（https://aerial.qust.me/update/#setup=1&v=1.95&f=guard&tv=192.168.100.136） | ✅ | — |
 | **CEC 自动切信号源** | ❌ 没接 | ✅ | — |
 | **输出设备** | ❌ 没接 | ✅ | — |
 | **Vidaa 信号源** | ❌ 没接 | ✅ | — |
