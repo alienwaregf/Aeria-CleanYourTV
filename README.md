@@ -21,9 +21,9 @@
 | **电视桌面** | ✅ | ✅ | ✅ |
 | **系统瘦身** | ✅ | ❌ | ✅ |
 | **瘦身怎么做** | 电视里直接做：按型号拉清单，两列分建议/自选，一键先清数据再禁用 | — | 工具跑 `pm` 命令；launcher 须自己编译 |
-| **天气** | ✅ 彩云 + Open-Meteo，约 20 种，彩色 emoji，全国城市 + 区县，国标 12h 降雨分档，恶劣天气提醒 | ✅ Open-Meteo，7 种，矢量图标 | 插件提供 |
+| **天气** | ✅ 彩云 + Open-Meteo，约 20 种，彩色 emoji，全国城市 + 区县，国标 12h 降雨分档，恶劣天气提醒 | ✅ Open-Meteo，7 种纯白矢量图标 | 插件提供 |
 | **屏保 / 壁纸** | ✅ 航拍 4K /<br>![Dolby Vision](https://img.shields.io/badge/-Dolby%20Vision-black?logo=dolby) | ✅ 航拍 4K /<br>![Dolby Vision](https://img.shields.io/badge/-Dolby%20Vision-black?logo=dolby) | ✅ 主题 + 屏保插件 |
-| **图标** | 只用App默认图标 | 联网拉远程图标 | — |
+| **图标** | 只用App默认图标 | 部分App可联网拉远程图标 | — |
 | **语言** | 中 / 英 | 中 / 英 / 哈 / 俄 / 乌 | 31 种 |
 | **最低安卓** | 5.0+ | 5.0+ | 8.0+ |
 | **安装** | 装一个 APK | 装 APK | 自己编译后装；社区有预编译 APK |
