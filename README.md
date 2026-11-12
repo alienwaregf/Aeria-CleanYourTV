@@ -48,7 +48,7 @@
 
 ### 2. 装 APK
 
-先下载 APK：[Aeria-CleanYourTV.apk](https://github.com/alienwaregf/Aeria-CleanYourTV/releases/download/v1.89/Aeria-CleanYourTV.apk)
+先下载 APK：[Aeria-CleanYourTV.apk]([https://github.com/alienwaregf/Aeria-CleanYourTV/releases/download/v1.89/Aeria-CleanYourTV.apk](https://github.com/alienwaregf/Aeria-CleanYourTV/releases/download/v99/Aeria-CleanYourTV.apk))
 
 然后装到电视上：
 
