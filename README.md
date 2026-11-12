@@ -10,10 +10,10 @@
 
 [下载 APK](#安装) · [功能](#功能) · [自己编译](#自己编译) · [致谢](#致谢)
 
-![版本](https://img.shields.io/badge/版本-1.89-2997ff?style=flat-square)
+![版本](https://img.shields.io/badge/版本-软件内更新-2997ff?style=flat-square)
 ![包名](https://img.shields.io/badge/包名-com.gathin.slimtv-555555?style=flat-square)
-![Android](https://img.shields.io/badge/Android%20TV-10%2B-3ddc84?style=flat-square&logo=android&logoColor=white)
-![许可证](https://img.shields.io/badge/许可证-MIT-555555?style=flat-square)
+![Android](https://img.shields.io/badge/Android%20TV-5.0%2B-3ddc84?style=flat-square&logo=android&logoColor=white)
+![鸣谢](https://img.shields.io/badge/鸣谢-Aerial·CleanYourTV-555555?style=flat-square)
 
 </div>
 
