@@ -1,5 +1,3 @@
-<div align="center">
-
 # 📺 CleanYourTV 懒人版
 
 ### Aerial + CleanYourTV，二合一，一次装好。
@@ -9,34 +7,35 @@
 [下载 APK](#安装) · [对比](#对比) · [致谢](#致谢)
 
 ![版本](https://img.shields.io/badge/版本-软件内更新-2997ff?style=flat-square)
-![包名](https://img.shields.io/badge/包名-com.gathin.slimtv-555555?style=flat-square)
-![Android](https://img.shields.io/badge/Android%20TV-5.0%2B-3ddc84?style=flat-square&logo=android&logoColor=white)
-![鸣谢](https://img.shields.io/badge/鸣谢-Aerial·CleanYourTV-555555?style=flat-square)
 
-</div>
+![包名](https://img.shields.io/badge/包名-com.gathin.slimtv-555555?style=flat-square)
+
+![Android](https://img.shields.io/badge/Android%20TV-5.0%2B-3ddc84?style=flat-square&logo=android&logoColor=white)
+
+![鸣谢](https://img.shields.io/badge/鸣谢-Aerial·CleanYourTV-555555?style=flat-square)
 
 ---
 
 ## 对比
 
-|  | Aerial | CleanYourTV | CleanYourTV懒人版（我们） |
+|  | Aeria-CleanYourTV（我们） | Aerial | CleanYourTV |
 |---|---|---|---|
-| **定位** | 电视桌面 | 电视桌面 + 瘦身 | 桌面 + 瘦身，二合一 |
+| **定位** | 桌面 + 瘦身，二合一 | 电视桌面 | 电视桌面 + 瘦身 |
 | **电视桌面** | ✅ | ✅ | ✅ |
-| **系统瘦身** | ❌ | ✅ | ✅ |
-| **瘦身怎么做** | — | 工具跑 `pm` 命令；launcher 须自己编译 | 电视里直接做：按型号拉清单，两列分建议/自选，一键先清数据再禁用 |
-| **天气** | ✅ Open-Meteo，7 种，矢量图标 | 插件提供 | ✅ 彩云 + Open-Meteo，约 20 种，彩色 emoji，736 城，国标 12h 降雨分档，恶劣天气提醒 |
-| **屏保 / 壁纸** | ✅ 航拍 4K / 杜比视界 | ✅ 主题 + 屏保插件 | ✅ 航拍 4K / 杜比视界 |
-| **图标** | 联网拉远程图标 | — | 只用本机图标 |
-| **语言** | 中 / 英 / 哈 / 俄 / 乌 | 31 种 | 只留中 / 英 |
-| **最低安卓** | 5.0+ | 8.0+ | 5.0+ |
-| **安装** | 装 APK | 自己编译后装；社区有预编译 APK | 装一个 APK |
-| **包名** | app.orchard.tv | — | com.gathin.slimtv |
-| **更新** | 软件内更新 | — | 软件内更新 |
-| **二维码（官网设置）** | ✅ | — | ❌ 已砍 |
-| **CEC 自动切信号源** | ✅ | — | ❌ 没接 |
-| **输出设备** | ✅ | — | ❌ 没接 |
-| **Vidaa 信号源** | ✅ | — | ❌ 没接 |
+| **系统瘦身** | ✅ | ❌ | ✅ |
+| **瘦身怎么做** | 电视里直接做：按型号拉清单，两列分建议/自选，一键先清数据再禁用 | — | 工具跑 `pm` 命令；launcher 须自己编译 |
+| **天气** | ✅ 彩云 + Open-Meteo，约 20 种，彩色 emoji，全国城市 + 区县，国标 12h 降雨分档，恶劣天气提醒 | ✅ Open-Meteo，7 种，矢量图标 | 插件提供 |
+| **屏保 / 壁纸** | ✅ 航拍 4K / 杜比视界 | ✅ 航拍 4K / 杜比视界 | ✅ 主题 + 屏保插件 |
+| **图标** | 只用本机图标 | 联网拉远程图标 | — |
+| **语言** | 只留中 / 英 | 中 / 英 / 哈 / 俄 / 乌 | 31 种 |
+| **最低安卓** | 5.0+ | 5.0+ | 8.0+ |
+| **安装** | 装一个 APK | 装 APK | 自己编译后装；社区有预编译 APK |
+| **包名** | com.gathin.slimtv | app.orchard.tv | — |
+| **更新** | 软件内更新 | 软件内更新 | — |
+| **二维码（官网设置）** | ❌ 已砍 | ✅ | — |
+| **CEC 自动切信号源** | ❌ 没接 | ✅ | — |
+| **输出设备** | ❌ 没接 | ✅ | — |
+| **Vidaa 信号源** | ❌ 没接 | ✅ | — |
 
 > 以索尼 KD-43X85K 为例：清单默认 31 个建议禁用，另有 49 个按使用情况自选。国行本机没装的包会报 `Unknown package`，属于正常跳过；被索尼锁住的包改不了状态，会留着。
 
@@ -52,13 +51,13 @@
 
 ### 2. 装 APK
 
-先下载 APK：[CleanYourTV.apk](https://github.com/alienwaregf/Aeria-CleanYourTV/releases/download/untagged-6a4e1d89a323b05fc44a/CleanYourTV.apk)
+先下载 APK：[Aeria-CleanYourTV.apk](https://github.com/alienwaregf/Aeria-CleanYourTV/releases/download/v1.89/Aeria-CleanYourTV.apk)
 
 然后装到电视上：
 
 ```bash
 adb kill-server && adb start-server && adb connect <电视IP>:5555
-adb -s <电视IP>:5555 install -r CleanYourTV.apk
+adb -s <电视IP>:5555 install -r Aeria-CleanYourTV.apk
 ```
 
 装完按主页键，进的就是 CleanYourTV 懒人版。
