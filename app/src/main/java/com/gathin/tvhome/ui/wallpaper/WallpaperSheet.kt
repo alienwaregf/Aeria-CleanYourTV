@@ -1,0 +1,794 @@
+package com.gathin.tvhome.ui.wallpaper
+
+import android.content.Intent
+import android.os.Build
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.relocation.BringIntoViewResponder
+import androidx.compose.foundation.relocation.bringIntoViewResponder
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import com.gathin.tvhome.R
+import com.gathin.tvhome.SystemSlimmingActivity
+import com.gathin.tvhome.settings.AerialSettings
+import com.gathin.tvhome.settings.Restricted
+import com.gathin.tvhome.settings.RestrictedKind
+import com.gathin.tvhome.settings.FocusStyle
+import com.gathin.tvhome.settings.UiSounds
+import com.gathin.tvhome.settings.Effects
+import com.gathin.tvhome.system.Sounds
+import com.gathin.tvhome.ui.components.Pressable
+import com.gathin.tvhome.ui.components.consumeTaps
+import com.gathin.tvhome.ui.components.dismissOnTap
+import com.gathin.tvhome.ui.components.liquidGlass
+import com.gathin.tvhome.ui.components.smoothBackground
+import com.gathin.tvhome.ui.components.smoothBorder
+import com.gathin.tvhome.ui.components.smoothCut
+import com.gathin.tvhome.ui.theme.Glyph
+import com.gathin.tvhome.ui.theme.GlyphIcon
+import com.gathin.tvhome.ui.theme.Motion
+import com.gathin.tvhome.ui.theme.Palette
+import com.gathin.tvhome.ui.theme.Type
+import com.gathin.tvhome.wallpaper.PhoneServer
+import com.gathin.tvhome.wallpaper.AerialFormats
+import com.gathin.tvhome.wallpaper.AerialQuality
+import com.gathin.tvhome.wallpaper.AerialSet
+import com.gathin.tvhome.wallpaper.AerialStream
+import com.gathin.tvhome.wallpaper.ScreensaverMode
+import com.gathin.tvhome.system.SystemScreensaver
+import com.gathin.tvhome.wallpaper.Wallpaper
+import com.gathin.tvhome.wallpaper.WallpaperKind
+import com.gathin.tvhome.wallpaper.Wallpapers
+import com.gathin.tvhome.weather.Weather
+import com.gathin.tvhome.weather.WeatherKind
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
+import androidx.compose.ui.geometry.Size
+
+/**
+ * Wallpaper and screensaver, chosen on the TV. A sheet rises from the bottom and leaves the top of
+ * the screen showing Home, so a new wallpaper can be seen the moment it is chosen. A QR code on the
+ * right opens the same settings on a phone, where sending photos is easy.
+ */
+@Composable
+fun WallpaperSheet(
+    visible: Boolean,
+    onDismiss: () -> Unit,
+    hiddenCount: Int,
+    onHiddenApps: () -> Unit,
+    onStartScreensaver: () -> Unit,
+    onPin: (on: Boolean) -> Unit,
+    /** Kids and Elders mode's setup (behind the PIN). */
+    onKids: () -> Unit,
+    /** The sheet is all the way in (true) or not: Home need not draw under it then ([SheetCovers]). */
+    onSettled: (Boolean) -> Unit = {},
+    /** Draw the closed sheet once, nearly clear, so that its first opening is not its first draw (HomeScreen). */
+    warm: Boolean = false,
+) {
+    val context = LocalContext.current
+    var phoneUrl by remember { mutableStateOf<String?>(null) }
+    var qr by remember { mutableStateOf<ImageBitmap?>(null) }
+
+    BackHandler(enabled = visible, onBack = onDismiss)
+
+    // The phone page listens all along (PhoneServer.listen); the address is read again each time,
+    // as the TV's may have changed.
+    LaunchedEffect(visible) {
+        if (!visible) return@LaunchedEffect
+        val url = withContext(Dispatchers.IO) { PhoneServer.start(context) }
+        phoneUrl = url
+        qr = url?.let { withContext(Dispatchers.Default) { PhoneServer.qr(it).asImageBitmap() } }
+    }
+
+    val shown = remember { MutableTransitionState(false) }
+    shown.targetState = visible
+    val settled = shown.isIdle && shown.currentState
+    LaunchedEffect(settled) { onSettled(settled) }
+
+    AnimatedVisibility(visible = visible, enter = fadeIn(tween(220, easing = Motion.EaseOut)), exit = fadeOut(tween(180, easing = Motion.EaseOut)), modifier = Modifier.fillMaxSize()) {
+        // A tap above the sheet closes it, back to Control Center as Back does. Once the sheet is
+        // in, the dimming stops where it starts: the sheet is opaque.
+        Box(
+            Modifier.fillMaxSize().dismissOnTap(onDismiss).drawBehind {
+                val h = if (settled) size.height - SheetCovers.toPx() else size.height
+                drawRect(Color.Black.copy(alpha = 0.25f), size = Size(size.width, h))
+            },
+        )
+    }
+
+    // The sheet as it opens, or (takeFocus false) drawn once nearly clear for the warm-up.
+    val sheet: @Composable (takeFocus: Boolean) -> Unit = { takeFocus ->
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(SheetHeight)
+                .consumeTaps()
+                // Glass made from the wallpaper itself, opaque: Home is not blurred behind
+                // this sheet, so the wallpaper above it stays sharp while you choose, and the
+                // app grid must not show through.
+                .liquidGlass(SheetCorner, bottomCorners = false)
+                .padding(start = 40.dp, end = 32.dp, top = 24.dp),
+        ) {
+            val scroll = rememberScrollState()
+            val scope = rememberCoroutineScope()
+            // How Home looks, in the order you see it: the picture behind everything, how Home
+            // is laid out over it, what replaces it when idle, then the weather and the PIN.
+            // Settings sit in tvOS-style grouped rows; each group's note follows the focused row.
+            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(scroll).latestBringIntoView(scroll)) {
+                BasicText(stringResource(R.string.wp_title), style = Type.LargeTitle)
+                Spacer(Modifier.height(16.dp))
+                SectionTitle(R.string.wp_wallpaper)
+                WallpaperRows(takeFocus)
+                // A TV input's sound behind Home, wallpaper or focus preview alike: the
+                // switch shows whenever the TV has an input to show, not only while one
+                // is the wallpaper, because the focus preview runs with any wallpaper.
+                if (Wallpapers.items.any { it.kind == WallpaperKind.Source }) Group { note ->
+                    Choices(
+                        R.string.st_source_sound, null, note,
+                        listOf(true to R.string.st_on, false to R.string.st_off),
+                        AerialSettings.sourceSound, AerialSettings::chooseSourceSound, first = true,
+                    )
+                }
+                // Only for the owner's videos: whether keys stop them. The aerial films always move.
+                if (Wallpapers.isVideo()) Group { note ->
+                    Choices(
+                        R.string.st_play, stringResource(R.string.st_play_hint), note,
+                        listOf(false to R.string.st_play_still, true to R.string.st_play_always),
+                        AerialSettings.wallpaperAlwaysMoves, AerialSettings::chooseWallpaperAlwaysMoves, first = true,
+                    )
+                }
+
+                Spacer(Modifier.height(6.dp))
+                SectionTitle(R.string.st_home_layout)
+                // What is on Home and where; then the clock; then how the remote feels.
+                Group { note ->
+                    Choices(
+                        R.string.st_layout, stringResource(R.string.st_home_layout_hint), note,
+                        listOf(true to R.string.st_home_one_row, false to R.string.st_home_standard),
+                        AerialSettings.oneRowHome, AerialSettings::chooseOneRowHome, first = true,
+                    )
+                    // Two rows show the second row whole; only one row has a peek to hide.
+                    if (AerialSettings.oneRowHome) Choices(
+                        R.string.st_peek, stringResource(R.string.st_peek_hint), note,
+                        listOf(true to R.string.st_peek_show, false to R.string.st_peek_hide),
+                        AerialSettings.peekNextRow, AerialSettings::choosePeekNextRow,
+                    )
+                    Choices(
+                        R.string.st_columns, stringResource(R.string.st_columns_hint), note,
+                        AerialSettings.HOME_COLUMNS.map { it to it.toString() },
+                        AerialSettings.homeColumns, AerialSettings::chooseHomeColumns,
+                    )
+                    Choices(
+                        R.string.st_plate, stringResource(R.string.st_plate_hint), note,
+                        listOf(true to R.string.st_plate_glass, false to R.string.st_plate_none),
+                        AerialSettings.homePlate, AerialSettings::chooseHomePlate,
+                    )
+                    Choices(
+                        R.string.st_names, stringResource(R.string.st_names_hint), note,
+                        listOf(false to R.string.st_names_focused, true to R.string.st_names_all),
+                        AerialSettings.showAllNames, AerialSettings::chooseShowAllNames,
+                    )
+                    // Apps taken off Home are kept with the rest of how Home looks.
+                    SettingRow(R.string.st_hidden_apps, stringResource(R.string.st_hidden_apps_hint), note) {
+                        ActionChip(
+                            if (hiddenCount == 0) stringResource(R.string.st_hidden_none) else stringResource(R.string.st_hidden_count, hiddenCount),
+                            Glyph.ChevronRight,
+                            onHiddenApps,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Group { note ->
+                    Choices(
+                        R.string.st_clock, stringResource(R.string.st_clock_hint), note,
+                        listOf(false to R.string.st_clock_left, true to R.string.st_clock_right),
+                        AerialSettings.clockRight, AerialSettings::chooseClockRight, first = true,
+                    )
+                    Choices(
+                        R.string.st_clock_size, stringResource(R.string.st_clock_size_hint), note,
+                        listOf(false to R.string.st_clock_small, true to R.string.st_clock_large),
+                        AerialSettings.largeClock, AerialSettings::chooseLargeClock,
+                    )
+                    Choices(
+                        R.string.wp_weather, null, note,
+                        listOf(true to R.string.st_on, false to R.string.st_off),
+                        AerialSettings.showWeather, AerialSettings::chooseShowWeather,
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Group { note ->
+                    Choices(
+                        R.string.st_focus_style,
+                        stringResource(if (AerialSettings.focusStyle == FocusStyle.HighContrast) R.string.st_focus_high_hint else R.string.st_focus_standard_hint),
+                        note,
+                        listOf(FocusStyle.HighContrast to R.string.st_focus_high, FocusStyle.Standard to R.string.st_focus_standard),
+                        AerialSettings.focusStyle, AerialSettings::chooseFocusStyle, first = true,
+                    )
+                    Choices(
+                        R.string.st_sounds,
+                        stringResource(if (AerialSettings.uiSounds == UiSounds.Tv) R.string.st_sounds_tv_hint else R.string.st_sounds_hint),
+                        note,
+                        listOf(UiSounds.Tv to R.string.st_sounds_tv, UiSounds.Aerial to R.string.st_sounds_aerial, UiSounds.Off to R.string.st_off),
+                        AerialSettings.uiSounds, { AerialSettings.chooseUiSounds(it); Sounds.prepare() },
+                    )
+                    Choices(
+                        R.string.st_effects,
+                        stringResource(
+                            if (AerialSettings.effects == Effects.Auto && AerialSettings.lowEnd) R.string.st_effects_auto_lite_hint
+                            else R.string.st_effects_hint,
+                        ),
+                        note,
+                        listOf(Effects.Auto to R.string.st_effects_auto, Effects.Full to R.string.st_effects_full, Effects.Lite to R.string.st_effects_lite),
+                        AerialSettings.effects, AerialSettings::chooseEffects,
+                    )
+                }
+
+                Spacer(Modifier.height(22.dp))
+                SectionTitle(R.string.wp_screensaver)
+                Group { note ->
+                    SettingRow(
+                        R.string.ss_kind,
+                        when {
+                            Wallpapers.screensaver == ScreensaverMode.Videos -> stringResource(R.string.ss_videos_hint)
+                            Wallpapers.screensaver == ScreensaverMode.System -> stringResource(R.string.ss_system_hint)
+                            Wallpapers.screensaverFollows -> stringResource(R.string.ss_follow_hint)
+                            AerialSettings.backStartsScreensaver -> stringResource(R.string.ss_back_hint)
+                            else -> null
+                        },
+                        note, first = true,
+                    ) { ScreensaverChoice(onStartScreensaver) }
+                    // Only the qualities this TV can play; a 1080p-only TV has nothing to choose.
+                    val qualities = remember { AerialFormats.supported(context) }
+                    if (qualities.size > 1) {
+                        // The films kept on the TV (AerialSet, AerialStream): how many, how much
+                        // space at most, and how they change. In place of the quality's own note,
+                        // as a note shows two lines at most.
+                        val keeps = stringResource(
+                            R.string.ss_aerial_keeps,
+                            remember { android.text.format.Formatter.formatShortFileSize(context, AerialStream.keepLimit(context)) },
+                            AerialSet.MAX,
+                        )
+                        Choices(
+                            R.string.ss_quality, keeps, note,
+                            listOf(AerialQuality.Auto to R.string.ss_quality_auto, AerialQuality.Hd to R.string.ss_quality_hd) +
+                                listOf(AerialQuality.Uhd to R.string.ss_quality_uhd, AerialQuality.DolbyVision to R.string.ss_quality_dv)
+                                    .filter { it.first in qualities },
+                            AerialSettings.aerialQuality, AerialSettings::chooseAerialQuality,
+                        )
+                    }
+                    // The clock screensaver is its clock, and the others show none.
+                    if (Wallpapers.screensaver == ScreensaverMode.Aerial || Wallpapers.screensaver == ScreensaverMode.Photos) Choices(
+                        R.string.ss_show_time, stringResource(R.string.ss_show_time_hint), note,
+                        listOf(true to R.string.st_on, false to R.string.st_off),
+                        AerialSettings.screensaverClock, AerialSettings::chooseScreensaverClock,
+                    )
+                    // The firmware's screensaver starts on the firmware's timer: Aerial's delay
+                    // did nothing there, and Xiaomi's 1 minute came before the 5 chosen (issue #675).
+                    if (Wallpapers.screensaver == ScreensaverMode.System) SettingRow(R.string.ss_delay, null, note) {
+                        val delay = remember { SystemScreensaver.firmwareDelayMs(context) }
+                        BasicText(
+                            when {
+                                delay == null -> stringResource(R.string.ss_delay_system)
+                                delay == 0L -> stringResource(R.string.ss_delay_system_off)
+                                else -> stringResource(R.string.ss_delay_system_minutes, ((delay + 30_000) / 60_000).coerceAtLeast(1).toInt())
+                            },
+                            style = Type.Body.copy(color = Palette.SecondaryLabel),
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
+                    } else Choices(
+                        R.string.ss_delay, null, note,
+                        AerialSettings.screensaverChoices.map {
+                            it to if (it == AerialSettings.NEVER) stringResource(R.string.ss_never) else stringResource(R.string.ss_minutes, it)
+                        },
+                        AerialSettings.screensaverMinutes, AerialSettings::chooseScreensaverMinutes,
+                    )
+                    Choices(
+                        R.string.ss_back, stringResource(R.string.ss_back_choice_hint), note,
+                        listOf(true to R.string.ss_back_on, false to R.string.ss_back_off),
+                        AerialSettings.backStartsScreensaver, AerialSettings::chooseBackStartsScreensaver,
+                    )
+                }
+
+                Spacer(Modifier.height(22.dp))
+                SectionTitle(R.string.wp_weather)
+                Group(stringResource(if (Weather.chosen) R.string.wp_weather_chosen else R.string.wp_weather_guessed)) { note ->
+                    SettingRow(R.string.wp_weather_city, null, note, first = true) { WeatherValue() }
+                }
+
+                // One row says what it is; a title over it would only repeat it.
+                Spacer(Modifier.height(10.dp))
+                Group(stringResource(R.string.st_pin_hint)) { note ->
+                    SettingRow(R.string.st_pin, null, note, first = true) {
+                        PinChoice(onPin, onFocused = { scope.launch { scroll.animateScrollTo(scroll.maxValue) } })
+                    }
+                    SettingRow(R.string.st_kids, stringResource(R.string.st_kids_hint), note) {
+                        // The last row that takes focus: bring the note under it into view too.
+                        Box(Modifier.onFocusChanged { if (it.hasFocus) scope.launch { scroll.animateScrollTo(scroll.maxValue) } }) {
+                            ActionChip(
+                                when {
+                                    !Restricted.enabled -> stringResource(R.string.st_off)
+                                    Restricted.kind == RestrictedKind.Kids -> stringResource(R.string.kids_kind_kids)
+                                    else -> stringResource(R.string.kids_kind_elders)
+                                },
+                                Glyph.ChevronRight,
+                                onKids,
+                            )
+                        }
+                    }
+                }
+                // System slimming, under Personalize: the current model's list, one row opening it.
+                Spacer(Modifier.height(10.dp))
+                Group { note ->
+                    SettingRow(R.string.system_slimming, stringResource(R.string.slimming_note), note, first = true) {
+                        // The last row that takes focus: bring the note under it into view too.
+                        Box(Modifier.onFocusChanged { if (it.hasFocus) scope.launch { scroll.animateScrollTo(scroll.maxValue) } }) {
+                            ActionChip(
+                                stringResource(R.string.slimming_open),
+                                Glyph.ChevronRight,
+                            ) { context.startActivity(Intent(context, SystemSlimmingActivity::class.java)) }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(24.dp))
+            }
+            Spacer(Modifier.width(28.dp))
+            PhoneCard(phoneUrl, qr)
+        }
+    }
+
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        // The first opening composed the sheet and gave the GPU its pictures, glyphs and shaders
+        // for the first time: frames of 250 and 316 ms, 1.16 s for the slide-in, against about
+        // 140 ms at worst on later openings (Xiaomi MiTV-MFTR0). Drawn once at 1% while Home is
+        // idle, without focus (HomeScreen, as Control Center), the first opening is like the next.
+        if (warm && !visible) Box(Modifier.graphicsLayer { alpha = 0.01f }) { sheet(false) }
+        AnimatedVisibility(
+            visibleState = shown,
+            enter = fadeIn(tween(200, easing = Motion.EaseOut)) + slideInVertically(tween(380, easing = Motion.Drawer)) { it / 3 },
+            exit = fadeOut(tween(160, easing = Motion.EaseOut)) + slideOutVertically(tween(200, easing = Motion.EaseOut)) { it / 4 },
+        ) {
+            sheet(true)
+        }
+    }
+}
+
+/**
+ * Every wallpaper in one row, in the order most people want them: the moving aerial, Bing's photo
+ * of the day, the owner's own photos, then a few of the built-in pictures and "Follow App". Past
+ * daily photos and the rest of the built-ins are left out unless one of them is the current
+ * choice. The focused card's note is under the row, as under a group of settings.
+ */
+@Composable
+private fun WallpaperRows(takeFocus: Boolean) {
+    val items = Wallpapers.items
+    val selected = Wallpapers.selectedId
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        if (!takeFocus) return@LaunchedEffect
+        withFrameNanos { }
+        runCatching { first.requestFocus() }
+    }
+    val dailyTitle = stringResource(R.string.wp_daily_latest)
+    val rotateTitle = stringResource(R.string.wp_photos_rotate)
+    val videosTitle = stringResource(R.string.wp_videos_rotate)
+    val list = remember(items, selected, dailyTitle, rotateTitle, videosTitle) {
+        buildList {
+            addAll(items.filter { it.kind == WallpaperKind.Live })
+            // Each video on its own, and with two or more one card that plays them in turn (#762).
+            val videos = items.filter { it.kind == WallpaperKind.Video && it.id != Wallpapers.VIDEOS }
+            if (videos.size > 1 || selected == Wallpapers.VIDEOS) add(Wallpaper(Wallpapers.VIDEOS, WallpaperKind.Video, videosTitle))
+            addAll(videos)
+            if (items.any { it.kind == WallpaperKind.Daily }) add(Wallpaper(Wallpapers.LATEST_DAILY, WallpaperKind.Daily, dailyTitle))
+            addAll(items.filter { it.kind == WallpaperKind.Daily && it.id == selected })
+            val photos = items.filter { it.kind == WallpaperKind.Photo }
+            // With two or more, one card takes turns through all of them, one a day (#27).
+            if (photos.size > 1) add(Wallpaper(Wallpapers.ROTATE_PHOTOS, WallpaperKind.Photo, rotateTitle))
+            addAll(photos)
+            addAll(items.filter { it.kind == WallpaperKind.Builtin && (it.id in Wallpapers.FEATURED_BUILTINS || it.id == selected) })
+            addAll(items.filter { it.kind == WallpaperKind.Auto })
+            // The inputs' pictures last: a choice for a home with a set-top box, not the usual one.
+            addAll(items.filter { it.kind == WallpaperKind.Source })
+        }
+    }
+    var note by remember { mutableStateOf<String?>(null) }
+    // A row clips to its bounds, and the focused card grows by 8%: room on the left for that,
+    // with the row moved back by as much so the cards still line up with the titles.
+    LazyRow(
+        modifier = Modifier.offset(x = (-10).dp).drawWithContent {
+            // Keep the cards out of the phone column on old GPUs (#557), independently of the
+            // scroll layer's clip. Leave vertical room for the focused card's 8% zoom.
+            val focusRoom = 16.dp.toPx()
+            clipRect(top = -focusRoom, bottom = size.height + focusRoom) {
+                this@drawWithContent.drawContent()
+            }
+        },
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+        contentPadding = PaddingValues(start = 14.dp, end = 24.dp, top = 6.dp, bottom = 4.dp),
+    ) {
+        items(list, key = { it.id }) { wp ->
+            val hint = wallpaperNote(wp)
+            WallpaperCard(wp, if (wp === list.first()) first else null, onFocused = { note = hint })
+        }
+    }
+    Box(Modifier.height(42.dp).padding(start = 4.dp, top = 8.dp)) {
+        note?.let { BasicText(it, style = Type.Caption.copy(color = Palette.TertiaryLabel), maxLines = 2, overflow = TextOverflow.Ellipsis) }
+    }
+}
+
+/** What a wallpaper card is, for the note under the row; null where its picture says it all. */
+@Composable
+private fun wallpaperNote(wp: Wallpaper): String? = when {
+    wp.kind == WallpaperKind.Live -> stringResource(R.string.wp_live)
+    wp.id == Wallpapers.VIDEOS -> stringResource(R.string.wp_videos_note)
+    wp.kind == WallpaperKind.Video -> stringResource(R.string.wp_video_note)
+    wp.kind == WallpaperKind.Source -> stringResource(R.string.wp_source_note)
+    wp.id == Wallpapers.LATEST_DAILY -> stringResource(R.string.wp_daily_note)
+    wp.id == Wallpapers.ROTATE_PHOTOS -> stringResource(R.string.wp_photos_rotate_note)
+    wp.kind == WallpaperKind.Photo -> stringResource(R.string.wp_photo_note)
+    wp.kind == WallpaperKind.Auto -> stringResource(R.string.wp_auto_note)
+    wp.kind == WallpaperKind.Daily -> wp.caption
+    else -> null
+}
+
+private val CardCorner = 12.dp
+
+@Composable
+private fun WallpaperCard(wp: Wallpaper, focusRequester: FocusRequester?, onFocused: () -> Unit) {
+    val selected = Wallpapers.selectedId == wp.id
+    // A moving wallpaper's card is made again when the frame it stopped on changes, also while the
+    // sheet is open: the film stopped as the sheet opened is decoded seconds later (Xiaomi MiTV-MFTR0).
+    val picture = if (wp.kind == WallpaperKind.Live || wp.kind == WallpaperKind.Video) Wallpapers.pictureVersion else 0
+    // The picture is cut to the card's continuous outline once, at the size it is drawn, so the
+    // card is one image draw and nothing is clipped (see SmoothCorners.kt).
+    val density = LocalDensity.current
+    val cardW = with(density) { 168.dp.roundToPx() }
+    val cardH = with(density) { 94.dp.roundToPx() }
+    val corner = with(density) { CardCorner.toPx() }
+    val thumb by produceState<ImageBitmap?>(null, wp.id, Wallpapers.items, picture, cardW, cardH) {
+        value = withContext(Dispatchers.Default) {
+            Wallpapers.thumbnail(wp.id)?.let { smoothCut(it, cardW, cardH, corner).asImageBitmap() }
+        }
+    }
+    Pressable(onClick = { Wallpapers.select(wp.id) }, focusRequester = focusRequester, focusedScale = 1.08f) { state ->
+        LaunchedEffect(state.focused) { if (state.focused) onFocused() }
+        Column(Modifier.width(168.dp)) {
+            Box(
+                Modifier
+                    .size(168.dp, 94.dp)
+                    .smoothBackground(if (thumb == null) Palette.Fill else Color.Transparent, CardCorner)
+                    .smoothBorder(
+                        if (state.focused || selected) 3.dp else 1.dp,
+                        when {
+                            state.focused -> Palette.Focus
+                            selected -> Palette.Focus.copy(alpha = 0.55f)
+                            else -> Palette.Hairline
+                        },
+                        CardCorner,
+                    ),
+            ) {
+                thumb?.let {
+                    Canvas(Modifier.fillMaxSize()) {
+                        drawImage(it, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()), filterQuality = FilterQuality.Medium)
+                    }
+                }
+                if (selected) {
+                    Box(
+                        Modifier.align(Alignment.TopEnd).padding(7.dp).size(22.dp).clip(CircleShape).background(Palette.Focus),
+                        contentAlignment = Alignment.Center,
+                    ) { GlyphIcon(Glyph.Check, Palette.OnFocus, 13.dp) }
+                }
+                // The aerial wallpaper moves; its card shows the last frame it stopped on.
+                if (wp.kind == WallpaperKind.Live || wp.kind == WallpaperKind.Video) {
+                    GlyphIcon(Glyph.Play, Color.White, 22.dp, Modifier.align(Alignment.BottomStart).padding(7.dp))
+                }
+                // An input's picture cannot be copied for a card: its mark over the dark picture.
+                if (wp.kind == WallpaperKind.Source) {
+                    GlyphIcon(Glyph.Hdmi, Color.White, 34.dp, Modifier.align(Alignment.Center))
+                }
+            }
+            Spacer(Modifier.height(6.dp))
+            BasicText(
+                wp.title, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                style = Type.Caption.copy(color = if (state.focused) Palette.Label else Palette.SecondaryLabel),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(title: Int) {
+    BasicText(stringResource(title), style = Type.Headline, modifier = Modifier.padding(start = 4.dp))
+    Spacer(Modifier.height(10.dp))
+}
+
+/**
+ * A card of setting rows, as in tvOS Settings, with one note under it: the focused row's, or
+ * [note] when the row has none or focus is elsewhere. The note keeps two lines of room so the
+ * sheet does not shift as focus moves.
+ */
+@Composable
+private fun Group(note: String? = null, rows: @Composable ColumnScope.(note: (String?) -> Unit) -> Unit) {
+    var focusedNote by remember { mutableStateOf<String?>(null) }
+    var inside by remember { mutableStateOf(false) }
+    var height by remember { mutableStateOf(0f) }
+    // A focused row asks the sheet to show it from its top down to the group's note: the
+    // screensaver's group sits at the sheet's bottom, and showing the row alone (on TV, Compose
+    // keeps a focused row about a third down) left the quality's note below the screen. One
+    // request, so the sheet scrolls once; a second scroll after the focus's own made the sheet
+    // jump back and forth on every press (TCL MT5879).
+    val withNote = remember {
+        @OptIn(ExperimentalFoundationApi::class)
+        object : BringIntoViewResponder {
+            override fun calculateRectForParent(localRect: Rect) =
+                Rect(localRect.left, localRect.top, localRect.right, maxOf(localRect.bottom, height))
+            override suspend fun bringChildIntoView(localRect: () -> Rect?) {}
+        }
+    }
+    @OptIn(ExperimentalFoundationApi::class)
+    Column(Modifier.fillMaxWidth().onSizeChanged { height = it.height.toFloat() }.bringIntoViewResponder(withNote)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .smoothBackground(Color.White.copy(alpha = 0.05f), 16.dp)
+                .onFocusChanged { inside = it.hasFocus },
+        ) { rows { focusedNote = it } }
+        Box(Modifier.height(38.dp).padding(start = 16.dp, top = 7.dp)) {
+            (if (inside) focusedNote ?: note else note)?.let {
+                BasicText(it, style = Type.Caption.copy(color = Palette.TertiaryLabel), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/** One row: the setting's name on the left, its control on the right, a hairline above all but the first. */
+@Composable
+private fun SettingRow(label: Int, hint: String?, note: (String?) -> Unit, first: Boolean = false, control: @Composable () -> Unit) {
+    if (!first) Box(Modifier.padding(start = 18.dp).fillMaxWidth().height(1.dp).background(Palette.Hairline))
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(58.dp)
+            .padding(start = 18.dp, end = 10.dp)
+            .onFocusChanged { if (it.hasFocus) note(hint) },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BasicText(stringResource(label), style = Type.Body, modifier = Modifier.weight(1f), maxLines = 1)
+        control()
+    }
+}
+
+/** A row of chips for one of a few values. */
+@Composable
+private fun <T> Choices(
+    label: Int,
+    hint: String?,
+    note: (String?) -> Unit,
+    options: List<Pair<T, Any>>,
+    current: T,
+    choose: (T) -> Unit,
+    first: Boolean = false,
+) {
+    SettingRow(label, hint, note, first) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            options.forEach { (value, text) ->
+                Chip(if (text is Int) stringResource(text) else text.toString(), on = current == value) { choose(value) }
+            }
+        }
+    }
+}
+
+/** Parental PIN on or off; either way goes through the PIN pad (issue #10). */
+@Composable
+private fun PinChoice(onPin: (on: Boolean) -> Unit, onFocused: () -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        listOf(false to R.string.st_pin_off, true to R.string.st_pin_on).forEach { (on, label) ->
+            Chip(stringResource(label), on = AerialSettings.pinSet == on, onFocused = onFocused) {
+                if (AerialSettings.pinSet != on) onPin(on)
+            }
+        }
+    }
+}
+
+/** Where the weather is for and what it is now. The city is set on the phone page. */
+@Composable
+private fun WeatherValue() {
+    val w = Weather.now
+    val place = Weather.place
+    val kind = w?.let {
+        stringResource(
+            when (it.kind) {
+                WeatherKind.Clear -> R.string.wx_clear
+                WeatherKind.PartlyCloudy -> R.string.wx_partly_cloudy
+                WeatherKind.Cloudy -> R.string.wx_cloudy
+                WeatherKind.Fog -> R.string.wx_fog
+                WeatherKind.Rain, WeatherKind.LightRain, WeatherKind.ModerateRain, WeatherKind.HeavyRain, WeatherKind.StormRain -> R.string.wx_rain
+                WeatherKind.LightSnow, WeatherKind.ModerateSnow, WeatherKind.HeavySnow, WeatherKind.StormSnow -> R.string.wx_snow
+                WeatherKind.Thunder -> R.string.wx_thunder
+                WeatherKind.Haze -> R.string.wx_haze
+                WeatherKind.Dust -> R.string.wx_dust
+                WeatherKind.Sand -> R.string.wx_sand
+                WeatherKind.Wind -> R.string.wx_wind
+                WeatherKind.Hail -> R.string.wx_hail
+                WeatherKind.Sleet -> R.string.wx_sleet
+            },
+        )
+    }
+    BasicText(
+        if (w != null) listOfNotNull(place, "${w.celsius}° $kind").joinToString(" · ") else stringResource(R.string.wp_weather_none),
+        style = Type.Body.copy(color = Palette.SecondaryLabel),
+        modifier = Modifier.padding(end = 8.dp),
+    )
+}
+
+/** A pill to pick one of a few options: a check on the chosen one, white when focused. */
+@Composable
+private fun Chip(label: String, on: Boolean, onFocused: (() -> Unit)? = null, onClick: () -> Unit) {
+    Pressable(onClick = onClick, focusedScale = 1.06f) { state ->
+        if (onFocused != null) LaunchedEffect(state.focused) { if (state.focused) onFocused() }
+        val bg by animateColorAsState(
+            when {
+                state.focused -> Palette.Focus
+                on -> Palette.FillStrong
+                else -> Palette.Fill
+            },
+            tween(140, easing = Motion.EaseOut), label = "chip-bg",
+        )
+        val fg = if (state.focused) Palette.OnFocus else Palette.Label
+        Row(
+            Modifier.clip(RoundedCornerShape(50)).drawBehind { drawRect(bg) }.height(40.dp).padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (on) GlyphIcon(Glyph.Check, fg, 14.dp)
+            BasicText(label, style = Type.Body.copy(color = fg))
+        }
+    }
+}
+
+/** A pill that does something rather than choosing a value: white when focused, a glyph after its label. */
+@Composable
+private fun ActionChip(label: String, glyph: Glyph, onClick: () -> Unit) {
+    Pressable(onClick = onClick, focusedScale = 1.06f) { state ->
+        val bg by animateColorAsState(if (state.focused) Palette.Focus else Palette.FillStrong, tween(140, easing = Motion.EaseOut), label = "action-bg")
+        val fg = if (state.focused) Palette.OnFocus else Palette.Label
+        Row(
+            Modifier.clip(RoundedCornerShape(50)).drawBehind { drawRect(bg) }.height(40.dp).padding(start = 20.dp, end = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            BasicText(label, style = Type.Body.copy(color = fg))
+            GlyphIcon(glyph, fg, 18.dp)
+        }
+    }
+}
+
+@Composable
+private fun ScreensaverChoice(onStart: () -> Unit) {
+    // The choice first, then the action that tries it.
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        listOf(
+            ScreensaverMode.Aerial to R.string.ss_aerial,
+            ScreensaverMode.Photos to R.string.ss_photos,
+            ScreensaverMode.Clock to R.string.ss_clock,
+            ScreensaverMode.Videos to R.string.ss_videos,
+            ScreensaverMode.System to R.string.ss_system,
+        ).forEach { (mode, label) ->
+            Chip(stringResource(label), on = Wallpapers.screensaver == mode) { Wallpapers.chooseScreensaver(mode) }
+        }
+        Spacer(Modifier.width(6.dp))
+        Pressable(onClick = onStart, focusedScale = 1.06f) { state ->
+            val bg by animateColorAsState(if (state.focused) Palette.Focus else Palette.FillStrong, tween(140, easing = Motion.EaseOut), label = "ss-start")
+            val fg = if (state.focused) Palette.OnFocus else Palette.Label
+            Row(
+                Modifier.clip(RoundedCornerShape(50)).drawBehind { drawRect(bg) }.height(40.dp).padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                GlyphIcon(Glyph.Play, fg, 14.dp)
+                BasicText(stringResource(R.string.ss_start), style = Type.Body.copy(color = fg))
+            }
+        }
+    }
+}
+
+@Composable
+private fun PhoneCard(url: String?, qr: ImageBitmap?) {
+    Column(Modifier.width(220.dp).padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            Modifier.size(176.dp).smoothBackground(Color.White, 18.dp).padding(14.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (qr != null) {
+                Image(qr, contentDescription = null, contentScale = ContentScale.Fit, filterQuality = FilterQuality.None, modifier = Modifier.fillMaxSize())
+            } else {
+                GlyphIcon(Glyph.Offline, Color.Black.copy(alpha = 0.35f), 40.dp)
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        BasicText(stringResource(R.string.wp_phone_title), style = Type.Headline)
+        Spacer(Modifier.height(4.dp))
+        BasicText(
+            stringResource(if (url != null) R.string.wp_phone_body else R.string.wp_phone_offline),
+            style = Type.Caption.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center),
+        )
+        if (url != null) {
+            Spacer(Modifier.height(6.dp))
+            // The whole address, token and all, to type into a computer's browser.
+            BasicText(url.removePrefix("http://"), style = Type.Caption.copy(color = Palette.SecondaryLabel))
+        }
+    }
+}
+
+private val SheetHeight = 360.dp
+private val SheetCorner = 30.dp
+
+/**
+ * How much of the screen's bottom the settled sheet hides whole: its height less its rounded top
+ * corners, under which Home shows. Home drew all of itself under the opaque sheet every frame,
+ * three full-screen layers and the tiles that nobody sees (Xiaomi MiTV-MFTR0).
+ */
+val SheetCovers = SheetHeight - SheetCorner
