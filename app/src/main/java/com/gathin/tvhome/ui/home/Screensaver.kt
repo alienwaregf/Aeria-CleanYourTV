@@ -122,6 +122,11 @@ fun Screensaver(visible: Boolean, apps: List<AppEntry>, now: LocalDateTime, skip
                 return@AnimatedVisibility
             }
             is SaverCarry.Still -> { PhotoSaver(now, skips.steps, carried.wallpaper, carried); return@AnimatedVisibility }
+            is SaverCarry.Source -> {
+                SourceWallpaper(carried.inputId, show = true)
+                Labels(null, now, shade = false)
+                return@AnimatedVisibility
+            }
             null -> Unit
         }
         val context = LocalContext.current
@@ -178,6 +183,9 @@ sealed interface SaverCarry {
         /** The photos have moved on over it: Home's picture can stop. */
         var covered by mutableStateOf(false)
     }
+
+    /** The TV input's picture, tuned as the screensaver (follow over a source wallpaper). */
+    class Source(val inputId: String) : SaverCarry
 }
 
 /**

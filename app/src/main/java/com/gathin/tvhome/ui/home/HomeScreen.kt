@@ -1144,6 +1144,7 @@ fun HomeScreen(
         Screensaver(visible = vm.screensaverVisible, apps = apps, now = now, skips = vm.screensaverSkips, carry = when {
                 filmSaver -> if (Wallpapers.isVideo()) SaverCarry.Video(homeVideo) else SaverCarry.Film(liveFilm)
                 stillCarry != null -> stillCarry
+                Wallpapers.isSource() && Wallpapers.screensaverFollows -> Wallpapers.sourceInput?.let { SaverCarry.Source(it) }
                 else -> null
             },
         )
