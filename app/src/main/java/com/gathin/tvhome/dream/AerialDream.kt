@@ -25,6 +25,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.gathin.tvhome.ui.home.LiveFilm
+import com.gathin.tvhome.ui.home.SaverCarry
 import com.gathin.tvhome.ui.home.Screensaver
 import com.gathin.tvhome.ui.home.ScreensaverSkips
 import com.gathin.tvhome.ui.home.rememberNow
@@ -70,7 +71,12 @@ class AerialDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
                 setContent {
                     CompositionLocalProvider(LocalDensity provides Density(canvas, LocalDensity.current.fontScale)) {
                         val now by rememberNow()
-                        Screensaver(visible = true, apps = emptyList(), now = now, skips = skips)
+                        Screensaver(
+                            visible = true, apps = emptyList(), now = now, skips = skips,
+                            carry = if (Wallpapers.isSource() && Wallpapers.screensaverFollows) {
+                                Wallpapers.sourceInput?.let { SaverCarry.Source(it) }
+                            } else null,
+                        )
                     }
                 }
             },
