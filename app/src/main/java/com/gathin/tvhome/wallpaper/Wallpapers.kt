@@ -257,6 +257,13 @@ object Wallpapers {
         GuardSetup.screensaverModeChanged(app)
     }
 
+    /** Back to following the wallpaper: no mode chosen, [screensaver] resolves from it. */
+    fun followScreensaver() {
+        chosenScreensaver = null
+        prefs.edit { putString("screensaver", FOLLOW) }
+        GuardSetup.screensaverModeChanged(app)
+    }
+
     /** The concrete wallpaper the selection points at today. */
     fun resolve(id: String = selectedId): Wallpaper? = when (id) {
         LATEST_DAILY -> items.firstOrNull { it.kind == WallpaperKind.Daily }

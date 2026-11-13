@@ -99,8 +99,8 @@ class PhoneServer private constructor(private val context: Context, private val 
                     json(state())
                 }
                 session.method == Method.POST && path == "/api/screensaver" -> {
-                    val mode = ScreensaverMode.of(form(session)["mode"])
-                    onMain { Wallpapers.chooseScreensaver(mode) }
+                    val mode = form(session)["mode"]
+                    onMain { if (mode == "follow") Wallpapers.followScreensaver() else Wallpapers.chooseScreensaver(ScreensaverMode.of(mode)) }
                     json(state())
                 }
                 session.method == Method.POST && path == "/api/setting" -> {
