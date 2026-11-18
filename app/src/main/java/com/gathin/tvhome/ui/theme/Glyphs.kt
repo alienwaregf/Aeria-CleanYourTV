@@ -28,12 +28,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import kotlin.math.roundToInt
 
-/**
- * Aerial's glyphs: filled Material Symbols Rounded (GlyphPaths), whose soft, even weight sits
- * closest to SF Symbols among icons an Android app may ship (SF Symbols are licensed for Apple
- * platforms only). Vector paths, rasterized at each UI size, in a square box.
- */
-enum class Glyph { Folder, Pencil, Wifi, Ethernet, Offline, Gear, Input, Speaker, SpeakerMuted, Switches, EyeSlash, Move, Info, Trash, ChevronRight, ChevronLeft, Check, Hdmi, Antenna, Av, Sun, Photo, Play, Bag, CloudSun, Calendar, Cast, Shield, Globe, Moon, Cloud, Download, Power, Usb, Home, Kids }
+enum class Glyph { Folder, Pencil, Wifi, Ethernet, Offline, Gear, Input, Speaker, SpeakerMuted, Switches, EyeSlash, Move, Info, Trash, ChevronRight, ChevronLeft, Check, Hdmi, Antenna, Av, Sun, Photo, Play, Bag, CloudSun, Calendar, Cast, Shield, Globe, Moon, Cloud, CloudRain, CloudSnow, CloudFog, CloudBolt, Download, Power, Usb, Home, Kids }
 
 @Composable
 fun GlyphIcon(glyph: Glyph, color: Color, size: Dp, modifier: Modifier = Modifier, level: Float = 1f) {
@@ -47,7 +42,6 @@ fun GlyphIcon(glyph: Glyph, color: Color, size: Dp, modifier: Modifier = Modifie
     })
 }
 
-/** [level] picks the variant of Wi-Fi (signal) and Speaker (volume): 0 to 1. */
 fun DrawScope.drawGlyph(glyph: Glyph, color: Color, level: Float = 1f) = drawGlyph(glyphPath(glyph, level), color)
 
 private fun glyphPath(glyph: Glyph, level: Float): String? {
@@ -91,6 +85,10 @@ private fun glyphPath(glyph: Glyph, level: Float): String? {
         Glyph.Globe -> GlyphPaths.LANGUAGE
         Glyph.Moon -> GlyphPaths.BEDTIME
         Glyph.Cloud -> GlyphPaths.CLOUD
+        Glyph.CloudRain -> GlyphPaths.RAINY
+        Glyph.CloudSnow -> GlyphPaths.WEATHER_SNOWY
+        Glyph.CloudFog -> GlyphPaths.FOGGY
+        Glyph.CloudBolt -> GlyphPaths.THUNDERSTORM
         Glyph.Download -> GlyphPaths.DOWNLOAD
         Glyph.Power -> GlyphPaths.POWER
         Glyph.Usb -> GlyphPaths.USB
@@ -106,20 +104,13 @@ private fun DrawScope.drawGlyph(data: String?, color: Color) {
         return
     }
     val path = parsed.getOrPut(data) { PathParser().parsePathString(data).toPath() }
-    // The symbols' box runs from y = -960 to 0.
     scale(s / 960f, pivot = Offset.Zero) {
         translate(0f, 960f) { drawPath(path, color) }
     }
 }
 
-/**
- * The KKTV U86V9 leaves hardware paths jagged. Rasterize UI glyphs once on the CPU at twice their
- * display size, then downsample. A white mask can be tinted without baking every focus color;
- * bitmap generation for app tiles still draws paths directly.
- */
 private fun glyphImage(data: String?, w: Int, h: Int): ImageBitmap {
     val large = ImageBitmap(w * 2, h * 2)
-    // Snap Switches' geometry at the final size, before scaling the canvas for antialiasing.
     CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(large), Size(w.toFloat(), h.toFloat())) {
         scale(2f, pivot = Offset.Zero) { drawGlyph(data, Color.White) }
     }
@@ -134,17 +125,9 @@ private val glyphImages = object : LruCache<Triple<String?, Int, Int>, ImageBitm
     override fun sizeOf(key: Triple<String?, Int, Int>, value: ImageBitmap) = value.width * value.height * 4
 }
 
-// Tiles are drawn off the main thread while the UI draws glyphs on it.
 private val parsed = java.util.concurrent.ConcurrentHashMap<String, Path>()
 private val switches = java.util.concurrent.ConcurrentHashMap<Float, Path>()
 
-/**
- * Two toggles, the Control Center glyph, as SF Symbols' switch.2 draws it (Material has no close
- * match): an outlined track with its knob solid on the left over a solid track with its knob cut
- * out on the right. At 17dp it is 34 px on a 1080p UI, so every edge is placed on whole pixels and
- * the tracks keep a clear gap; the earlier strokes fell between pixels and the tracks ran together
- * (Xiaomi MiTV-MFTR0). One path, so a translucent color does not darken where parts overlap.
- */
 private fun switchesPath(s: Float): Path {
     val line = maxOf(1f, kotlin.math.round(s / 16f))
     val h = kotlin.math.round(s * 0.36f)

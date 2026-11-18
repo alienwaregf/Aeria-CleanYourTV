@@ -7,12 +7,6 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import org.json.JSONObject
 
-/**
- * Names typed for apps on the phone page, by package name, kept in the settings prefs as JSON.
- * Home shows them in place of the app's own label (HomeViewModel.arrange); the tile art never
- * carries an app's name, so nothing is drawn again. Inputs are named in SourceLooks, folders in
- * LayoutStore.
- */
 object AppNames {
     private const val PREFS = "settings"
     private const val KEY = "app_names"
@@ -31,8 +25,8 @@ object AppNames {
 
     fun of(key: String): String? = all[key]
 
-    /** A blank name goes back to the app's own. Call on the main thread: Home watches [all]. */
     fun rename(key: String, name: String?) {
+        if (!::app.isInitialized) return
         val clean = name?.trim()?.take(MAX_NAME)?.takeIf { it.isNotEmpty() }
         all = if (clean == null) all - key else all + (key to clean)
         val json = JSONObject()

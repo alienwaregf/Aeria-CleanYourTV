@@ -146,25 +146,25 @@ class NetworkStatusTest {
     }
 
     @Test
-    fun missingPhysicalConnectionEvidenceKeepsExistingVpnFallback() {
+    fun missingPhysicalConnectionEvidenceReportsOther() {
         setDefault(ConnectivityManager.TYPE_VPN, NetworkCapabilities.TRANSPORT_VPN)
         val network = ShadowNetwork.newInstance(100)
         connectivity.addNetwork(network, null)
         connectivity.setNetworkCapabilities(network, capabilities(NetworkCapabilities.TRANSPORT_WIFI))
-        assertEquals(NetKind.Ethernet, SystemProbe.network(context).kind)
+        assertEquals(NetKind.Other, SystemProbe.network(context).kind)
     }
 
     @Test
-    fun unresolvedVpnKeepsExistingFallbackEvenWithStaleWifiInfo() {
+    fun unresolvedVpnReportsOtherEvenWithStaleWifiInfo() {
         setWifiInfo("Previously connected", -50)
         setDefault(ConnectivityManager.TYPE_VPN, NetworkCapabilities.TRANSPORT_VPN)
-        assertEquals(NetKind.Ethernet, SystemProbe.network(context).kind)
+        assertEquals(NetKind.Other, SystemProbe.network(context).kind)
     }
 
     @Test
-    fun unknownNonVpnTransportKeepsExistingFallback() {
+    fun unknownNonVpnTransportReportsOther() {
         setDefault(ConnectivityManager.TYPE_MOBILE, NetworkCapabilities.TRANSPORT_CELLULAR)
-        assertEquals(NetKind.Ethernet, SystemProbe.network(context).kind)
+        assertEquals(NetKind.Other, SystemProbe.network(context).kind)
     }
 
     @Test

@@ -10,66 +10,42 @@
 
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <!-- Only to read the Wi-Fi network name. Granted over adb by tools/install.sh, never prompted. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
         tools:ignore="CoarseFineLocation" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <!-- Some Android 5/6 TV firmwares deny even their app-specific external cache without these. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="23" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="23" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Both granted only over ADB by tools/install.sh, never requested in the app:
-         - WRITE_SECURE_SETTINGS lets Aerial turn Home Guard back on after firmwares that
-           force-stop third-party apps on standby (Xiaomi) have switched it off.
-         - SYSTEM_ALERT_WINDOW is Android's exemption for opening Aerial right after boot. -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <!-- Brightness on TVs that keep it in the standard system setting; granted over ADB. -->
     <uses-permission android:name="android.permission.WRITE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Which app is in front, where a launcher hides from accessibility (Xiaomi PatchWall on
-         Android 6, issue #81); granted over ADB. -->
+    <uses-permission android:name="android.permission.READ_TV_LISTINGS" />
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
-    <!-- RevivalSync: the sync adapter that restarts Aerial after a force-stop. -->
     <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
     <uses-permission android:name="android.permission.WRITE_SYNC_SETTINGS" />
-    <!-- Up to Android 5.1 RevivalSync's account lookup and the account it adds need these; without
-         them the sync revival was never set up (LeTV X3-55 Pro, Android 5.0.1, issue #328).
-         Granted at install there. -->
     <uses-permission android:name="android.permission.GET_ACCOUNTS" android:maxSdkVersion="22" />
     <uses-permission android:name="android.permission.AUTHENTICATE_ACCOUNTS" android:maxSdkVersion="22" />
-    <!-- A home screen lists every launchable app by definition. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
-    <!-- Android 11 package visibility for the Skyworth/Coocaa source API: the TV's SDK provider
-         lists the ports and its TV activity opens one (SystemProbe.skyworthSources). -->
     <queries>
         <package android:name="com.skyworth.tv" />
         <provider android:authorities="com.skyworth.tv.sdk.provider" />
-        <!-- SystemProbe.coocaaInputPanel: coocaaInputPanel asks whether Coocaa's Quick Panel
-             service exists; without this the Android 11 visibility filter hides it. -->
         <package android:name="com.coocaa.os.ccosservice" />
-        <!-- SystemProbe.skyworthPicturePanel: on Skyworth/Coocaa TVs (75A7D) Control Center opens
-             the picture panel through SkySetting's exported HalfScreenService; without this the
-             Android 11 visibility filter hides the service. -->
         <package android:name="com.skyworth.setting" />
-        <!-- SystemProbe.openInputPicker: older Coocaa firmware's own source dialog. -->
         <intent>
             <action android:name="coocaa.intent.action.SOURCE_DIALOG" />
         </intent>
-        <!-- SystemSlimmingActivity opens the system app-details page for a package. -->
         <intent>
             <action android:name="android.settings.APPLICATION_DETAILS_SETTINGS" />
         </intent>
     </queries>
 
-    <!-- largeHeap: up to Android 7 bitmaps live on the Java heap, and LeTV X3-55 Pro (Android 5.0.1)
-         ran out of it drawing Home (issue #328). -->
     <application
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
@@ -81,13 +57,8 @@
         android:largeHeap="true"
         android:networkSecurityConfig="@xml/network_security_config">
 
-        <!-- TCL MT9655's picture interface (TvBacklightManager, see Brightness.kt TclPq); optional,
-             so TVs without it install as before (#656). -->
         <uses-library android:name="com.tcl.tv.display" android:required="false" />
 
-        <!-- The HOME intent filter is added by the "standard" flavor (src/standard).
-             Not in recent apps: where the firmware keeps Home for itself, Aerial's task is a standard
-             one and showed as a card first in the list that switched to nothing (MiTV-MFTR0, #324). -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -104,18 +75,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
-            <!-- Most Chinese TV launchers (Xiaomi PatchWall, Raybird, Huanshi) list only apps with
-                 this category: installed from a USB stick, Aerial had no icon to open it by
-                 (issues #207, #213). -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- System slimming (CleanYourTV): a normal launchable activity in the app grid, NOT a
-             home screen. Opens the per-model debloat list; tapping a row opens the system
-             app-details page, where the owner disables the package by hand. -->
         <activity
             android:name=".SystemSlimmingActivity"
             android:exported="true"

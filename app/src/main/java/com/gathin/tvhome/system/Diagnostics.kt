@@ -23,19 +23,8 @@ import com.gathin.tvhome.wallpaper.Wallpapers
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * What a maintainer without the reporter's TV needs to adapt Aerial to it, as Markdown to paste
- * into a GitHub issue (.github/ISSUE_TEMPLATE/device.yml). Shown on the phone page and printed by
- *   adb shell dumpsys activity com.gathin.tvhome/.MainActivity report
- * which tools/report.sh adds to what only a shell can read.
- *
- * Nothing personal: no account, serial number, Wi-Fi name, address, phone page token, weather city
- * or list of installed apps (only whether the packages Aerial treats specially are there). Log lines
- * have addresses masked, since a film URL or a peer can turn up in them.
- */
 object Diagnostics {
 
-    /** Packages Aerial looks for somewhere, by what they mean for it. */
     private val VENDOR_PACKAGES = listOf(
         "com.mitv.tvhome", "com.xiaomi.mitv.settings", "com.xiaomi.mitv.tvplayer", "com.xiaomi.mitv.hyper.screensaver",
         "com.tcl.settings", "com.tcl.tv", "com.tcl.MultiScreenInteraction_TV", "com.tcl.appmarket2",
@@ -47,14 +36,8 @@ object Diagnostics {
         "com.dangbeimarket",
     )
 
-    // AerialDiag is in DiagLog already; AerialWeather names the city.
     private val LOG_TAGS = listOf("AerialGuard", "AerialUpdates", "AerialStream", "AerialWallpaper", "AerialKonkaSources", "AndroidRuntime")
 
-    /**
-     * Whether ART has compiled Aerial with its profile yet. Installed without install.sh (which runs
-     * `compile -m speed`), Aerial runs interpreted until the system's background job compiles it,
-     * and Home's start takes about twice as long (Xiaomi MiTV-MFTR0: tiles at 0.8 s against 0.4 s).
-     */
     private fun compiled(context: Context): String {
         val profile = runCatching {
             val s = androidx.profileinstaller.ProfileVerifier.getCompilationStatusAsync().get(2, java.util.concurrent.TimeUnit.SECONDS)
@@ -62,9 +45,6 @@ object Diagnostics {
                 "profile state not readable on this Android"
             else "with profile=${s.isCompiledWithProfile}, profile waiting=${s.hasProfileEnqueuedForCompilation()}, code=${s.profileInstallResultCode}"
         }.getOrElse { "profile state unknown (${it.javaClass.simpleName})" }
-        // The compiled code beside the APK: a few hundred KB when only verified (interpreted), several
-        // MB when compiled (TCL MT5879, Android 11, "speed": the profile state is not readable there).
-        // The oat folder cannot be listed by the app, only opened by name.
         val oat = com.gathin.tvhome.update.SelfCompile.odexBytes(context)?.div(1024)
         return "$profile; odex ${oat?.let { "$it KB" } ?: "-"}"
     }
@@ -126,7 +106,6 @@ object Diagnostics {
         runCatching { com.gathin.tvhome.ui.home.filmGlassReport(context) }.getOrNull()?.let { appendLine("            film glass $it") }
         appendLine("```")
 
-        appendLine("```")
 
         appendLine()
         appendLine("**Brightness**")
@@ -148,7 +127,6 @@ object Diagnostics {
         }
         appendLine("```")
 
-        // What a maintainer copies into devices.json, as it is on this TV.
         appendLine()
         appendLine("**Device profile** (${DeviceProfile.origin(context)})")
         appendLine("```json")
@@ -223,13 +201,6 @@ object Diagnostics {
         else context.packageManager.getInstallerPackageName(context.packageName)
     }.getOrNull()
 
-    /**
-     * Android 13+: where Android says the APK came from. 3 is a local file (a USB stick, a file
-     * manager, Aerial's own update before 1.63): such an app gets ACCESS_RESTRICTED_SETTINGS denied
-     * and may not switch its accessibility service on, and Home Guard kept going off on two Android 14
-     * TVs installed that way (issues #811 #829); install.sh allows it. An app cannot read that op
-     * itself (it came out unknown on Xiaomi MiTV-MFTR0), so `adb shell appops get` tells.
-     */
     private fun restrictedSettings(context: Context): String {
         if (Build.VERSION.SDK_INT < 33) return ""
         val source = runCatching { context.packageManager.getInstallSourceInfo(context.packageName).packageSource }.getOrNull()
@@ -239,7 +210,6 @@ object Diagnostics {
     private fun granted(context: Context, permission: String) =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
-    // Android 12 and later refuse some keys outside the public API; those show as "unreadable".
     private fun secure(context: Context, key: String) = runCatching { Settings.Secure.getString(context.contentResolver, key) }.getOrElse { "unreadable" }
     private fun global(context: Context, key: String) = runCatching { Settings.Global.getString(context.contentResolver, key) }.getOrElse { "unreadable" }
     private fun system(context: Context, key: String) = runCatching { Settings.System.getString(context.contentResolver, key) }.getOrElse { "unreadable" }
@@ -248,12 +218,10 @@ object Diagnostics {
         Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, key) as String
     }.getOrNull()
 
-    /** This process's own lines (all an app may read), from Aerial's tags and crashes. */
     private fun logcat(): List<String> = runCatching {
         val args = listOf("logcat", "-d", "-v", "time", "-t", "400") + LOG_TAGS.map { "$it:V" } + "*:S"
         val p = ProcessBuilder(args).redirectErrorStream(true).start()
         val lines = p.inputStream.bufferedReader().use { it.readLines() }
-        // logcat -d ends by itself once it has printed the buffer.
         p.destroy()
         lines.takeLast(200)
     }.getOrElse { listOf("logcat unreadable: $it") }
@@ -262,7 +230,6 @@ object Diagnostics {
     private val MAC = Regex("""(?i)\b([0-9a-f]{2}:){5}[0-9a-f]{2}\b""")
     private val PHONE_PAGE = Regex(""":${PhoneServer.PORT}/\w+""")
 
-    /** Addresses out of a log line: a film URL's host stays, a LAN or peer address does not. */
     fun mask(line: String): String = line
         .replace(PHONE_PAGE, ":${PhoneServer.PORT}/<token>")
         .replace(IPV4, "<ip>")

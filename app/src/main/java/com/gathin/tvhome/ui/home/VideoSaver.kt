@@ -39,13 +39,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.withContext
 
-/**
- * A local, silent playlist, shared by Home and AerialDream. An empty or broken set falls back.
- * Over the owner's video wallpaper it goes on from it: the wallpaper's films in its order, from the
- * film and moment it is at (HomeVideo.start), and Home comes back on where it got to
- * (VideoSaverFrames), so wallpaper and screensaver are one film, as with the aerials. Over any
- * other wallpaper, all the videos shuffled.
- */
 @Composable
 internal fun VideoSaver(steps: SharedFlow<Int>, leaving: Boolean = false, onUnavailable: () -> Unit) {
     val context = LocalContext.current
@@ -64,7 +57,6 @@ internal fun VideoSaver(steps: SharedFlow<Int>, leaving: Boolean = false, onUnav
 private fun LocalFilms(
     films: List<ScreensaverVideo>?,
     start: Pair<String, Long>?,
-    /** Over the owner's video wallpaper: Home comes back on where this got to. */
     follows: Boolean,
     leaving: Boolean,
     steps: SharedFlow<Int>,
@@ -72,8 +64,6 @@ private fun LocalFilms(
 ) {
     val context = LocalContext.current
     val player = remember {
-        // As AerialSaver does: Home's wallpaper film starts again as Home resumes for a moment
-        // under the dream, and would hold the decoder this film needs (TCL MT5879).
         LiveFilm.onHome?.letDecoderGo()
         ExoPlayer.Builder(context).setLoadControl(
             DefaultLoadControl.Builder().setTargetBufferBytes(12 * 1024 * 1024)
@@ -89,7 +79,6 @@ private fun LocalFilms(
     var attempt by remember { mutableIntStateOf(0) }
     var playing by remember { mutableStateOf(false) }
     var aspect by remember { mutableFloatStateOf(16f / 9f) }
-    // Films that have shown a frame this time: a pause in one of those is not a broken file.
     val shown = remember { HashSet<String>() }
 
     fun skip(step: Int) {
@@ -100,7 +89,6 @@ private fun LocalFilms(
     fun failed() {
         playing = false
         if (player.mediaItemCount <= 1) { onUnavailable(); return }
-        // Only this session's queue changes. Never delete a film because one decoder rejected it.
         player.removeMediaItem(player.currentMediaItemIndex)
         player.prepare()
         attempt++
@@ -116,8 +104,6 @@ private fun LocalFilms(
                 if (videoSize.width > 0 && videoSize.height > 0) aspect = videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
             }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                // A film that ended hands over without a gap, and a single film starting over
-                // (REPEAT) may render no new first frame (it does on Xiaomi MiTV-MFTR0).
                 if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && reason != Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) playing = false
                 attempt++
             }
@@ -134,14 +120,9 @@ private fun LocalFilms(
         onDispose {
             player.removeListener(listener)
             player.release()
-            // The dream's window goes with no fade first: its last picture now, before Home is back.
             if (follows) VideoSaverFrames.apply()
         }
     }
-    // Over the owner's video wallpaper: every SAVER_PICTURE_EVERY_MS the key frame of where this is
-    // becomes the picture Home comes back on (VideoSaverFrames). Ahead by half a beat and the
-    // decoding's time, so the one kept is as often just ahead of where the screensaver is as just
-    // behind; at once on another film (a skip, the next in turn). Less often after a while.
     if (follows) LaunchedEffect(Unit) {
         VideoSaverFrames.latest = null
         val began = SystemClock.uptimeMillis()
@@ -160,13 +141,7 @@ private fun LocalFilms(
             VideoSaverFrames.make(context, film, at)?.let { if (!leavingNow) VideoSaverFrames.latest = it }
         }
     }
-    // Home's own screensaver fades out over Home: the picture is swapped as the fade begins, not
-    // under the fading film once it is over.
     LaunchedEffect(leaving) { if (leaving && follows) VideoSaverFrames.apply() }
-    // The list is read off the main thread, but the film's view is there from the first frame: a
-    // SurfaceView added to the dream's window after its first frame never got a surface, and the
-    // film played into nothing, a black screen (TCL MT5879, Android 11, issue #609). AerialSaver's
-    // view is in the first frame, which is why the aerial screensaver showed.
     LaunchedEffect(films) {
         val list = films ?: return@LaunchedEffect
         DiagLog.i("local screensaver: ${list.size} films")
@@ -185,8 +160,6 @@ private fun LocalFilms(
     LaunchedEffect(attempt, playing, films != null) {
         if (films == null || playing) return@LaunchedEffect
         delay(8_000)
-        // Only a film that never showed is dropped. One that played once and was then taken for a
-        // stall ended the owner's videos for the photos after one pass (Sony 85X95EK, issue #659).
         if (player.currentMediaItem?.mediaId in shown) DiagLog.i("local screensaver: no new frame for 8 s from a film that played; kept")
         else failed()
     }
@@ -208,13 +181,9 @@ private fun LocalFilms(
     }
 }
 
-/** The first picture of where the screensaver is, once its film has settled. */
 private const val FIRST_PICTURE_MS = 1_500L
-/** How often a picture of where the screensaver is, at first, then after a while (as SaverFrames). */
 private const val PICTURE_EVERY_MS = 5_000L
 private const val PICTURE_FAST_FOR_MS = 10 * 60_000L
 private const val PICTURE_SLOW_MS = 15_000L
-/** About what decoding a key frame in the app takes (1080p, TCL MT5879 and Xiaomi MiTV-MFTR0). */
 private const val PICTURE_DECODE_MS = 800L
-/** How often the loop looks for the screensaver going on to another film. */
 private const val FILM_LOOK_MS = 500L

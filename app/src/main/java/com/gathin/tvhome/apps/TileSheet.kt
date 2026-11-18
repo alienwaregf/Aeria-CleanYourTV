@@ -12,16 +12,6 @@ import android.util.Log
 import androidx.core.graphics.createBitmap
 import java.io.File
 
-/**
- * Every tile on one picture, for comparing how apps are drawn before and after a change to
- * [TileArtFactory]. Started from a computer (see ConfigReceiver):
- *
- *   adb shell am broadcast -a com.gathin.slimtv.CONFIG -n com.gathin.slimtv/.guard.ConfigReceiver --es export_tiles before
- *   adb pull /sdcard/Android/data/com.gathin.slimtv/files/tiles/before.png
- *
- * Installed apps come first, as Home draws them. APKs pushed to files/tiles/apks/ (from another
- * TV, say) follow, drawn as if installed; they only need their manifest and resources.
- */
 object TileSheet {
     private const val TAG = "AerialTiles"
     private const val COLUMNS = 6
@@ -66,7 +56,6 @@ object TileSheet {
         val out = File(dir, "$name.png")
         out.outputStream().use { sheet.compress(Bitmap.CompressFormat.PNG, 100, it) }
         sheet.recycle()
-        // Written as the app's user; ADB's shell may only read it if it is world-readable.
         out.setReadable(true, false)
         Log.i(TAG, "Wrote ${tiles.size} tiles to $out")
         return out

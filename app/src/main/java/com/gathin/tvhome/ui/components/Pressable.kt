@@ -38,31 +38,13 @@ class PressState {
     var focused by mutableStateOf(false)
     var pressed by mutableStateOf(false)
 
-    /** The press under way came from the remote; a finger on the control must not end it. */
     internal var byKey = false
 }
 
-/**
- * Takes taps that land on an overlay's panel, so they neither fall through to Home nor reach a
- * scrim around the panel that closes it.
- */
 fun Modifier.consumeTaps(): Modifier = pointerInput(Unit) { detectTapGestures { } }
 
-/**
- * A tap here closes the overlay. Add it only while the overlay is up: an idle pointer handler
- * still takes every touch from Home beneath it.
- */
 fun Modifier.dismissOnTap(onDismiss: () -> Unit): Modifier = pointerInput(Unit) { detectTapGestures { onDismiss() } }
 
-/**
- * A focusable control for the remote. It fires on key up, and only for a press that began on it:
- * when a long press opens a menu, the key-up that ends that press must not also choose the menu's
- * first item.
- *
- * A tap (touch screen or mouse, issue #60) does the same: it focuses the control and fires when the
- * finger lifts. Touches already go only to the control they began on, and a drag that turns into a
- * scroll cancels the tap.
- */
 @Composable
 fun Pressable(
     onClick: () -> Unit,
@@ -139,9 +121,6 @@ fun Pressable(
                 }
             }
             .focusable(enabled)
-            // After the focusable: the bounds a scroll container brings into view are then the
-            // card's own, not the 8% larger ones of the focus animation, which made a sheet or
-            // list shift a few pixels with every move of focus and settle back.
             .graphicsLayer { scaleX = scale; scaleY = scale },
     ) { content(state) }
 }

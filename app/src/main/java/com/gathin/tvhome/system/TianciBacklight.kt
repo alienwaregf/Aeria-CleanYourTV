@@ -12,13 +12,6 @@ import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/**
- * Optional Tianci/SkySDK byte-array IPC, verified on Skyworth 43H30 (1MC02_H30, Android 9),
- * TVOS-04.16.031.01.12. Descriptors and the configuration key were recovered from that firmware's
- * SkyIPCService / SkySystemService bytecode and checked by an ordinary-app read/write/readback.
- * Support requires the exported service, matching interface and a valid native backlight reply;
- * other firmware retains the legacy TCHotelApi path in Brightness.
- */
 internal object TianciBacklight {
     private const val CONNECTOR = "com.skyworth.framework.skysdk.ipc.IIPCConnector"
     private const val RECEIVER = "com.skyworth.framework.skysdk.ipc.ICmdReceiver"
@@ -31,7 +24,6 @@ internal object TianciBacklight {
     private var checked = false
     private var connection: Connection? = null
 
-    // Once a native read matches, failures must not redirect writes to Android's unrelated setting.
     @Volatile var supported = false
         private set
 
@@ -65,7 +57,6 @@ internal object TianciBacklight {
             }
             connection
         } ?: return null
-        // ServiceConnection callbacks use the main looper. Never wait for it from a key handler.
         if (Looper.myLooper() != Looper.getMainLooper()) native.ready.await(2, TimeUnit.SECONDS)
         return native.service
     }
@@ -98,7 +89,6 @@ internal object TianciBacklight {
         if (service.interfaceDescriptor != CONNECTOR) return null
         val id = service.call(1, read = { it.readInt() })
         check(id > 0)
-        // The synchronous channel needs a source registration, not an unsolicited command handler.
         val receiver = Binder().apply { attachInterface(null, RECEIVER) }
         service.call(4, { it.writeInt(id); it.writeString(context.packageName); it.writeStrongBinder(receiver) })
         try {
@@ -140,7 +130,6 @@ internal object TianciBacklight {
                 }, { it.createByteArray() }) ?: error("Missing Tianci reply")
                 envelope.unmarshall(packed, 0, packed.size)
                 envelope.setDataPosition(0)
-                // SkyCmdByte has an explicit size before each Parcel byte array's own size.
                 val headerSize = envelope.readInt()
                 check(headerSize in 0..packed.size && envelope.readInt() == headerSize)
                 val headerEnd = envelope.dataPosition() + ((headerSize + 3) and -4)

@@ -15,22 +15,13 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
 
-/**
- * Apple TV's aerial screensaver films. Aerial ships only the catalogue (assets/aerials.json, built
- * from Apple's public resources-16.tar): addresses and place names. The films themselves stream from
- * Apple's servers while the screensaver runs, the way the Apple TV plays them.
- */
 class Aerial(
     val id: String,
     val label: String,
     val category: String,
-    /** 1080p H.264, about 10 Mbps: plays everywhere. */
     val url: String,
-    /** 4K SDR HEVC, about 12 Mbps. */
     val uhd: String,
-    /** 4K Dolby Vision (profile 5, HEVC 10-bit), about 24 Mbps. */
     val dolbyVision: String,
-    /** (second, caption) pairs: tvOS changes the place name as the camera moves on. */
     val captions: List<Pair<Int, String>>,
 ) {
     fun captionAt(seconds: Int): String = captions.lastOrNull { it.first <= seconds }?.second ?: label
@@ -42,7 +33,6 @@ class Aerial(
     }
 }
 
-/** Which of Apple's files the screensaver streams. Auto takes the best this TV can play. */
 enum class AerialQuality(val key: String) {
     Auto("auto"), Hd("1080p"), Uhd("4k"), DolbyVision("dolby_vision");
 
@@ -51,21 +41,12 @@ enum class AerialQuality(val key: String) {
     }
 }
 
-/**
- * What this TV's decoders and display can play, asked once. A TV's UI is usually 1080p whatever
- * its panel (Xiaomi MiTV-MFTR0 reports a single 1920×1080 mode), so the panel cannot be asked;
- * the decoders can. 4K SDR costs about what the 1080p H.264 files do (12 against 10 Mbps), so a
- * TV that decodes it gets it. Dolby Vision needs a decoder for profile 5 at 4K and a display that
- * lists Dolby Vision: Apple's HDR files are profile 5, which has no HDR10 base layer to fall back
- * on, and decoded by anything else they come out green and purple.
- */
 object AerialFormats {
     @Volatile
     private var probed: Set<AerialQuality>? = null
 
     fun supported(context: Context): Set<AerialQuality> = probed ?: probe(context).also { probed = it }
 
-    /** [chosen], or for Auto the best supported; a choice the TV cannot play falls back too. */
     fun resolve(context: Context, chosen: AerialQuality): AerialQuality {
         val ok = supported(context)
         return if (chosen != AerialQuality.Auto && chosen in ok) chosen
@@ -73,29 +54,16 @@ object AerialFormats {
             ?: AerialQuality.Hd
     }
 
-    /**
-     * What the aerial wallpaper plays: as chosen, but never Dolby Vision. A TV in Dolby Vision mode
-     * shows the tiles over the film with Dolby's picture settings. A screensaver that carries the
-     * wallpaper's film on plays this too (Screensaver), so the two are one, with no switch.
-     */
     fun forWallpaper(context: Context): AerialQuality =
         resolve(context, AerialSettings.aerialQuality).let { if (it == AerialQuality.DolbyVision) AerialQuality.Uhd else it }
 
-    /**
-     * Whether a screensaver of aerials over the aerial wallpaper carries the wallpaper's film on, in
-     * its format. Auto does: going to Dolby Vision from the wallpaper's SDR showed black for 0.9–3.5 s
-     * (Xiaomi MiTV-MFTR0, one 4K decoder) and most TVs blink as they switch modes. Dolby Vision
-     * chosen by hand is played whatever that costs, from the wallpaper's film and moment.
-     */
     fun screensaverCarriesWallpaper(context: Context): Boolean =
         !(AerialSettings.aerialQuality == AerialQuality.DolbyVision && AerialQuality.DolbyVision in supported(context))
 
-    /** What a screensaver of aerials starts in; [overWallpaper]: it begins from the aerial wallpaper's film. */
     fun forScreensaver(context: Context, overWallpaper: Boolean): AerialQuality =
         if (overWallpaper && screensaverCarriesWallpaper(context)) forWallpaper(context)
         else resolve(context, AerialSettings.aerialQuality)
 
-    /** One step down, after a decoder failed on [quality]. */
     fun lower(quality: AerialQuality): AerialQuality = when (quality) {
         AerialQuality.DolbyVision -> AerialQuality.Uhd
         else -> AerialQuality.Hd
@@ -137,15 +105,6 @@ object Aerials {
         cache ?: load(context).also { cache = it }
     }
 
-    /**
-     * Silent catalogue refresh (merged build): the Apple aerial-film catalogue shipped in the
-     * APK (assets/aerials.json) goes stale as Apple adds films, so Home checks the catalogue
-     * published with the Aerial sources at most once a day and, when it parses and validates,
-     * stores it under filesDir/aerials.json, which [load] then prefers over the asset. Any
-     * failure is silent: the old catalogue (cached file, then the asset) keeps being used, and
-     * nothing is ever shown or retried noisily. The films themselves still stream from Apple.
-     * Called from MainActivity's start; it never blocks that thread.
-     */
     fun refreshIfStale(context: Context) {
         val app = context.applicationContext
         val prefs = app.getSharedPreferences("aerials_catalog", Context.MODE_PRIVATE)
@@ -158,7 +117,7 @@ object Aerials {
                 try {
                     if (c.responseCode !in 200..299) return@runCatching
                     val text = c.inputStream.use { it.readBytes().decodeToString() }
-                    val films = parse(text) // throws unless the catalogue validates
+                    val films = parse(text)
                     if (films.isEmpty()) return@runCatching
                     val dir = app.filesDir
                     val tmp = File(dir, "aerials.json.tmp")
@@ -186,7 +145,6 @@ object Aerials {
         )
     }
 
-    /** Parses and validates a catalogue: every film needs an id and an Apple video URL. */
     private fun parse(text: String): List<Aerial> {
         val zh = Locale.getDefault().language == "zh"
         val root = JSONObject(text)

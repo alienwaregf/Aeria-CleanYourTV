@@ -44,39 +44,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
 import java.io.File
 
-/**
- * Streams Apple's aerial films with Media3 ExoPlayer rather than the platform MediaPlayer, which on
- * TVs is the maker's own fork with its own network handling (TclNuPlayer on TCL 75S365C retried a
- * failing load 10 times over 34 s before reporting it, and every film started on a fresh connection).
- *
- * - One player per screensaver or wallpaper with the films kept (AerialSet) as a playlist, round and
- *   round, so the next film loads while the current one ends and they follow without a black gap.
- * - Short network timeouts and a single retry: a slow edge of Apple's CDN costs seconds, not a minute.
- * - These files keep their index (moov) at the very end, so a cold start is two round trips to Apple
- *   (the index, then the start of the film) before the first frame; [prepareSeek] and [prepareStart]
- *   fetch those ahead where the next start is known.
- * - Playback writes what it plays to a disk cache of up to [keepBytes], in every format: the few
- *   films kept come round again and play from disk the second time (owner, 2026-10-29; issue #843
- *   asked for a kept copy rather than the same film fetched again and again).
- */
 @OptIn(UnstableApi::class)
 object AerialStream {
     private const val TAG = "AerialStream"
 
-    /** The index is 115–170 KB in these files; a generous tail covers it. */
     private const val TAIL_BYTES = 1L * 1024 * 1024
 
-    /** The least the cache may take, where a quarter of the free space is less. */
     private const val CACHE_BYTES = 64L * 1024 * 1024
 
-    /**
-     * The most a kept film may take: Apple's films are 0.2-2.2 GB each in Dolby Vision and 0.2-1.1 GB
-     * in 4K SDR, so the two of a short film fit and a long one is kept in part. Never more than a
-     * quarter of the free space, for TVs with 8-16 GB in all (Sony 65X91J had 12 GB free, #843).
-     */
     const val KEEP_MAX_BYTES = 3_000_000_000L
 
-    /** The cache's limit; set when the cache opens. */
     @Volatile
     var keepBytes = CACHE_BYTES
         private set
@@ -85,14 +62,10 @@ object AerialStream {
     private var cache: SimpleCache? = null
     private val evictor = AerialEvictor { keepBytes }
 
-    /** One instance per process: SimpleCache locks its folder, and Home and the system screensaver share it. */
     private fun cache(context: Context): SimpleCache {
         return cache ?: synchronized(this) {
             cache ?: run {
                 val dir = File(context.applicationContext.cacheDir, "aerials")
-                // The limit before the cache opens: it reads what is on disk on a thread of its own,
-                // and evicted down to 64 MB while the limit was still that (TCL MT5879, 320 MB to 172
-                // after a restart).
                 val kept = dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
                 keepBytes = ((context.applicationContext.cacheDir.usableSpace + kept) / 4).coerceIn(CACHE_BYTES, KEEP_MAX_BYTES)
                 SimpleCache(dir, evictor, StandaloneDatabaseProvider(context.applicationContext)).also { cache = it }
@@ -100,12 +73,10 @@ object AerialStream {
         }
     }
 
-    /** What [keepBytes] comes to on this TV now, for Personalize to say; without opening the cache. */
     fun keepLimit(context: Context): Long =
         ((context.applicationContext.cacheDir.usableSpace + (cache?.cacheSpace ?: 0L)) / 4)
             .coerceIn(CACHE_BYTES, KEEP_MAX_BYTES)
 
-    /** Bytes on disk now, and the limit; for Diagnostics. */
     fun usage(context: Context): Pair<Long, Long> = cache(context).cacheSpace to keepBytes
 
     private fun http() = DefaultHttpDataSource.Factory()
@@ -115,18 +86,11 @@ object AerialStream {
     fun url(film: Aerial, quality: AerialQuality, overHttp: Boolean): String =
         film.url(quality).let { if (overHttp) it.replaceFirst("https://", "http://") else it }
 
-    /** Keyed by film and quality, not address, so the cached opener serves HTTP and HTTPS alike. */
     private fun key(film: Aerial, quality: AerialQuality) = "${film.id}@${quality.key}"
 
     fun mediaItem(film: Aerial, quality: AerialQuality, overHttp: Boolean): MediaItem =
         MediaItem.Builder().setUri(url(film, quality, overHttp)).setMediaId(film.id).setCustomCacheKey(key(film, quality)).build()
 
-    /**
-     * [decodeOnScreen]: the decoder starts only once the player has its SurfaceView, not on
-     * ExoPlayer's off-screen placeholder surface. Xiaomi MiTV-MFTR0's Dolby Vision decoder set up on
-     * the placeholder copies its frames out through the GPU (MStar's DIP), and keeps doing so on the
-     * SurfaceView it is handed later: the film plays, but not in Dolby Vision (issue #754).
-     */
     fun player(context: Context, quality: AerialQuality, decodeOnScreen: Boolean = false): ExoPlayer {
         val cache = cache(context)
         val source = CacheDataSource.Factory()
@@ -134,9 +98,6 @@ object AerialStream {
             .setUpstreamDataSourceFactory(http())
             .setCacheWriteDataSinkFactory(CacheDataSink.Factory().setCache(cache))
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-        // ExoPlayer's default video buffer is sized for phones (up to 128 MB); TVs here have 1–2 GB.
-        // 24 MB is 10–13 s of 1080p film, which is also when the next film starts loading; the 4K
-        // files get about as many seconds.
         val load = DefaultLoadControl.Builder()
             .setBufferDurationsMs(10_000, 30_000, 1_000, 2_000)
             .setTargetBufferBytes(
@@ -162,7 +123,6 @@ object AerialStream {
             }
     }
 
-    /** ExoPlayer's renderers, with a video renderer that never decodes onto the placeholder surface. */
     private class OnScreenRenderers(context: Context) : DefaultRenderersFactory(context) {
         override fun buildVideoRenderers(
             context: Context,
@@ -183,15 +143,8 @@ object AerialStream {
         }
     }
 
-    /** The boxes before the film's data: the player reads them, then seeks to the index. */
     private const val LEAD_BYTES = 256L * 1024
 
-    /**
-     * Fetches the index and the first boxes of [film] in [quality], about 1.3 MB, so that starting
-     * it mid-film needs one request to Apple, for the moment itself, rather than three. For the
-     * other format's player: the Dolby Vision screensaver going on from the aerial wallpaper's film,
-     * and the wallpaper going on from the screensaver's.
-     */
     suspend fun prepareSeek(context: Context, film: Aerial, quality: AerialQuality, overHttp: Boolean) =
         runInterruptible(Dispatchers.IO) {
             val cache = cache(context)
@@ -213,23 +166,14 @@ object AerialStream {
             }.onFailure { Log.w(TAG, "could not fetch the index of $key", it) }
         }
 
-    /** About 2 s of Dolby Vision film (24 Mbps), 4 of 4K SDR: enough to start without the network. */
     private const val START_BYTES = 6L * 1024 * 1024
 
-    /** A moment fetched ahead by [prepareStart]: film id, quality and where in it. */
     class Start(val film: String, val quality: AerialQuality, val atMs: Long)
 
     @Volatile
     var prepared: Start? = null
         private set
 
-    /**
-     * Fetches [film] in [quality] from [atMs] on, about 2-4 s of it, so a player started there
-     * plays from disk at once (0.5 s to the first frame on Xiaomi MiTV-MFTR0, against 1.8-2.7 s
-     * from Apple). For the Dolby Vision screensaver, fetched a few seconds before it starts at the
-     * moment the wallpaper's film will be at then (MainActivity). The byte where that moment starts
-     * comes from the film's index, read with Media3's MP4 extractor.
-     */
     suspend fun prepareStart(context: Context, film: Aerial, quality: AerialQuality, overHttp: Boolean, atMs: Long) {
         prepareSeek(context, film, quality, overHttp)
         runInterruptible(Dispatchers.IO) {
@@ -251,16 +195,8 @@ object AerialStream {
         }
     }
 
-    /**
-     * The key frame of [film]'s 1080p file nearest [atMs], at [w]×[h], read and decoded in this
-     * process (FilmKeyFrame), one at a time. From disk where the film was played in 1080p, else
-     * from Apple, about the index and the frame (0.3-0.8 MB), not kept.
-     */
     internal suspend fun keyFrame(context: Context, film: Aerial, atMs: Long, w: Int, h: Int, overHttp: Boolean): FilmKeyFrame.Frame =
         runInterruptible(keyFrames) {
-            // Behind whatever else wants the CPU: the screensaver starting beside it took 1.7-2.1 s
-            // to its first frame instead of 1.0 (Xiaomi MiTV-MFTR0). Given back after: the thread
-            // is one of Dispatchers.IO's.
             val tid = android.os.Process.myTid()
             val before = android.os.Process.getThreadPriority(tid)
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
@@ -273,11 +209,6 @@ object AerialStream {
             }
         }
 
-    /**
-     * The key frame of the owner's video [file] nearest [atMs], at [w]×[h], read and decoded in this
-     * process like [keyFrame]: off the hardware decoder the paused wallpaper player still holds,
-     * which the media server's retriever needed too (Hisense VIDAA_TV MTK9652, issue #1251).
-     */
     internal suspend fun keyFrameOfFile(file: java.io.File, key: String, atMs: Long, w: Int, h: Int): FilmKeyFrame.Frame =
         runInterruptible(keyFrames) {
             val tid = android.os.Process.myTid()
@@ -292,7 +223,6 @@ object AerialStream {
 
     private val keyFrames = Dispatchers.IO.limitedParallelism(1)
 
-    /** The film's index, as the player reads it: the boxes at the start, then the index at the end. */
     private fun seekMap(factory: CacheDataSource.Factory, uri: android.net.Uri, key: String): SeekMap {
         var map: SeekMap? = null
         val extractor = Mp4Extractor(SubtitleParser.Factory.UNSUPPORTED, 0)
@@ -320,7 +250,6 @@ object AerialStream {
         error("no index after 8 seeks")
     }
 
-    /** The file's size, from the Content-Range of a one-byte request. */
     private fun contentLength(uri: android.net.Uri): Long {
         val source = http().createDataSource()
         try {
@@ -334,7 +263,6 @@ object AerialStream {
     }
 }
 
-/** Media3's least-recently-used evictor, with its limit read when it is needed ([AerialStream.keepBytes]). */
 @OptIn(UnstableApi::class)
 private class AerialEvictor(private val limit: () -> Long) : CacheEvictor {
     private val spans = java.util.TreeSet<CacheSpan> { a, b ->

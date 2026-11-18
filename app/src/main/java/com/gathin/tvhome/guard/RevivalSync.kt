@@ -18,29 +18,13 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 
-/**
- * Brings Home Guard back after the firmware kills Aerial, where the notification listener cannot.
- *
- * Android 9 refuses every notification listener on a device with ro.config.low_ram=true
- * (NotificationManagerService.canUseManagedServices), which is what MiTV-MFTP0 is, so
- * RevivalListener never binds there. The sync framework has no such limit and still binds a
- * force-stopped app: the jobs belong to the system, so force-stop leaves them in place.
- *
- * Aerial registers a sync adapter, with an account of its own, on the "settings" authority.
- * SettingsProvider reports every write with syncToNetwork, so SyncManager runs a local sync
- * about 30 seconds after any setting changes, and the firmware's kill is itself such a write:
- * Android drops Aerial's accessibility service from enabled_accessibility_services. Xiaomi
- * switching ADB off on wake is another. Nothing is synced; the sync only starts Aerial's process.
- */
 object RevivalSync {
     const val TAG = "AerialGuard"
     private const val AUTHORITY = "settings"
 
     fun ensure(context: Context) {
-        // Accounts live in credential storage.
         if (!GuardSetup.isUserUnlocked(context)) return
         runCatching {
-            // Normally com.gathin.tvhome; an isolated test build must not share the owner's account.
             val accountType = context.packageName
             val accounts = AccountManager.get(context)
             val account = accounts.getAccountsByType(accountType).firstOrNull()
@@ -62,12 +46,8 @@ class RevivalSyncService : Service() {
 
     private class Adapter(context: Context) : AbstractThreadedSyncAdapter(context, false) {
         override fun onPerformSync(account: Account, extras: Bundle, authority: String, provider: ContentProviderClient, result: SyncResult) {
-            // Credential storage is still locked; the guard and the boot receiver catch up on unlock.
             if (!GuardSetup.isUserUnlocked(context)) return
             GuardSetup.ensureAdb(context)
-            // Runs after every settings write, mostly while the guard is fine (or not bound yet, right
-            // after Aerial is opened). Only a guard Android had switched off counts as a revival, or
-            // the LeTV check (GuardSetup.revivedOften) trips after a few writes.
             val turnedOn = GuardSetup.ensureEnabled(context)
             if (HomeGuardService.isRunning) return
             val now = SystemClock.elapsedRealtime()
@@ -75,10 +55,6 @@ class RevivalSyncService : Service() {
                 Log.i(RevivalSync.TAG, "revived by the sync framework")
                 GuardSetup.noteRevival(context)
             } else {
-                // Still enabled but not bound: XGIMI Z6X 4th gen (Android 8, low-RAM) kills Aerial's
-                // whole process and Android keeps the setting without binding the guard again
-                // (issue #1326). Not counted as a revival, and once a minute at most: the rebind's own
-                // writes start this sync again.
                 if (now - lastStalledRebindAt < STALLED_REBIND_GAP_MS) return
                 lastStalledRebindAt = now
                 Log.i(RevivalSync.TAG, "sync framework: Home Guard enabled but not bound")
@@ -93,7 +69,6 @@ class RevivalSyncService : Service() {
     }
 }
 
-/** The account type RevivalSync's account needs. It cannot sign in to anything. */
 class RevivalAccountService : Service() {
     private val authenticator by lazy { Authenticator(this) }
 

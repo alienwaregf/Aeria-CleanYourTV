@@ -36,16 +36,10 @@ import com.gathin.tvhome.ui.components.dismissOnTap
 import com.gathin.tvhome.ui.theme.Motion
 import com.gathin.tvhome.ui.theme.Type
 
-/**
- * An open folder, as on tvOS: its name over its apps, at Home's tile size, on Home blurred and
- * dimmed. Apps open from here as from Home; holding one gives its menu, which comes back here.
- * Back closes the folder, and focus returns to its tile.
- */
 @Composable
 fun FolderView(
     name: String?,
     apps: List<AppEntry>,
-    /** Open; the folder may still be on screen under its app's menu without taking keys. */
     visible: Boolean,
     enabled: Boolean,
     tileW: Dp,
@@ -61,11 +55,9 @@ fun FolderView(
     val requesters = remember { HashMap<String, FocusRequester>() }
     fun requester(key: String) = requesters.getOrPut(key) { FocusRequester() }
     var focusedKey by remember(shownName) { mutableStateOf<String?>(null) }
-    // The app whose menu is open: a closing menu hands focus to whatever lies under it first.
     var menuKey by remember(shownName) { mutableStateOf<String?>(null) }
 
     BackHandler(enabled = visible && enabled, onBack = onDismiss)
-    // On opening, the first app; back from a menu, the app it was for, or its neighbour if it left.
     LaunchedEffect(visible, enabled, shownApps) {
         if (!visible || !enabled) return@LaunchedEffect
         withFrameNanos { }
@@ -86,7 +78,6 @@ fun FolderView(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    // Room around the grid for a focused tile's zoom and its name.
                     .padding(start = 56.dp, end = 56.dp, top = 56.dp, bottom = 48.dp),
             ) {
                 BasicText(

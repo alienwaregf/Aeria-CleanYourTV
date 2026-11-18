@@ -81,7 +81,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
-/** Keeps the last non-null value, so an overlay still has its content while it animates out. */
 @Composable
 fun <T : Any> rememberLatest(value: T?): T? {
     val holder = remember { arrayOfNulls<Any>(1) }
@@ -90,7 +89,6 @@ fun <T : Any> rememberLatest(value: T?): T? {
     return holder[0] as T?
 }
 
-/** A row in a glass menu: transparent at rest, the tvOS white plate when focused. */
 @Composable
 fun MenuRow(
     glyph: Glyph,
@@ -136,17 +134,11 @@ private enum class MenuPage { Main, Folders, Rename, Device }
 
 private val MenuWidth = 250.dp
 
-/**
- * Long-press menu, opening out of the tile it belongs to. Choosing a folder or a folder's name
- * opens a list in the same menu; Back returns from it.
- */
 @Composable
 fun AppMenu(
     app: AppEntry?,
     anchor: Rect?,
-    /** The menu belongs to an app inside a folder. */
     inFolder: Boolean,
-    /** The folders on Home, for Move to Folder. */
     folders: List<Folder>,
     onMove: (String) -> Unit,
     onHide: (String) -> Unit,
@@ -154,11 +146,8 @@ fun AppMenu(
     onUninstall: (String) -> Unit,
     onUnpin: (String) -> Unit,
     onResetIcon: (String) -> Unit,
-    /** Opens [AppEntry.key] when the TV is switched on, or stops opening it. */
     onBootTarget: (String) -> Unit,
-    /** What is plugged into a pinned input, by its input id; null puts the input's own tile back. */
     onSourceDevice: (String, SourceDevice?) -> Unit,
-    /** Into folder id, or a new folder when null. */
     onToFolder: (String, String?) -> Unit,
     onOutOfFolder: (String) -> Unit,
     onRenameFolder: (String, String) -> Unit,
@@ -174,8 +163,6 @@ fun AppMenu(
     var page by remember(shownApp.key, visible) { mutableStateOf(MenuPage.Main) }
     val folder = shownApp.folder
     val holder = folders.firstOrNull { shownApp.key in it.apps }
-    // A look at the disk (and a hash, for an input): once per app, not on each recomposition of the
-    // menu as it grows in.
     val customIcon = remember(shownApp.key, CustomIcons.version) { CustomIcons.has(shownApp.key) }
 
     BackHandler(enabled = visible) { if (page != MenuPage.Main) page = MenuPage.Main else onDismiss() }
@@ -190,7 +177,6 @@ fun AppMenu(
     Box(
         Modifier
             .fillMaxSize()
-            // A tap beside the menu closes it, as Back does.
             .then(if (visible) Modifier.dismissOnTap(onDismiss) else Modifier)
             .layout { measurable, constraints ->
                 val margin = 24.dp.roundToPx()
@@ -199,7 +185,6 @@ fun AppMenu(
                     maxHeight = (constraints.maxHeight - margin * 2).coerceAtLeast(0),
                 ))
                 val gap = 18.dp.roundToPx()
-                // Submenus have different heights; place the measured menu inside the canvas (#1097).
                 val below = shownAnchor.bottom + gap + p.height <= constraints.maxHeight - margin
                 val y = (if (below) shownAnchor.bottom + gap else shownAnchor.top - gap - p.height)
                     .roundToInt().coerceIn(margin, (constraints.maxHeight - margin - p.height).coerceAtLeast(margin))
@@ -247,7 +232,6 @@ fun AppMenu(
                             }
                             MenuRow(Glyph.Folder, stringResource(R.string.menu_to_folder), { page = MenuPage.Folders }, trailing = "›")
                             if (shownApp.source != null) {
-                                // A pinned TV input: no app info or uninstall, and "remove" unpins it.
                                 MenuRow(Glyph.Input, stringResource(R.string.menu_source_device), { page = MenuPage.Device }, trailing = "›")
                                 if (customIcon) {
                                     MenuRow(Glyph.Photo, stringResource(R.string.menu_reset_icon), { onResetIcon(shownApp.key) })
@@ -255,13 +239,11 @@ fun AppMenu(
                                 MenuRow(Glyph.EyeSlash, stringResource(R.string.menu_unpin_source), { onUnpin(shownApp.key) })
                             } else {
                                 MenuRow(Glyph.EyeSlash, stringResource(R.string.menu_hide), { onHide(shownApp.key) })
-                                // A picture chosen on the phone page; changing it is done there.
                                 if (customIcon) {
                                     MenuRow(Glyph.Photo, stringResource(R.string.menu_reset_icon), { onResetIcon(shownApp.key) })
                                 }
                                 if (shownApp.shortcut == null) MenuRow(Glyph.Info, stringResource(R.string.menu_info), { onInfo(shownApp.key) })
                             }
-                            // What the TV starts on, for homes that switch it on to watch television.
                             val boots = shownApp.source?.let { it.id == AerialSettings.bootSource } ?: (shownApp.key == AerialSettings.bootApp)
                             MenuRow(
                                 if (boots) Glyph.Check else Glyph.Power,
@@ -275,15 +257,11 @@ fun AppMenu(
                     }
                     MenuPage.Folders -> {
                         MenuRow(Glyph.Folder, stringResource(R.string.menu_new_folder), { onToFolder(shownApp.key, null) }, focusRequester = first)
-                        // The folder the app is already in is not offered.
                         folders.filter { it.id != holder?.id }.forEach { f ->
                             MenuRow(Glyph.Folder, f.name, { onToFolder(shownApp.key, f.id) })
                         }
                     }
                     MenuPage.Device -> {
-                        // Picking one names the tile after the device, as folders take a name from
-                        // a list: typing on a remote is slow. A name of one's own is typed on the
-                        // phone page. The tile's current choice comes first, ticked.
                         val source = shownApp.source
                         val current = source?.let { SourceLooks.of(it.id)?.device }
                         val choices = listOfNotNull(current) + listOf(null) + SourceDevice.entries.filter { it != current }
@@ -300,7 +278,6 @@ fun AppMenu(
                     MenuPage.Rename -> {
                         val names = LocalContext.current.resources.getStringArray(R.array.folder_names).toList()
                         val current = folder?.name
-                        // The folder's own name first, ticked, so OK on it changes nothing.
                         (listOfNotNull(current) + names.filter { it != current }).forEachIndexed { i, name ->
                             MenuRow(
                                 if (name == current) Glyph.Check else Glyph.Pencil, name,
@@ -317,11 +294,8 @@ fun AppMenu(
 
 private val MiniCorner = 10.dp
 
-/** A small, flat copy of a tile for lists. */
 @Composable
 fun MiniTile(app: AppEntry, focused: Boolean, modifier: Modifier = Modifier) {
-    // As AppTile: the artwork cut to the continuous outline once, in the background, and until then
-    // drawn as it is inside the layer's plain rounded clip, which holds the outline.
     var px by remember { mutableStateOf(IntSize.Zero) }
     val corner = with(LocalDensity.current) { MiniCorner.toPx() }
     val face by produceState<ImageBitmap?>(null, app.art.back, px) {
@@ -348,7 +322,6 @@ fun MiniTile(app: AppEntry, focused: Boolean, modifier: Modifier = Modifier) {
     }
 }
 
-/** Hidden apps, to put back on Home. Reached from Control Center. */
 @Composable
 fun HiddenAppsSheet(
     visible: Boolean,
@@ -375,7 +348,6 @@ fun HiddenAppsSheet(
                 Modifier
                     .width(660.dp)
                     .consumeTaps()
-                    // The canvas is 540 dp tall: past three rows the grid scrolls inside the sheet.
                     .heightIn(max = 480.dp)
                     .liquidGlass(28.dp)
                     .padding(28.dp),
@@ -385,12 +357,10 @@ fun HiddenAppsSheet(
                     stringResource(if (apps.isEmpty()) R.string.hidden_empty else R.string.hidden_hint),
                     style = Type.Callout, modifier = Modifier.padding(top = 4.dp, bottom = 20.dp),
                 )
-                // Focus moving to a row out of view scrolls it in (Compose brings focused items into view).
                 Column(
                     Modifier
                         .weight(1f, fill = false)
                         .verticalScroll(rememberScrollState())
-                        // Room for the focused tile's 1.1x scale, so the edge rows are not clipped.
                         .padding(horizontal = 8.dp, vertical = 8.dp),
                 ) {
                 apps.chunked(4).forEachIndexed { r, row ->
@@ -420,10 +390,6 @@ fun HiddenAppsSheet(
     }
 }
 
-/**
- * A line at the top of the screen that confirms a choice and goes away by itself (HomeViewModel
- * .notify): glass, like the menus, falling in from the top edge.
- */
 @Composable
 fun NoticeBanner(text: String?, modifier: Modifier = Modifier, glyph: Glyph = Glyph.Power) {
     val shown = rememberLatest(text) ?: return

@@ -11,11 +11,6 @@ import java.lang.reflect.Proxy
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/**
- * Hisense H55E9A (VIDAA_TV, Android 8 / bigfish) exposes HDMI through SourceManager, not
- * TvInputManager. Its transition service owns switching; starting LiveTvActivity alone does not
- * select a port. Reading HDMI 3 and switching from an ordinary app were verified on this TV.
- */
 internal object HisenseSources {
     private const val TAG = "AerialHisenseSources"
     private const val TRANSITION_PACKAGE = "com.hisense.tv.tiletransition"
@@ -36,8 +31,6 @@ internal object HisenseSources {
         val native = synchronized(this) {
             connection ?: Connection(context.applicationContext).also { connection = it }
         }
-        // The native manager binds asynchronously on the main looper. Home and diagnostics read
-        // sources on a worker; never wait for that binding from the main thread itself.
         if (Looper.myLooper() != Looper.getMainLooper()) native.ready.await(2, TimeUnit.SECONDS)
         val manager = native.manager ?: return emptyList()
         return runCatching {
@@ -46,8 +39,6 @@ internal object HisenseSources {
             val getInputs = type.getMethod("getInputSources")
             val deadline = SystemClock.elapsedRealtime() + 1_000
             var ports: List<*>? = null
-            // The service can be bound before its port list is populated on this firmware.
-            // Retry only this initial read, on a worker, with a bounded wait.
             while (ports.isNullOrEmpty()) {
                 if (isConnected.invoke(manager) == true) ports = getInputs.invoke(manager) as? List<*>
                 if (!ports.isNullOrEmpty()) break
@@ -73,7 +64,6 @@ internal object HisenseSources {
         }.onFailure { Log.w(TAG, "Could not read the native HDMI inputs", it) }.getOrDefault(emptyList())
     }
 
-    /** The same route is used by Control Center, pinned input tiles and the boot input. */
     fun open(context: Context, intent: Intent): Boolean {
         if (intent.action != SWITCH_ACTION || intent.`package` != TRANSITION_PACKAGE ||
             intent.getIntExtra(SOURCE_EXTRA, 0) <= 0) return false
@@ -98,7 +88,6 @@ internal object HisenseSources {
                             "hashCode" -> System.identityHashCode(proxy)
                             "equals" -> proxy === args?.firstOrNull()
                             "toString" -> TAG
-                            // This firmware sets isConnected after notifying its listeners.
                             "onServiceAvailable" -> { main.post { ready.countDown() }; null }
                             else -> null
                         }

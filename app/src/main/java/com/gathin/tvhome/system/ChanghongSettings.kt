@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 
-/** ChangHong mt5520_ll (Android 5.1): EasySetting is a left-hand window hosted by a service. */
 internal object ChanghongSettings {
     const val PACKAGE = "com.changhong.easysetting"
     const val NETWORK = "StatusBar_to_netset"
@@ -29,15 +28,7 @@ internal object ChanghongSettings {
         intent.component == component && available(context) && runCatching { context.startService(intent) }.getOrNull() != null
 }
 
-/**
- * The mt5520_ll firmware exposes panel backlight through TVOS, not screen_brightness. Used only
- * while it reads back a level; otherwise Brightness keeps its existing path.
- */
 internal object ChanghongPicture {
-    /**
-     * Set once a write is refused or not read back: the slider stays off for this process rather
-     * than falling back to a screen_brightness the panel ignores. Read off the main thread.
-     */
     @Volatile
     var failed = false
         private set
@@ -48,7 +39,6 @@ internal object ChanghongPicture {
 
     fun available(context: Context): Boolean = managerClass(context) != null
 
-    /** The class is there and answers with a level; a failed read leaves the existing path. */
     fun usable(context: Context): Boolean = backlight(context) != null
 
     private fun manager(context: Context): Any? {

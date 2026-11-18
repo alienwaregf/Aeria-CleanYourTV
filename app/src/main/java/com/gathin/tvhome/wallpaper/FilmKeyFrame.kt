@@ -26,22 +26,10 @@ import androidx.media3.extractor.TrackOutput
 import androidx.media3.extractor.mp4.Mp4Extractor
 import androidx.media3.extractor.text.SubtitleParser
 
-/**
- * One key frame of a film, read and decoded in this process: Media3's MP4 extractor finds it in the
- * file, and the platform's software decoder decodes it to memory. Neither goes through the media
- * server's retriever, whose frames stuck inside TCL's own MP4 extractor (TclMPEG4Extractor) on TCL
- * MT5879 and jammed the media server until the TV restarted (FrameReader in LiveWallpaper). Only
- * key frames: one sample, nothing before it to decode. Only SDR files (the 1080p H.264 ones).
- */
 @OptIn(UnstableApi::class)
 internal object FilmKeyFrame {
-    /** A decoded frame, with what it cost, for the diagnostics log. */
     class Frame(val bitmap: Bitmap, val timeMs: Long, val codec: String, val readMs: Long, val decodeMs: Long, val convertMs: Long, val sampleBytes: Int, val indexKept: Boolean)
 
-    /**
-     * The key frame of [uri] nearest [atMs] at [w]×[h], read through [source] under cache [key].
-     * Blocking; throws on failure, and on interrupt between steps.
-     */
     fun decode(source: DataSource.Factory, uri: Uri, key: String, atMs: Long, w: Int, h: Int): Frame {
         val started = SystemClock.elapsedRealtime()
         val kept = index?.takeIf { it.uri == uri && it.key == key }
@@ -51,25 +39,18 @@ internal object FilmKeyFrame {
         return Frame(decoded.bitmap, sample.timeUs / 1000, decoded.codec, read - started, decoded.decodeMs, decoded.convertMs, sample.bytes.size, kept != null)
     }
 
-    /**
-     * The last film's index, read once: Mp4Extractor with its sample tables, so the next key frame
-     * of the same film is one read of the frame alone, not three (the index at the end of the file
-     * first, 0.6-0.9 s of the 0.65-1.2 s each read took on TCL MT5879). One film, some hundred KB.
-     */
     private class Index(val uri: Uri, val key: String, val extractor: Mp4Extractor, val video: VideoOutput, val map: SeekMap)
 
     @Volatile private var index: Index? = null
 
     private class Sample(val format: Format, val bytes: ByteArray, val timeUs: Long)
 
-    /** Collects the video track's samples; [taken] is the first key frame once it is whole. */
     private class VideoOutput : TrackOutput {
         var format: Format? = null
         var taken: Sample? = null
         private var buffer = ByteArray(512 * 1024)
         private var length = 0
 
-        /** Ready for another key frame after a seek: nothing collected before it counts. */
         fun reset() {
             taken = null
             length = 0
@@ -81,7 +62,6 @@ internal object FilmKeyFrame {
 
         private fun room(more: Int) {
             if (length + more <= buffer.size) return
-            // A key frame of Apple's 1080p files is 0.2-0.6 MB; a broken file must not take the heap.
             if (length + more > MAX_SAMPLE_BYTES) error("sample over ${MAX_SAMPLE_BYTES / 1024} KB")
             buffer = buffer.copyOf(maxOf(buffer.size * 2, length + more))
         }
@@ -109,20 +89,14 @@ internal object FilmKeyFrame {
             if (taken == null && flags and C.BUFFER_FLAG_KEY_FRAME != 0 && start >= 0) {
                 format?.let { taken = Sample(it, buffer.copyOfRange(start, end), timeUs) }
             }
-            // What follows this sample belongs to the next one.
             System.arraycopy(buffer, end, buffer, 0, offset)
             length = offset
         }
     }
 
-    /**
-     * The film's index (at the end of Apple's files), then the key frame nearest [atUs]. The same
-     * reads as ExoPlayer's: through the cache, so a film played from disk is read from disk.
-     */
     private fun readKeySample(factory: DataSource.Factory, uri: Uri, key: String, atUs: Long): Sample {
         index?.takeIf { it.uri == uri && it.key == key }?.let { kept ->
             return runCatching { readFrom(factory, kept, atUs) }.getOrElse { e ->
-                // A kept index that no longer reads (the extractor in an odd state): read afresh.
                 if (e is InterruptedException) throw e
                 index = null
                 readKeySample(factory, uri, key, atUs)
@@ -165,13 +139,11 @@ internal object FilmKeyFrame {
             } finally {
                 source.close()
             }
-            // The index is read; the reads at the end of the file are closed.
             kept?.let { index = it; return readFrom(factory, it, atUs) }
         }
         error("no index after $MAX_OPENS reads")
     }
 
-    /** With the index read: the key frame nearest [atUs], which may be anywhere in the file. */
     private fun readFrom(factory: DataSource.Factory, kept: Index, atUs: Long): Sample {
         val map = kept.map
         val points = map.getSeekPoints(atUs.coerceIn(0, maxOf(0, map.durationUs - 1)))
@@ -204,7 +176,6 @@ internal object FilmKeyFrame {
 
     private class Decoded(val bitmap: Bitmap, val codec: String, val decodeMs: Long, val convertMs: Long)
 
-    /** [sample] decoded by a software decoder, at [w]×[h], with that decoder's name and the time each step took. */
     private fun decodeSample(sample: Sample, w: Int, h: Int): Decoded {
         val started = SystemClock.elapsedRealtime()
         val mime = sample.format.sampleMimeType!!
@@ -238,7 +209,6 @@ internal object FilmKeyFrame {
                             codec.queueInputBuffer(index, 0, sample.bytes.size, sample.timeUs, 0)
                             queued = true
                         } else {
-                            // Nothing more: a decoder that holds frames for reordering lets this one out.
                             codec.queueInputBuffer(index, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                             ended = true
                         }
@@ -263,12 +233,6 @@ internal object FilmKeyFrame {
         }
     }
 
-    /**
-     * A YUV 4:2:0 image as an ARGB bitmap of [wanted]×[wantedH] at most its own size, scaled by picking the nearest pixel. BT.709 in
-     * studio range, as Apple's SDR films are. Turned by [rotation] (a phone's upright film is kept
-     * on its side with the turn in the file) and centre-cropped to the screen's shape, as the
-     * player shows it (SCALE_TO_FIT_WITH_CROPPING): a portrait video was squashed into 16:9.
-     */
     private fun toBitmap(image: android.media.Image, wanted: Int, wantedH: Int, rotation: Int = 0, pixelRatio: Float = 1f): Bitmap {
         if (image.format != ImageFormat.YUV_420_888) error("image format ${image.format}")
         val crop = image.cropRect
@@ -282,27 +246,19 @@ internal object FilmKeyFrame {
         val cw = crop.width(); val ch = crop.height()
         val turn = ((rotation % 360) + 360) % 360
         val side = turn == 90 || turn == 270
-        // The film's width as shown, upright, in the stored frame's pixels.
         val shownW = if (side) ch else cw
         val par = if (pixelRatio > 0f) pixelRatio.toDouble() else 1.0
         val shownAspect = if (side) ch / (cw * par) else cw * par / ch
         val screenAspect = wanted.toDouble() / wantedH
-        // The part of the shown film the screen holds, as a fraction of each side, centred.
         val fracW = if (shownAspect > screenAspect) screenAspect / shownAspect else 1.0
         val fracH = if (shownAspect > screenAspect) 1.0 else shownAspect / screenAspect
-        // No bigger than the film's own pixels across that part: on a 4K screen the picture is
-        // scaled when drawn, rather than made four times as large here by repeating pixels.
         val across = maxOf(1, (shownW * fracW).toInt())
         val w = minOf(wanted, across)
         val h = if (wanted > across) maxOf(1, (wantedH.toLong() * across / wanted).toInt()) else wantedH
-        // Each output column and row as a place along the shown film's width and height (0 until 1).
         val colAt = DoubleArray(w) { (0.5 - fracW / 2) + (it + 0.5) / w * fracW }
         val rowAt = DoubleArray(h) { (0.5 - fracH / 2) + (it + 0.5) / h * fracH }
-        // A place along the stored frame's width (x) or height (y) as a pixel, absolute in the image.
         fun px(f: Double) = crop.left + (f * cw).toInt().coerceIn(0, cw - 1)
         fun py(f: Double) = crop.top + (f * ch).toInt().coerceIn(0, ch - 1)
-        // Shown (col, row) to stored (x, y): 90 is turned clockwise to show, so the shown top runs
-        // down the stored left side's far end; 270 the other way.
         val xOfCol: IntArray; val yOfRow: IntArray; val xOfRow: IntArray; val yOfCol: IntArray
         when (turn) {
             90 -> { xOfRow = IntArray(h) { px(rowAt[it]) }; yOfCol = IntArray(w) { py(1 - colAt[it]) }; xOfCol = IntArray(0); yOfRow = IntArray(0) }
@@ -311,9 +267,6 @@ internal object FilmKeyFrame {
             else -> { xOfCol = IntArray(w) { px(colAt[it]) }; yOfRow = IntArray(h) { py(rowAt[it]) }; xOfRow = IntArray(0); yOfCol = IntArray(0) }
         }
         val pixels = IntArray(w * h)
-        // The chroma worked out once for the two pixels that share it: 1.793, 0.213, 0.533 and
-        // 2.112, times 256 (BT.709); the luma's 1.164 and offset from [luma], the 0-255 range from
-        // [clamp]. Worked out for each pixel with coerceIn, 1080p took 0.18-0.36 s on TCL MT5879.
         val luma = IntArray(256) { ((it - 16) * 298 + 128) }
         if (!side) {
             for (row in 0 until h) {
@@ -343,7 +296,6 @@ internal object FilmKeyFrame {
                 }
             }
         } else {
-            // On its side: a row of the picture is a column of the stored frame.
             for (row in 0 until h) {
                 val sx = xOfRow[row]
                 val cx = sx / 2
@@ -363,7 +315,6 @@ internal object FilmKeyFrame {
         return Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).apply { setPixels(pixels, 0, w, 0, 0, w, h) }
     }
 
-    /** 0-255 for any of -CLAMP_OFFSET until 256 + CLAMP_OFFSET: the BT.709 sums stay inside it. */
     private const val CLAMP_OFFSET = 384
     private val clamp = IntArray(256 + 2 * CLAMP_OFFSET) { (it - CLAMP_OFFSET).coerceIn(0, 255) }
 

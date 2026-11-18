@@ -14,20 +14,12 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 
-/**
- * Ready-made 16:9 tile pictures for popular apps. Merged build: the remote icon index is gone,
- * so no new pictures are fetched; pictures already on this TV (files/library, from the owner's
- * earlier installs) keep working, and the phone page can still pick one per app. Only this object
- * writes files/library, and it removes a file only when its app is no longer installed.
- */
 object IconLibrary {
-    /** Bumped when pictures arrive or the library is turned on or off, so Home redraws its tiles. */
     var version by mutableIntStateOf(0); private set
 
     private lateinit var dir: File
     private lateinit var prefs: SharedPreferences
 
-    /** Package → path on the site ("p/<package>-<hash>.jpg"), from the last index read. */
     @Volatile private var index: Map<String, String> = emptyMap()
     private val refreshing = Mutex()
 
@@ -43,13 +35,10 @@ object IconLibrary {
         return File(dir, path.substringAfterLast('/'))
     }
 
-    /** The library's picture of [pkg] is on this TV (whether or not its tile uses it). */
     fun has(pkg: String): Boolean = ::dir.isInitialized && fileFor(pkg)?.exists() == true
 
-    /** The library's picture of [pkg] as stored, for the phone page; null without one. */
     fun file(pkg: String): File? = if (::dir.isInitialized) fileFor(pkg)?.takeIf { it.exists() } else null
 
-    /** Whether [pkg]'s tile uses the library: unless the phone page picked the app's own art. */
     fun uses(pkg: String): Boolean = when (pick(pkg)) {
         Pick.Library -> true
         Pick.Own -> false
@@ -60,7 +49,6 @@ object IconLibrary {
 
     enum class Pick { Library, Own }
 
-    /** What the phone page picked for [pkg]; null for the library. */
     fun pick(pkg: String): Pick? = when {
         !::prefs.isInitialized -> null
         pkg in prefs.getStringSet("use_library", emptySet())!! -> Pick.Library
@@ -68,7 +56,6 @@ object IconLibrary {
         else -> null
     }
 
-    /** From the phone page; the caller calls [changed] on the main thread after. */
     fun choose(pkg: String, pick: Pick?) {
         val library = prefs.getStringSet("use_library", emptySet())!! - pkg
         val own = prefs.getStringSet("use_own", emptySet())!! - pkg
@@ -78,21 +65,14 @@ object IconLibrary {
         }
     }
 
-    /** When the app's picture arrived; 0 without one. Part of the tile cache's key. */
     fun stamp(pkg: String): Long = usable(pkg)?.lastModified() ?: 0L
 
-    /** The app's picture, or null. Off the main thread. */
     fun load(pkg: String): Bitmap? = usable(pkg)?.let { BitmapFactory.decodeFile(it.path) }
 
-    /** Called on the main thread when a pick changed or [refresh] brought something new. */
     fun changed() {
         version++
     }
 
-    /**
-     * Local-only: prunes pictures of apps no longer installed. Never fetches anything: the
-     * remote icon index was removed in the merged build, so [installed] only decides what stays.
-     */
     suspend fun refresh(installed: Set<String>): Boolean = withContext(Dispatchers.IO) {
         if (!::dir.isInitialized) return@withContext false
         if (!refreshing.tryLock()) return@withContext false

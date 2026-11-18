@@ -28,25 +28,11 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.math.tan
 
-/**
- * Apple's continuous corner: the curvature eases in along the edge instead of jumping from a
- * straight line onto a circle, so there is no visible "kink" where a plain rounded corner starts.
- * Built as Figma's corner smoothing does it (a short circular arc between two cubic transitions);
- * 0.6 is what Figma calls iOS. A rounded rect of the same radius with [smoothing] 0.
- *
- * The GPU never sees these paths. Filling, stroking or clipping to one costs the Xiaomi MFTR0
- * (Mali, Android 14) a mask or a stencil pass every frame, and since every frame replays the
- * whole screen that took tiles from 11ms to 57ms of GPU time. So shapes are drawn once per size
- * on the CPU into bitmaps ([baked]) and the GPU only draws rects and images, as cheap as before.
- * The outline lies wholly inside a plain rounded rect of the same radius, so a layer can still
- * clip to that one, which the hardware does for free.
- */
 const val AppleSmoothing = 0.6f
 
 fun smoothRectPath(rect: Rect, radius: Float, bottomRadius: Float = radius, smoothing: Float = AppleSmoothing): Path =
     Path().apply { addSmoothRect(rect, radius, bottomRadius, smoothing) }
 
-/** White inside a [w]×[h] rect with continuous corners, clear outside; made once per size. */
 fun smoothMask(w: Int, h: Int, radius: Float, bottomRadius: Float = radius): Bitmap =
     baked(listOf("mask", w, h, radius, bottomRadius)) {
         createBitmap(w, h).also {
@@ -55,7 +41,6 @@ fun smoothMask(w: Int, h: Int, radius: Float, bottomRadius: Float = radius): Bit
         }.frozen()
     }
 
-/** White in a band [width] wide just inside a [w]×[h] continuous outline, clear elsewhere; made once per size. */
 fun smoothRing(w: Int, h: Int, radius: Float, width: Float): Bitmap =
     baked(listOf("ring-in", w, h, radius, width)) {
         createBitmap(w, h).also {
@@ -71,10 +56,6 @@ fun smoothRing(w: Int, h: Int, radius: Float, width: Float): Bitmap =
         }.frozen()
     }
 
-/**
- * [src] stretched over [w]×[h] and cut to continuous corners, for a picture that would otherwise
- * be clipped every frame. Not kept here: the caller holds it. Off the main thread where it can be.
- */
 fun smoothCut(src: Bitmap, w: Int, h: Int, radius: Float): Bitmap =
     createBitmap(w.coerceAtLeast(1), h.coerceAtLeast(1)).also {
         val fill = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
@@ -84,10 +65,6 @@ fun smoothCut(src: Bitmap, w: Int, h: Int, radius: Float): Bitmap =
         Canvas(it).drawPath(smoothRectPath(Rect(0f, 0f, w.toFloat(), h.toFloat()), radius).asAndroidPath(), fill)
     }.frozen()
 
-/**
- * clip + background with continuous corners: the baked mask in [color], one image draw, nothing
- * clipped. Children are not clipped, so it suits a plate of color with padded content on it.
- */
 fun Modifier.smoothBackground(color: Color, radius: Dp): Modifier = drawWithCache {
     val w = size.width.roundToInt()
     val h = size.height.roundToInt()
@@ -96,10 +73,6 @@ fun Modifier.smoothBackground(color: Color, radius: Dp): Modifier = drawWithCach
     onDrawBehind { if (mask != null) drawImage(mask, dstSize = IntSize(w, h), colorFilter = tint) }
 }
 
-/**
- * [smoothBackground] for a color that animates (a focus fill): the color is read while drawing, so
- * each frame of its fade only draws again, without recomposing the control or remaking the cache.
- */
 fun Modifier.smoothBackground(color: () -> Color, radius: Dp): Modifier = drawWithCache {
     val w = size.width.roundToInt()
     val h = size.height.roundToInt()
@@ -110,7 +83,6 @@ fun Modifier.smoothBackground(color: () -> Color, radius: Dp): Modifier = drawWi
     }
 }
 
-/** border with continuous corners: a baked band [width] wide inside the edge, over the content. */
 fun Modifier.smoothBorder(width: Dp, color: Color, radius: Dp): Modifier = drawWithCache {
     val w = size.width.roundToInt()
     val h = size.height.roundToInt()
@@ -122,30 +94,19 @@ fun Modifier.smoothBorder(width: Dp, color: Color, radius: Dp): Modifier = drawW
     }
 }
 
-/**
- * An immutable copy. The renderer uploads an immutable bitmap once; a mutable one used in a shader
- * is copied and uploaded again whenever the drawing that uses it is recorded, which for the plate
- * under the top row is every frame of a scroll (Xiaomi MFTR0: 4ms -> 13ms to issue a frame).
- */
 fun Bitmap.frozen(): Bitmap = copy(Bitmap.Config.ARGB_8888, false).also { recycle() }
 
 private val bakes = object : LinkedHashMap<List<Any>, Any>(16, 0.75f, true) {
-    // Sizes come and go with layout (a panel opens, the screen rotates); a few dozen is plenty.
-    // 64: panels' rows, keys, cards and their borders are baked too, each one small.
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<List<Any>, Any>?) = size > 64
 }
 
-/** A drawing made once per [key] (its kind and sizes) and kept while it is in use. */
 @Suppress("UNCHECKED_CAST")
 fun <T : Any> baked(key: List<Any>, make: () -> T): T = synchronized(bakes) { bakes.getOrPut(key, make) as T }
 
-/** Adds [rect] with continuous corners, clockwise from the top left, as a closed contour. */
 fun Path.addSmoothRect(rect: Rect, radius: Float, bottomRadius: Float = radius, smoothing: Float = AppleSmoothing) {
     val budget = min(rect.width, rect.height) / 2f
     val top = SmoothCorner(radius, smoothing, budget)
     val bot = SmoothCorner(bottomRadius, smoothing, budget)
-    // Each corner in a local frame: the incoming edge runs along +u into the vertex, the outgoing
-    // one leaves along +v. Clockwise: top right, bottom right, bottom left, top left.
     moveTo(rect.left + top.p, rect.top)
     top.addTo(this, Offset(rect.right, rect.top), Offset(1f, 0f), Offset(0f, 1f))
     bot.addTo(this, Offset(rect.right, rect.bottom), Offset(0f, 1f), Offset(-1f, 0f))
@@ -161,11 +122,10 @@ private class SmoothCorner(radius: Float, smoothing: Float, budget: Float) {
     private val b: Float
     private val c: Float
     private val d: Float
-    private val arc: Float // the arc's sweep, radians
+    private val arc: Float
 
     init {
         var s = smoothing
-        // Not enough room for the full transition: give up smoothing before giving up radius.
         if (radius > 0f && (1f + s) * radius > budget) s = (budget / radius - 1f).coerceIn(0f, s)
         r = min(radius, budget).coerceAtLeast(0f)
         p = min((1f + s) * r, budget)
@@ -193,8 +153,6 @@ private class SmoothCorner(radius: Float, smoothing: Float, budget: Float) {
         val s0 = at(-p, 0f)
         path.lineTo(s0.x, s0.y)
         cubic(-p + a, 0f, -p + a + b, 0f, -p + a + b + c, d)
-        // The circular part, centred at (-r, r), symmetric about the diagonal; one cubic is exact
-        // enough for under a quarter turn.
         val f0 = -PI.toFloat() / 4 - arc / 2
         val f1 = -PI.toFloat() / 4 + arc / 2
         val k = 4f / 3f * tan(arc / 4) * r

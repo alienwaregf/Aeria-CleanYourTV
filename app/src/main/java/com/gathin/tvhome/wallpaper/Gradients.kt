@@ -12,95 +12,81 @@ import android.graphics.Shader
 import androidx.core.graphics.createBitmap
 import kotlin.math.sin
 
-/**
- * Aerial's own wallpapers, in the manner of the Mac's: layered hills, dunes in side light, a sea
- * at the horizon, Big Sur's stacked colour bands, and soft fields of light. They are drawn on the
- * TV at its real resolution rather than shipped as pictures, so they cost nothing to install and
- * stay sharp on a 4K UI. Apple's own wallpapers cannot ship in an MIT app; these are original.
- *
- * Every shape is laid out on fractions of the picture, so a thumbnail and the full picture match.
- */
 class GradientPreset(
     val key: String,
-    val nameZh: String,
-    val nameEn: String,
     internal val draw: Canvas.(w: Float, h: Float) -> Unit,
 )
 
 object Gradients {
     val presets = listOf(
-        GradientPreset("hills_dawn", "山丘 · 黎明", "Hills, Dawn") { w, h ->
+        GradientPreset("hills_dawn") { w, h ->
             hills(w, h, sky(0xFF7B8FD6, 0xFFE9B7C9, 0xFFFFD9B8), 0.7f, 0.6f, 0xFFFFD6AA, 0.7f, listOf(
                 0xFFB7A3D8 to 0xFFC9B2D9, 0xFF8F7FC4 to 0xFFA38FC8, 0xFF6A5AA8 to 0xFF7B66AE, 0xFF433878 to 0xFF3A2F66,
             ))
         },
-        GradientPreset("hills_dusk", "山丘 · 暮色", "Hills, Dusk") { w, h ->
+        GradientPreset("hills_dusk") { w, h ->
             hills(w, h, sky(0xFF16244F, 0xFFC25B6B, 0xFFF59B5B), 0.35f, 0.62f, 0xFFFFA05A, 0.65f, listOf(
                 0xFF7D3F63 to 0xFF8A4762, 0xFF552D5A to 0xFF5B2F55, 0xFF33204A to 0xFF2C1C40, 0xFF170F2A to 0xFF120B20,
             ))
         },
-        GradientPreset("hills_mist", "山丘 · 晨雾", "Hills, Mist") { w, h ->
+        GradientPreset("hills_mist") { w, h ->
             hills(w, h, sky(0xFFA9C9D8, 0xFFDBE8E3, 0xFFF3EFE2), 0.3f, 0.55f, 0xFFFFFAEB, 0.7f, listOf(
                 0xFFA8C2BB to 0xFFB9D0C6, 0xFF7EA79F to 0xFF8FB3A7, 0xFF4F8178 to 0xFF5D8B7D, 0xFF2A5249 to 0xFF24463D,
             ))
         },
-        GradientPreset("hills_night", "山丘 · 夜", "Hills, Night") { w, h ->
+        GradientPreset("hills_night") { w, h ->
             hills(w, h, sky(0xFF04081C, 0xFF14285A, 0xFF2F4D86), 0.62f, 0.58f, 0xFF78AAFF, 0.35f, listOf(
                 0xFF1F3566 to 0xFF253C70, 0xFF162851 to 0xFF182B55, 0xFF0D1B3A to 0xFF0B1733, 0xFF050C1F to 0xFF040917,
             ))
         },
-        GradientPreset("dunes_gold", "沙丘 · 金色", "Dunes, Gold") { w, h ->
+        GradientPreset("dunes_gold") { w, h ->
             dunes(w, h, sky(0xFF4F7FBF, 0xFFA7C3DD, 0xFFF5D3A0), 0.8f, 0.45f, 0xFFFFE6B4, 0.5f, listOf(
                 0xFFF3C58A to 0xFFE7A96A, 0xFFEEB06C to 0xFFD98E4F, 0xFFE39A52 to 0xFFC9733A, 0xFFD4843F to 0xFFB25D2B,
             ), listOf(0x73A05028, 0x808C411E, 0x8C783419, 0x99642814))
         },
-        GradientPreset("dunes_moon", "沙丘 · 月夜", "Dunes, Moonlight") { w, h ->
+        GradientPreset("dunes_moon") { w, h ->
             dunes(w, h, sky(0xFF0B0F2E, 0xFF2B2F6B, 0xFF6C5A9E), 0.2f, 0.4f, 0xFFB4AAFF, 0.3f, listOf(
                 0xFF6D63A8 to 0xFF5A4F93, 0xFF5A4F93 to 0xFF463C7C, 0xFF463C7C to 0xFF352C66, 0xFF352C66 to 0xFF251E4F,
             ), listOf(0x730A0828, 0x800A0828, 0x8C0A0828, 0x990A0828))
         },
-        GradientPreset("sea_sunset", "海 · 日落", "Sea, Sunset") { w, h ->
+        GradientPreset("sea_sunset") { w, h ->
             sea(w, h, sky(0xFF2A2F6E, 0xFFC75A7A, 0xFFFFB070), 0xFFFFAA6E, 0.6f, sky(0xFF6A3D6D, 0xFF2A1F48, 0xFF120C26), 0xFFFFF0D2, 0xFFFFC896)
         },
-        GradientPreset("sea_clear", "海 · 晴空", "Sea, Clear Sky") { w, h ->
+        GradientPreset("sea_clear") { w, h ->
             sea(w, h, sky(0xFF2F6FD6, 0xFF78AEE8, 0xFFD9ECF7), 0xFFFFFFFF, 0.55f, sky(0xFF2D7FC2, 0xFF155A9A, 0xFF0A3566), 0xFFFFFFFA, 0xFFFFFFFF)
         },
-        GradientPreset("waves_blue", "波浪 · 深蓝", "Waves, Blue") { w, h ->
+        GradientPreset("waves_blue") { w, h ->
             waves(w, h, 0xFF0A1A4A to 0xFF123A8A, listOf(
                 0xFF1F5FD0 to 0xFF0D2F7A, 0xFF2E86E8 to 0xFF1446A8, 0xFF3FB2F0 to 0xFF1A64C4, 0xFF7FD3FF to 0xFF2B85DC,
             ))
         },
-        GradientPreset("waves_coral", "波浪 · 珊瑚", "Waves, Coral") { w, h ->
+        GradientPreset("waves_coral") { w, h ->
             waves(w, h, 0xFF3A0F2E to 0xFF7A1F45, listOf(
                 0xFFC23A6B to 0xFF7A1F4A, 0xFFEC5F6A to 0xFFB0334F, 0xFFFF8A5C to 0xFFD9534A, 0xFFFFC078 to 0xFFF08A52,
             ))
         },
-        GradientPreset("waves_violet", "波浪 · 紫罗兰", "Waves, Violet") { w, h ->
+        GradientPreset("waves_violet") { w, h ->
             waves(w, h, 0xFF120A3A to 0xFF2A1670, listOf(
                 0xFF5B3FD0 to 0xFF2C1A85, 0xFF8A5CF0 to 0xFF4F30B8, 0xFFC27BF5 to 0xFF7B45D8, 0xFFF2A6E8 to 0xFFB56AD8,
             ))
         },
-        GradientPreset("glow_pink", "光晕 · 柔粉", "Glow, Pink") { w, h ->
+        GradientPreset("glow_pink") { w, h ->
             glows(w, h, 0xFFF6D6E0, listOf(
                 Blob(0.2f, 0.3f, 0.35f, 0xFFFFB3C7), Blob(0.75f, 0.25f, 0.3f, 0xFFC9B6FF), Blob(0.55f, 0.85f, 0.4f, 0xFFFFD2A8), Blob(0.9f, 0.8f, 0.25f, 0xFFA8D8FF),
             ))
         },
-        GradientPreset("aurora", "光晕 · 极光", "Glow, Aurora") { w, h ->
+        GradientPreset("aurora") { w, h ->
             glows(w, h, 0xFF071029, listOf(
                 Blob(0.2f, 0.35f, 0.3f, 0xFF18C79B), Blob(0.65f, 0.2f, 0.35f, 0xFF5B3FD9), Blob(0.5f, 0.9f, 0.4f, 0xFF0E6FFF), Blob(0.95f, 0.6f, 0.2f, 0xFFC14BD8),
             ))
         },
-        GradientPreset("glow_lime", "光晕 · 青柠", "Glow, Lime") { w, h ->
+        GradientPreset("glow_lime") { w, h ->
             glows(w, h, 0xFFE3F4EA, listOf(
                 Blob(0.25f, 0.3f, 0.3f, 0xFF9EE6B8), Blob(0.75f, 0.3f, 0.3f, 0xFFBFE9FF), Blob(0.5f, 0.85f, 0.4f, 0xFFF2F0A0), Blob(0.05f, 0.85f, 0.25f, 0xFF7FD6C8),
             ))
         },
     )
 
-    /**
-     * The light fields Aerial shipped before these, so a wallpaper chosen then still resolves: each
-     * points at the new one closest in colour. "aurora" kept its key.
-     */
     private val renamed = mapOf(
         "sunset" to "sea_sunset", "ocean" to "waves_blue", "violet" to "waves_violet", "forest" to "hills_mist",
         "dune" to "dunes_gold", "rose" to "glow_pink", "graphite" to "hills_night",
@@ -108,13 +94,8 @@ object Gradients {
 
     fun byKey(key: String) = presets.firstOrNull { it.key == (renamed[key] ?: key) }
 
-    /** The key a stored choice resolves to today. */
-    fun currentKey(key: String) = renamed[key] ?: key
-
-    /** Stands for "Follow App" in the picker. */
     val autoThumb get() = byKey("hills_night")!!
 
-    /** Renders a preset at [width]×[height], dithered so the long gradients do not band. */
     fun render(preset: GradientPreset, width: Int, height: Int): Bitmap {
         val out = createBitmap(width, height)
         Canvas(out).apply { preset.draw(this, width.toFloat(), height.toFloat()) }
@@ -122,7 +103,6 @@ object Gradients {
         return out
     }
 
-    // ---- the five kinds ----
 
     internal class Blob(val x: Float, val y: Float, val r: Float, val color: Long)
 
@@ -141,10 +121,6 @@ object Gradients {
         drawRect(0f, 0f, w, h, paint(RadialGradient(x, y, r, (c and 0xFFFFFF) or a, c and 0xFFFFFF, Shader.TileMode.CLAMP)))
     }
 
-    /**
-     * A ridge: three sines, seeded so each layer has its own, the same at every size. Closed down
-     * to the bottom of the picture, or with [crestOnly] just the line along the top.
-     */
     private fun ridge(w: Float, h: Float, base: Float, amp: Float, seed: Int, crestOnly: Boolean = false): Path {
         var s = seed.toLong()
         fun r(): Float { s = (s * 16807) % 2147483647; return s / 2147483647f }
@@ -182,16 +158,12 @@ object Gradients {
         glowAt(w, h, w * sunX, h * sunY, w * 0.4f, glow, glowA)
         for (i in 0 until 4) {
             val base = h * (0.5f + i * 0.12f)
-            // Long, low swells: a ridge line with less amplitude than a hill's.
             val dune = ridge(w, h, base, h * (0.06f - i * 0.008f), 41 + i * 17)
             drawPath(dune, paint(vertical(base - h * 0.08f, h, pair(lit[i]))))
-            // Light from the sun's side, the far side falling into shadow: a sideways gradient
-            // across the dune, so the turn from lit to shaded is soft, as on real sand.
             val c = shade[i].toInt()
             val fromX = if (sunX > 0.5f) w else 0f
             drawPath(dune, paint(LinearGradient(fromX, 0f, w - fromX, 0f,
                 intArrayOf(c and 0xFFFFFF, c and 0xFFFFFF, c), floatArrayOf(0f, 0.35f, 1f), Shader.TileMode.CLAMP)))
-            // A bright crest line where the light grazes the top.
             save()
             translate(0f, h * 0.004f)
             drawPath(ridge(w, h, base, h * (0.06f - i * 0.008f), 41 + i * 17, crestOnly = true), Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -211,7 +183,6 @@ object Gradients {
         glowAt(w, h, w * 0.5f, horizon, w * 0.06f, sun, 1f)
         restore()
         drawRect(0f, horizon, w, h, paint(vertical(horizon, h, water)))
-        // The sun's path on the water: lines that widen and fade toward the viewer.
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
         val unit = h / 270f
         for (i in 0 until 26) {
@@ -237,7 +208,6 @@ object Gradients {
                 cubicTo(w * 0.3f, y0 - h * 0.18f, w * 0.55f, y0 + h * 0.32f, w + edge, y0 - h * 0.02f)
                 lineTo(w + edge, h + edge); close()
             }
-            // Each band casts a soft shadow up onto the one behind it.
             save()
             translate(0f, -6 * unit)
             drawPath(path, shadow)
@@ -246,7 +216,6 @@ object Gradients {
         }
     }
 
-    /** Large soft blobs of colour: drawn small, blurred until no edge is left, then scaled up. */
     private fun Canvas.glows(w: Float, h: Float, base: Long, blobs: List<Blob>) {
         val sw = 160
         val sh = 90

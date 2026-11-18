@@ -10,11 +10,6 @@ import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import java.util.Locale
 
-/**
- * XK03U (ironman / MStar m7221, Android 8) has no TV input service. Its product config lists the
- * real ports, while the generic MStar list includes inputs this projector does not have.
- * Verified on the fourth-generation XGIMI Z6X from an ordinary app without added permissions.
- */
 internal object XgimiMstarSources {
     private const val TAG = "AerialXgimiSources"
     private const val CONFIG_MANAGER = "com.xgimi.clients.GimiConfigManager"
@@ -22,7 +17,6 @@ internal object XgimiMstarSources {
     private val hdmiSwitch = Regex("HDMI([1-9][0-9]*)?")
 
     fun load(context: Context): List<TvSource> {
-        // This native-player contract is verified only before Android 9; newer builds use another route.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) return emptyList()
         val activity = runCatching { context.packageManager.getActivityInfo(player, 0) }.getOrNull()
             ?: return emptyList()
@@ -68,7 +62,6 @@ internal object XgimiMstarSources {
         }.distinctBy { it.id }
     }
 
-    /** MStar connection flags are indexed by the runtime enum ordinal, not by the port number. */
     private fun connectedSources(): Map<String, Boolean> = runCatching {
         val commonClass = Class.forName("com.mstar.android.tv.TvCommonManager")
         val common = commonClass.getMethod("getInstance").invoke(null)

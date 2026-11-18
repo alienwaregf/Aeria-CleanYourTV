@@ -13,15 +13,6 @@ import com.gathin.tvhome.system.DiagLog
 import java.io.FileDescriptor
 import java.io.PrintWriter
 
-/**
- * Brings Home Guard back after the firmware kills Aerial.
- *
- * Xiaomi force-stops every third-party app when the TV goes to standby, and Android drops a
- * force-stopped app's accessibility services from the enabled list for good. Notification
- * listeners are treated differently: the system keeps the approval and binds the listener again
- * shortly after its process dies. That rebind is the one thing that reliably restarts Aerial
- * after a standby, so it is used for exactly this. No notification is read or touched.
- */
 class RevivalListener : NotificationListenerService() {
     private val handler = Handler(Looper.getMainLooper())
     private var recovering = false
@@ -39,9 +30,6 @@ class RevivalListener : NotificationListenerService() {
 
     override fun onCreate() {
         super.onCreate()
-        // Skyworth 8N312_H5D (Android 8) binds this service at boot, but leaves the guard
-        // enabled and unbound. Do not depend on onListenerConnected or USER_UNLOCKED alone:
-        // either callback can be missing, while the service and its main looper are alive.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             runCatching {
                 registerReceiver(unlocked, IntentFilter(Intent.ACTION_USER_UNLOCKED))
@@ -55,11 +43,8 @@ class RevivalListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         if (destroyed) return
-        // The line docs/HANDOFF.md and the issues look for after a kill (logcat -s AerialGuard).
         Log.i("AerialGuard", "revived by the notification listener binding")
         trace("notification listener connected")
-        // Keep the quick path on wake. The delayed checks also cover a binding that did not
-        // arrive after this write; none of the paths may touch credential storage while locked.
         if (GuardSetup.isUserUnlocked(this)) {
             runCatching {
                 prepareDiagnostics()
@@ -99,8 +84,6 @@ class RevivalListener : NotificationListenerService() {
                 noteRevival()
                 trace("attempt $attempt: unlocked, guard unbound; requesting recovery")
                 GuardSetup.ensureEnabled(this)
-                // Reuse the existing rebind: it preserves other services, waits between the
-                // two writes, and respects the owner's guard_off_in_standby setting.
                 GuardSetup.rebindIfStalled(this)
             }.onFailure {
                 trace("attempt $attempt failed: ${it.javaClass.simpleName}: ${it.message}")
@@ -108,8 +91,6 @@ class RevivalListener : NotificationListenerService() {
         } else {
             trace("attempt $attempt: waiting for user unlock")
         }
-        // A final check gives Android time to finish the last asynchronous rebind. Stop after
-        // about two minutes: this is recovery at service creation, not a permanent watchdog.
         handler.postDelayed(check, RETRY_DELAYS_MS.getOrElse(attempt) { FINAL_CHECK_DELAY_MS })
     }
 

@@ -10,16 +10,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * Dangbei X7 Max, Android 14 / v6.10.0: native brightness 10+ is lens display mode 1,
- * not DLP level 11. DLP writes are ignored until mode 0 is restored (issue #598).
- * Only handle the version-2 Boost contract reported by the firmware, not every projector
- * that happens to have getLensDispMode. No vendor APK or SDK is bundled.
- */
 object XgimiBoost {
     @Volatile private var supported = false
 
-    /** Read once when Control Center opens; an unavailable service can be retried next time. */
     suspend fun discover(context: Context) = withContext(Dispatchers.IO) {
         if (supported || SystemProbe.xgimiDisplayManager() == null) return@withContext
         val stub = runCatching { Class.forName("com.xgimi.aidl.IXgimiService\$Stub") }.getOrNull()
@@ -52,7 +45,6 @@ object XgimiBoost {
         }
     }
 
-    /** null means this firmware does not expose the verified Boost contract. */
     fun enabled(): Boolean? {
         if (!supported) return null
         val dm = SystemProbe.xgimiDisplayManager() ?: return null
@@ -60,12 +52,11 @@ object XgimiBoost {
             when ((dm.javaClass.getMethod("getLensDispMode").invoke(dm) as Number).toInt()) {
                 0 -> false
                 1 -> true
-                else -> null // Do not reinterpret or overwrite another lens mode.
+                else -> null
             }
         }.getOrNull()
     }
 
-    /** Leave Boost before an ordinary brightness write; enabling stays in the native settings. */
     fun disable(): Boolean {
         val current = enabled() ?: return false
         if (!current) return true

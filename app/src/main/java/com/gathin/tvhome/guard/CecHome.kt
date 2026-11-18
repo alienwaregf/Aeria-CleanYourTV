@@ -14,25 +14,16 @@ import com.gathin.tvhome.apps.SourceLooks
 import java.io.File
 import java.util.concurrent.Executors
 
-/** Opt-in Amlogic raw CEC transport, verified on OBE_NEW X7 (Android 9, driver version 5).
- * The ordinary HDMI service requires a system signature. This firmware exposes /dev/cec instead.
- * Never change driver addresses or settings: share the existing TV logical address (0).
- */
 internal object CecHome {
     private val sender = Executors.newSingleThreadExecutor()
 
     private fun prefs(context: Context) = context.getSharedPreferences("system", Context.MODE_PRIVATE)
 
-    // This is an Amlogic raw-frame ABI, not Linux's unrelated /dev/cec0 ioctl ABI.
-    // X7 version 5 is verified; other versions of this ABI require device testing.
     fun enabled(context: Context): Boolean =
         GuardSetup.isUserUnlocked(context) && prefs(context).getString("cec_home_input", null) != null &&
             File("/dev/cec").canWrite() && File("/sys/class/cec/cec_version").canRead()
 
-    /** The setting that names the input in front, while the feature is configured; else null. */
     fun inputSettingKey(context: Context): String? {
-        // Home Guard binds before credential storage opens, even when CEC Home is disabled.
-        // Reading it here crashed Aerial at boot on Hisense H55E9A (Android 8).
         if (!GuardSetup.isUserUnlocked(context)) return null
         val config = prefs(context)
         if (config.getString("cec_home_input", null) == null) return null
@@ -64,7 +55,6 @@ internal object CecHome {
         if (manager.getInputState(selected.id) != TvInputManager.INPUT_STATE_CONNECTED) return null
         val devices = if (selected.parentId != null) listOf(selected)
             else inputs.filter { it.parentId == parent }
-        // A physical AVR port alone does not identify which of several downstream devices is active.
         if (devices.size != 1) return null
         SourceLooks.init(context)
         val manualAppleTv = SourceLooks.of(port.id)?.device == SourceDevice.AppleTv
@@ -73,7 +63,6 @@ internal object CecHome {
             val hdmi by lazy {
                 runCatching { device.javaClass.getMethod("getHdmiDeviceInfo").invoke(device) }.getOrNull()
             }
-            // Manual tile selection comes first; CEC identity is only the fallback.
             val recognized = manualAppleTv || run {
                 val vendor = hdmi?.let { runCatching { it.javaClass.getMethod("getVendorId").invoke(it) as Int }.getOrNull() }
                 val name = hdmi?.let { runCatching { it.javaClass.getMethod("getDisplayName").invoke(it) as String }.getOrNull() } ?: label
@@ -88,7 +77,6 @@ internal object CecHome {
                 ?: return@mapNotNull null
             address.takeIf { it in 1..14 }?.let { Target(port.id, it) }
         }
-        // Do not guess when several CEC devices share an AVR/switch input.
         apple.singleOrNull()
     }.getOrNull()
 
@@ -104,8 +92,6 @@ internal object CecHome {
             runCatching {
                 val fd = Os.open("/dev/cec", OsConstants.O_WRONLY, 0)
                 try {
-                    // One syscall per frame: X7 reports a CEC status (zero on success), not a
-                    // byte count. Stream APIs may retry forever or duplicate the command.
                     try {
                         val press = byteArrayOf(address.toByte(), 0x44, 0x09)
                         val result = Os.write(fd, press, 0, press.size)

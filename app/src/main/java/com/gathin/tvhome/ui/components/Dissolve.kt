@@ -9,13 +9,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
-/**
- * The new content fades in over the old, which stays whole beneath it until it is covered.
- *
- * A Crossfade fades both at once: two opaque pictures at half each cover only three quarters of
- * the screen mid-way, and the black behind them shows through as a dip. Only for content that is
- * opaque and covers the same area, or the old would vanish in one frame at the end.
- */
 @Composable
 fun <T> Dissolve(
     targetState: T,

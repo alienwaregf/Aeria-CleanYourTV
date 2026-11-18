@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,20 +57,13 @@ import com.gathin.tvhome.ui.theme.Motion
 import com.gathin.tvhome.ui.theme.Palette
 import com.gathin.tvhome.ui.theme.Type
 
-/** [Verify] checks the PIN without unlocking the rest for a while (Kids mode: leaving it, more time). */
 enum class PinMode { Unlock, Verify, Create }
 
 private const val PIN_LENGTH = 4
 
-/**
- * The parental PIN (issue #10): four digits, from the remote's number keys or the keypad on screen
- * (most remotes here have no number keys), or four arrow keys (AerialSettings.pinArrows).
- * [PinMode.Create] asks which kind, then asks twice and stores it.
- */
 @Composable
 fun PinPad(visible: Boolean, mode: PinMode?, onDone: () -> Unit, onCancel: () -> Unit) {
     BackHandler(enabled = visible, onBack = onCancel)
-    // The mode is gone once the overlay changes; keep the last one while the panel fades out.
     var shown by remember { mutableStateOf(mode) }
     if (mode != null) shown = mode
     AnimatedVisibility(
@@ -80,7 +72,6 @@ fun PinPad(visible: Boolean, mode: PinMode?, onDone: () -> Unit, onCancel: () ->
         exit = fadeOut(tween(150, easing = Motion.EaseOut)) + scaleOut(tween(150, easing = Motion.EaseOut), targetScale = 0.97f),
         modifier = Modifier.fillMaxSize(),
     ) {
-        // Each opening starts empty: the panel leaves composition while hidden.
         shown?.let { PinPanel(it, onDone, onCancel) }
     }
 }
@@ -90,7 +81,6 @@ private fun PinPanel(mode: PinMode, onDone: () -> Unit, onCancel: () -> Unit) {
     var entered by remember { mutableStateOf("") }
     var first by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<Int?>(null) }
-    // Null while a new PIN's kind is still to be chosen.
     var arrows by remember { mutableStateOf(if (mode != PinMode.Create) AerialSettings.pinArrows else null) }
     val one = remember { FocusRequester() }
     val choice = remember { FocusRequester() }
@@ -147,8 +137,6 @@ private fun PinPanel(mode: PinMode, onDone: () -> Unit, onCancel: () -> Unit) {
             .onPreviewKeyEvent { e ->
                 val code = e.nativeKeyEvent.keyCode
                 if (arrows == true) {
-                    // Every arrow is an entry, never a move; OK does nothing. Ups go too, so no
-                    // control below sees a key it did not see go down.
                     val symbol = ARROWS[code]
                     if (symbol == null && code != NativeKeyEvent.KEYCODE_DPAD_CENTER && code != NativeKeyEvent.KEYCODE_ENTER) return@onPreviewKeyEvent false
                     if (e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0 && symbol != null) type(symbol)
@@ -190,7 +178,6 @@ private fun PinPanel(mode: PinMode, onDone: () -> Unit, onCancel: () -> Unit) {
                 return@Column
             }
             Spacer(Modifier.height(18.dp))
-            // Focus sits on the dots while arrows are typed, so the keys reach the panel.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = if (arrows == true) Modifier.focusRequester(pad).focusable() else Modifier,
@@ -225,7 +212,6 @@ private fun PinPanel(mode: PinMode, onDone: () -> Unit, onCancel: () -> Unit) {
     }
 }
 
-/** How an arrow key is kept in an arrow PIN. */
 private val ARROWS = mapOf(
     NativeKeyEvent.KEYCODE_DPAD_UP to 'U',
     NativeKeyEvent.KEYCODE_DPAD_DOWN to 'D',

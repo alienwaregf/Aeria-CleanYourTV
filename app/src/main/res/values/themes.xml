@@ -8,9 +8,6 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowShowWallpaper">false</item>
-        <!-- No starting window: it is this theme's black, shown while the process starts (TCL MT5879:
-             0.55 s of black, then a fade). Without it the screen stays on what was there until Home's
-             first frame, which is the wallpaper baked at the last start. -->
         <item name="android:windowDisablePreview">true</item>
     </style>
 </resources>

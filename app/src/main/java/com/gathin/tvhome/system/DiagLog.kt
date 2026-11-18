@@ -12,29 +12,18 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
 
-/**
- * A log of its own for firmwares whose logcat shows nothing from apps (Skyworth 7T631_T60,
- * Android 13: black Home, remote did nothing, no app line in logcat). Every line also goes to
- * logcat. The last lines are kept in memory and printed by
- *   adb shell dumpsys activity com.gathin.slimtv/.MainActivity
- * and, in a diagnostic build (`./gradlew -Pdiag ...`) or after
- *   adb shell am broadcast -a com.gathin.slimtv.CONFIG -n com.gathin.slimtv/.guard.ConfigReceiver --ez diag true
- * also written to Android/data/com.gathin.slimtv/files/aerial-diag.log, which `adb pull` can fetch.
- */
 object DiagLog {
     private const val TAG = "AerialDiag"
     private const val KEEP = 600
     private const val FILE_LIMIT = 1 shl 20
 
     private val lines = ArrayDeque<String>()
-    // Made on the first line written to the file, so a release build without diag has no thread.
     private val writer by lazy {
         Executors.newSingleThreadExecutor { Thread(it, "AerialDiag").apply { isDaemon = true } }
     }
     private val stamp = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US)
     @Volatile private var file: File? = null
 
-    /** Whether lines go to the file as well; set from ConfigReceiver, on in a diagnostic build. */
     fun enabled(context: Context): Boolean = BuildConfig.DIAG || prefs(context).getBoolean("diag", false)
 
     fun setEnabled(context: Context, on: Boolean) {
@@ -42,19 +31,9 @@ object DiagLog {
         if (on) init(context) else file = null
     }
 
-    /**
-     * Experiments for a black Home, set over ADB (ConfigReceiver) and read when Home starts:
-     * mode_switch lets Home change the display's refresh rate (off in a diagnostic build, the only
-     * Android 12+ display change Aerial makes); soft_layer draws Home in software, past the GPU.
-     */
     fun modeSwitch(context: Context): Boolean = prefs(context).getBoolean("mode_switch", !BuildConfig.DIAG)
     fun softLayer(context: Context): Boolean = prefs(context).getBoolean("soft_layer", false)
 
-    /**
-     * An experiment for issue #654 (Redmi X50, MiTV-NSOP0, Novatek): the apps fading into the
-     * screensaver each in a buffer of their own rather than with their alpha laid on every drawing.
-     * Their frame and shadow are cut to the tile while they fade.
-     */
     fun saverFadeOffscreen(context: Context): Boolean = prefs(context).getBoolean("saver_fade_offscreen", false)
     fun setOption(context: Context, key: String, on: Boolean) = prefs(context).edit().putBoolean(key, on).apply()
     private fun prefs(context: Context) = context.getSharedPreferences("system", Context.MODE_PRIVATE)
@@ -68,7 +47,6 @@ object DiagLog {
 
     fun i(message: String) {
         Log.i(TAG, message)
-        // SimpleDateFormat is not thread-safe; lines come from the main thread and the player's.
         val line = synchronized(lines) {
             "${stamp.format(Date())} +${SystemClock.uptimeMillis()} $message".also {
                 lines.addLast(it)
@@ -81,7 +59,6 @@ object DiagLog {
                 if (f.length() > FILE_LIMIT) f.renameTo(File(f.parentFile, "aerial-diag.old.log"))
                 val fresh = !f.exists()
                 f.appendText(line + "\n")
-                // Created 0600 on Xiaomi MiTV-MFTR0 (Android 14), which adb pull could not read.
                 if (fresh) f.setReadable(true, false)
             }
         }
@@ -89,7 +66,6 @@ object DiagLog {
 
     fun e(message: String, error: Throwable) = i("$message: ${Log.getStackTraceString(error)}")
 
-    /** Logs whatever kills the process before it goes. */
     fun catchCrashes() {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         if (previous is Crashes) return
@@ -111,7 +87,6 @@ object DiagLog {
             "Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), ${Build.FINGERPRINT}, " +
             "Aerial ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
 
-    /** The last [n] lines, oldest first. */
     fun recent(n: Int): List<String> = synchronized(lines) { lines.toList().takeLast(n) }
 
     fun dump(writer: PrintWriter) {

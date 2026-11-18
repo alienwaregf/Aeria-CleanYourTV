@@ -20,15 +20,6 @@ import java.io.DataOutputStream
 import java.io.File
 import java.util.Locale
 
-/**
- * Tiles as drawn at an earlier start, one file per app, so a cold start shows them at once. Drawing
- * them took a cold start 1.3 s for 24 apps on Xiaomi MiTV-MFTR0, and Home stood without tiles
- * meanwhile, longer on slower TVs (issue #294); reading one back is a few small PNG decodes.
- *
- * A file is used only while its key matches: the app's update time and custom picture, the tile
- * size, the icon style, the language (the label is in it) and Aerial's version (the drawing may
- * change between versions).
- */
 object TileDiskCache {
     private const val TAG = "AerialTiles"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -39,7 +30,6 @@ object TileDiskCache {
         dir = File(context.cacheDir, "tiles").apply { mkdirs() }
     }
 
-    /** Bumped when tiles are drawn differently, so a build with the same version code redraws them. */
     private const val ART = 4
 
     fun key(stamp: Long): String =
@@ -47,7 +37,6 @@ object TileDiskCache {
 
     private fun file(pkg: String) = File(dir, "$pkg.tile")
 
-    /** The label and tile kept for [pkg] under [key], or null. Off the main thread. */
     fun read(pkg: String, key: String): Pair<String, TileArt>? {
         if (!::dir.isInitialized) return null
         val f = file(pkg).takeIf { it.exists() } ?: return null
@@ -71,7 +60,6 @@ object TileDiskCache {
         }.onFailure { Log.w(TAG, "could not read the kept tile of $pkg", it) }.getOrNull()
     }
 
-    /** Only the label and color kept for [pkg] under [key], or null: the few bytes at the file's start. */
     fun readHeader(pkg: String, key: String): Pair<String, Color>? {
         if (!::dir.isInitialized) return null
         val f = file(pkg).takeIf { it.exists() } ?: return null
@@ -83,7 +71,6 @@ object TileDiskCache {
         }.getOrNull()
     }
 
-    /** Keeps [art] for the next start, in the background. */
     fun write(pkg: String, key: String, label: String, art: TileArt) {
         if (!::dir.isInitialized) return
         scope.launch {
@@ -109,7 +96,6 @@ object TileDiskCache {
         }
     }
 
-    /** Drops the files of apps no longer listed. */
     fun keepOnly(packages: Set<String>) {
         if (!::dir.isInitialized) return
         scope.launch {

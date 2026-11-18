@@ -109,37 +109,24 @@ import kotlin.math.ceil
 import kotlin.math.cos
 import kotlin.math.roundToInt
 
-// D-pad remotes give no tilt to follow, so the lift itself has to read from across the room.
 private const val FOCUSED_SCALE = 1.15f
 private const val PRESSED_SCALE = 1.05f
 
-/**
- * A tile's rest bounds grown about their middle to its size when focused: where the launch
- * animation starts, since the focused tile is what the viewer sees.
- */
 fun Rect.asFocusedTile(): Rect {
     val dx = width * (FOCUSED_SCALE - 1f) / 2f
     val dy = height * (FOCUSED_SCALE - 1f) / 2f
     return Rect(left - dx, top - dy, right + dx, bottom + dy)
 }
 
-/** Half a sine wave, so a back-and-forth eases through each turn. */
 private val SineEasing = Easing { t -> (1f - cos(PI * t).toFloat()) / 2f }
 private val Corner = 12.dp
 private const val RIM_AT_REST = 0.07f
 
-// High-contrast focus frame: a white ring this far outside the tile, as tvOS draws it.
 private val RingGap = 5.dp
 private val ShadowBlur = 14.dp
 private val ShadowDrop = 12.dp
 private val RingWidth = 3.dp
 
-/**
- * One app on the home screen, drawn the tvOS way: it lifts toward you when focused, a soft light
- * lies across its top edge, its name appears beneath it, and it leans and springs back when you
- * push against the edge of the grid. Adaptive icons keep their two layers, so the logo shifts
- * against its background when the tile leans.
- */
 @Composable
 fun AppTile(
     app: AppEntry,
@@ -148,17 +135,13 @@ fun AppTile(
     focusRequester: FocusRequester,
     enabled: Boolean,
     moving: Boolean,
-    /** Extra opacity applied inside each drawing layer, without a layer around the whole tile. */
     opacity: () -> Float = { 1f },
     onFocused: () -> Unit,
     onClick: (Rect?) -> Unit,
     onLongPress: (Rect?) -> Unit,
     modifier: Modifier = Modifier,
-    /** Last tile of its row: Right stops here instead of finding the status pill above (#211). */
     rowEnd: Boolean = false,
-    /** False on the glass plate: the top row shows no names there, as on tvOS 26. */
     showName: Boolean = true,
-    /** The name sits on the glass plate, which ends just under it: it does not step down past the focus frame. */
     nameOnPlate: Boolean = false,
 ) {
     val reduced = LocalReducedMotion.current
@@ -166,7 +149,6 @@ fun AppTile(
     val focusManager = LocalFocusManager.current
 
     var focused by remember { mutableStateOf(false) }
-    // Once per tile: a focused one drawn from its artwork before its face was made (issue #654).
     val rawLogged = remember { booleanArrayOf(false) }
     var pressed by remember { mutableStateOf(false) }
     var bounds by remember { mutableStateOf<Rect?>(null) }
@@ -176,7 +158,6 @@ fun AppTile(
     val click by rememberUpdatedState(onClick)
     val longPress by rememberUpdatedState(onLongPress)
 
-    // Lean (degrees) and push (px) used by the edge nudge.
     val leanY = remember { Animatable(0f) }
     val leanX = remember { Animatable(0f) }
     val push = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
@@ -188,9 +169,6 @@ fun AppTile(
             focused || moving -> FOCUSED_SCALE
             else -> 1f
         },
-        // Press answers immediately; focus settles on a spring so rapid D-pad presses retarget
-        // smoothly. Critically damped, as Android TV's focus zoom (Leanback, Compose for TV) is: an
-        // overshoot reads as a wobble on a lit tile and makes the white frame shimmer.
         animationSpec = if (pressed) tween(110, easing = Motion.EaseOut) else spring(dampingRatio = 1f, stiffness = 520f),
         label = "tile-scale",
     )
@@ -206,31 +184,23 @@ fun AppTile(
         label = "tile-ring",
     )
     val ring by ringState
-    // The frame comes on quickly with the zoom and goes off faster still, so moving along a row
-    // never shows two frames at once. It grows out from the tile's edge to its place.
     val ringInState = animateFloatAsState(
         targetValue = if (focused || moving) 1f else 0f,
         animationSpec = if (focused || moving) spring(dampingRatio = 1f, stiffness = 700f) else spring(dampingRatio = 1f, stiffness = 2400f),
         label = "tile-ring-in",
     )
     val ringIn by ringInState
-    // Whether the shadow and the frame are there at all changes once per focus move; the values
-    // themselves are read only in the layers and draws below. Read in composition, every frame of
-    // the springs recomposed the whole tile and threw away its drawing cache.
     val showShadow by remember { derivedStateOf { liftState.value > 0.01f } }
     val showFrame by remember { derivedStateOf { ringState.value > 0.01f && ringInState.value > 0.01f } }
 
-    // tvOS "jiggle" while the app is being moved.
     val wobble = if (moving && !reduced) {
         rememberInfiniteTransition(label = "jiggle").animateFloat(
             initialValue = -1.3f, targetValue = 1.3f,
-            // A sine, not a triangle: linear turned back hard at each end and read as a buzz.
             animationSpec = infiniteRepeatable(tween(130, easing = SineEasing), RepeatMode.Reverse),
             label = "jiggle-angle",
         )
     } else null
 
-    // One small bump back, as tvOS does: at 0.45 damping it swung past rest and rocked once more.
     fun nudge(dx: Float, dy: Float) {
         if (reduced) return
         scope.launch {
@@ -249,9 +219,6 @@ fun AppTile(
 
     Box(modifier.size(width, height)) {
         if (showShadow && !AerialSettings.lite && DiagLayers.shows("shadow")) {
-            // A lifted tile casts a soft shadow below it, as cards do on tvOS. The system's
-            // elevation shadow is too faint to read on a TV; this one is baked, so it costs one
-            // image draw while a tile is lifted.
             Canvas(
                 Modifier
                     .size(width, height)
@@ -277,10 +244,6 @@ fun AppTile(
                 .onGloballyPositioned { bounds = it.boundsInWindow() }
                 .graphicsLayer {
                     alpha = opacity()
-                    // Fading into the screensaver, without an offscreen buffer per tile: every tile
-                    // of both rows fades at once (Xiaomi MiTV-MFTR0 over the aerial film, four
-                    // screensaver entries: 49 janky frames with the buffers, 27 without). The logo
-                    // over the plate lets a little of it through meanwhile, unseen in a fade that short.
                     compositingStrategy = CompositingStrategy.ModulateAlpha
                     zoom(scale)
                     rotationY = leanY.value
@@ -289,8 +252,6 @@ fun AppTile(
                     translationX = push.value.x
                     translationY = push.value.y
                     cameraDistance = 14f * density
-                    // The plain rounded rect holds the continuous outline the tile draws itself,
-                    // and the hardware clips to it for free.
                     shape = RoundedCornerShape(Corner)
                     clip = true
                 }
@@ -314,8 +275,6 @@ fun AppTile(
                         else -> null
                     }
                     if (dir != null) {
-                        // A held key repeats: the wall is told once, on the first press, or the tile
-                        // stayed pushed and leaning and the limit sound ran on while the key was held.
                         if (down && !focusManager.moveFocus(dir) && e.nativeKeyEvent.repeatCount == 0) {
                             Sounds.limit()
                             when (dir) {
@@ -327,9 +286,6 @@ fun AppTile(
                         }
                         return@onKeyEvent true
                     }
-                    // The Menu key opens the same menu: old remotes (Phicomm boxes) rarely report a
-                    // held OK as held (issue #28). On key-up, and only for a press that began on
-                    // this tile, so no release is left over to choose the menu's first row.
                     if (e.nativeKeyEvent.keyCode == NativeKeyEvent.KEYCODE_MENU) {
                         if (down && e.nativeKeyEvent.repeatCount == 0) menuPressed = true
                         else if (e.type == KeyEventType.KeyUp && menuPressed) {
@@ -342,7 +298,6 @@ fun AppTile(
                     if (!e.isSelect()) return@onKeyEvent false
                     if (down) {
                         if (e.nativeKeyEvent.repeatCount > 0 && pressed && !longFired) {
-                            // Remotes that auto-repeat a held key report the long press themselves.
                             longPressJob?.cancel()
                             longFired = true
                             pressed = false
@@ -372,10 +327,6 @@ fun AppTile(
                     }
                     true
                 }
-                // Touch (issue #60): a tap opens the app and a long press opens its menu, both
-                // focusing the tile first. The lift that ends a long press belongs to this tile's
-                // gesture, so it cannot choose the menu's first row. A drag that scrolls the grid
-                // cancels both.
                 .pointerInput(enabled) {
                     if (!enabled) return@pointerInput
                     detectTapGestures(
@@ -405,18 +356,8 @@ fun AppTile(
                 val w = size.width.roundToInt()
                 val h = size.height.roundToInt()
                 val full = IntSize(w, h)
-                // The plate is a picture made once: the artwork cut to the continuous outline with
-                // its rim, so a tile is one image draw, as before. Cut on the GPU (a path, or masks
-                // sampled with the artwork) it took the Xiaomi MFTR0 from 11ms to 15-72ms a frame.
-                // There are two, each shown pixel for pixel: one at rest size, and one at the focused
-                // size, made the first time the tile is focused. With only the rest one, the focus
-                // zoom stretched it and banners read soft (issue #307); with only the focused one,
-                // tiles at rest were shrunk and lost a little.
                 val fw = focusedPx(size.width)
                 val fh = focusedPx(size.height)
-                // Made in the background (TileFaces.prepare). Until it is there the artwork is drawn
-                // as it is, inside the layer's rounded clip: nearly the same picture, and the tiles
-                // show at once instead of waiting for the faces.
                 fun face(fw: Int, fh: Int): ImageBitmap? = TileFaces.ready(art.back, fw, fh)
                     ?: if (TileFaces.background) null
                     else TileFaces.face(art.back, fw, fh, Corner.toPx() * fw / w, 0.5.dp.toPx() * fw / w)
@@ -424,21 +365,15 @@ fun AppTile(
                     .apply { setLocalMatrix(Matrix().apply { setScale(size.width / w, size.height / h) }) }
                 val rim = tileRim(w, h, Corner.toPx(), 0.5.dp.toPx())
                 onDrawBehind {
-                    // Plate and logo are placed in the face's pixels; at focus the zoom undoes the scale.
                     val lifted = scale > (1f + FOCUSED_SCALE) / 2f
                     val pw = if (lifted) fw else w
                     val ph = if (lifted) fh else h
-                    // Read here so the tile draws again when the faces it waits for are made.
                     TileFaces.version
-                    // Lite: no sheen (a shader per frame) and no parallax on the focused tile.
                     val lite = AerialSettings.lite
                     scale(size.width / pw, size.height / ph, pivot = Offset.Zero) {
                         val made = face(pw, ph)
                         if (made != null) drawImage(made)
                         else {
-                            // Cut to the outline here too, not only by the layer: Redmi X50 (MiTV-NSOP0,
-                            // Novatek, Android 9) showed the focused tile square-cornered as Back
-                            // started the screensaver (issue #654). Only until the face is made.
                             if (!rawLogged[0] && (focused || lift > 0.01f)) { rawLogged[0] = true; DiagLog.i("tile ${app.label} drawn before its face, ${pw}x$ph") }
                             clipPath(smoothRectPath(Rect(0f, 0f, pw.toFloat(), ph.toFloat()), Corner.toPx() * pw / size.width)) {
                                 drawImage(art.back, dstSize = IntSize(pw, ph), filterQuality = FilterQuality.Medium)
@@ -446,7 +381,6 @@ fun AppTile(
                         }
                         art.fore?.let { fore ->
                             val at = art.foreAt
-                            // Parallax: the logo travels further than the plate when the tile leans.
                             val px = if (lite) 0f else leanY.value / 7f * pw * 0.035f
                             val py = if (lite) 0f else -leanX.value / 7f * ph * 0.035f
                             drawImage(
@@ -458,7 +392,6 @@ fun AppTile(
                         }
                     }
                     if (lift > 0.01f && !lite) {
-                        // Light from above: a soft sheen across the top, brighter where the tile leans toward it.
                         val glintX = size.width * (0.3f + leanY.value / 7f * 0.25f)
                         val glint = RadialGradient(
                             glintX, -size.height * 0.25f, size.width * 0.75f,
@@ -466,15 +399,12 @@ fun AppTile(
                         )
                         drawRect(ShaderBrush(ComposeShader(glint, shape, PorterDuff.Mode.DST_IN)), blendMode = BlendMode.Screen)
                     }
-                    // A focused tile's rim catches a little more light.
                     if (lift > 0.01f) drawImage(rim, dstSize = full, alpha = 0.08f * lift)
                 }
             })
         }
 
         if (showFrame) {
-            // The frame sits outside the tile, so it is drawn on its own unclipped layer that moves
-            // exactly as the tile does: same lift, lean, push and jiggle.
             Canvas(
                 Modifier
                     .size(width, height)
@@ -487,13 +417,9 @@ fun AppTile(
                         translationY = push.value.y
                         cameraDistance = 14f * density
                         alpha = ring * ringIn * opacity()
-                        // No offscreen buffer while fading: it would be only tile-sized and clip the
-                        // frame down to the four corner arcs that reach inside the tile's bounds.
                         compositingStrategy = CompositingStrategy.ModulateAlpha
                     },
             ) {
-                // The frame grows out from the tile to its place: drawn at its full gap, pulled in
-                // by what the gap still lacks.
                 val frame = ringFrame(size.width.roundToInt(), size.height.roundToInt(), Corner.toPx(), RingGap.toPx(), RingWidth.toPx(), 1.dp.toPx())
                 val e = frame.ext - RingGap.toPx() * 0.6f * (1f - ringIn)
                 translate(-e, -e) {
@@ -508,7 +434,6 @@ fun AppTile(
             text = app.label,
             style = Type.Headline.copy(
                 textAlign = TextAlign.Center,
-                // Names sit on the wallpaper; a soft shadow keeps them readable over bright photos.
                 shadow = Shadow(Color.Black.copy(alpha = 0.6f), blurRadius = 8f),
             ),
             maxLines = 1,
@@ -518,12 +443,8 @@ fun AppTile(
                 .offset(y = height + 10.dp)
                 .requiredSize(width + 36.dp, 24.dp)
                 .graphicsLayer {
-                    // Only the focused app shows its name. With every name shown, the others stay a
-                    // little dimmer than the focused one.
                     alpha = (if (AerialSettings.showAllNames) 0.7f + 0.3f * lift else lift) * opacity()
-                    // Keep the shadow outside the text bounds when the name is dimmed or fading.
                     compositingStrategy = CompositingStrategy.ModulateAlpha
-                    // Sits just under the lifted tile, and rises into place as it appears.
                     translationY = height.toPx() * (scale - 1f) / 2f - (1f - lift) * 6.dp.toPx() +
                         if (nameOnPlate) 0f else ring * ringIn * (RingGap + RingWidth).toPx() * scale
                 },
@@ -532,51 +453,26 @@ fun AppTile(
 }
 
 
-/**
- * The tile at rest: [back] cut to the continuous outline, with a hairline rim as on tvOS icons so
- * dark artwork still reads against black.
- */
-/**
- * A side of the focused tile in pixels: about [FOCUSED_SCALE] times [px], grown by the same whole
- * number of pixels at both ends, so a face of this size lands exactly on the screen's pixels. At
- * 294 px × 1.15 = 338.1 the face drifted across pixel boundaries and was resampled on the screen,
- * which cost about as much sharpness as the stretch it replaced (Xiaomi MiTV-MFTR0, issue #307).
- */
 private fun focusedPx(px: Float): Int {
     val r = px.roundToInt()
     return r + 2 * (r * (FOCUSED_SCALE - 1f) / 2f).roundToInt()
 }
 
-/** The tile's zoom for [scale], per axis, so that at [FOCUSED_SCALE] each side is exactly [focusedPx]. */
 private fun GraphicsLayerScope.zoom(scale: Float) {
     val t = (scale - 1f) / (FOCUSED_SCALE - 1f)
     scaleX = 1f + t * (focusedPx(size.width) / size.width - 1f)
     scaleY = 1f + t * (focusedPx(size.height) / size.height - 1f)
 }
 
-/**
- * Tile faces by artwork and pixel size. A face is a path drawn with anti-aliasing on the CPU: made
- * on a tile's first draw, the whole grid's took the main thread about 120 ms in the frame the tiles
- * first appear on a cold start (Xiaomi MiTV-MFTR0, release build; more on slower TVs). Home makes
- * them on background threads before it shows the tiles ([prepare]); a tile only draws them.
- * Kept while the artwork is: AppCatalog keeps that as long as the app is installed and unchanged.
- */
 object TileFaces {
     private val made = java.util.WeakHashMap<ImageBitmap, HashMap<Long, ImageBitmap>>()
 
-    /** Bumped when [prepare] has made a batch; tiles read it while drawing. */
     var version by mutableIntStateOf(0); private set
 
-    /** Set while [prepare] is making faces: a tile then draws its artwork until its face is made. */
     @Volatile var background = false; private set
 
-    /** The size [prepare] last made the faces at rest, packed as in [made]'s keys. */
     @Volatile private var restKey = 0L
 
-    /**
-     * Drops the faces at any other size than at rest (the focused ones, about 250 KB each): a tile
-     * makes its own again when it is next focused. For the system's low-memory signals.
-     */
     fun trimMemory() = synchronized(made) {
         val keep = restKey
         for (sizes in made.values) sizes.keys.retainAll { it == keep }
@@ -593,11 +489,6 @@ object TileFaces {
         return face
     }
 
-    /**
-     * Makes the faces of [arts] at rest on a screen [screenW] px wide at [density], as AppTile will
-     * draw them, several at a time; with [focused], the focused faces instead. Off the main thread.
-     * Sizes worked out exactly as AppTile's: a face of another size is simply made there.
-     */
     suspend fun prepare(arts: List<TileArt>, screenW: Int, density: Float, focused: Boolean = false) = coroutineScope {
         val tileW = restTileWidth((screenW / density).dp, AerialSettings.homeColumns).value * density
         val tileH = tileW * 9f / 16f
@@ -609,18 +500,14 @@ object TileFaces {
         val rim = 0.5f * density * fw / w
         if (!focused) {
             val key = (w.toLong() shl 32) or h.toLong()
-            // Another number of apps a row: the faces at the old size go, focused ones too.
             val resized = restKey != 0L && restKey != key
             restKey = key
             if (resized) trimMemory()
         }
         val todo = arts.distinctBy { System.identityHashCode(it.back) }.filter { ready(it.back, fw, fh) == null }
         if (todo.isEmpty()) return@coroutineScope
-        // Only for the faces at rest: the focused ones are made ahead of need, and a tile focused
-        // before its turn still makes its own.
         if (!focused) background = true
         try {
-            // A few at a time, so the tiles appear in order (and Home's first frames keep a core).
             for (batch in todo.chunked(BATCH)) {
                 batch.map { art -> async { runCatching { face(art.back, fw, fh, radius, rim) } } }.awaitAll()
                 withContext(Dispatchers.Main) { version++ }
@@ -647,7 +534,6 @@ private fun tileFace(back: ImageBitmap, w: Int, h: Int, radius: Float, rimWidth:
     return bitmap.frozen().asImageBitmap()
 }
 
-/** The tile's rim: a hairline just inside its continuous outline, white at [alpha] on clear. */
 private fun tileRim(w: Int, h: Int, radius: Float, width: Float, alpha: Float = 1f): ImageBitmap = baked(listOf("tile-rim", w, h, radius, width, alpha)) {
     val bitmap = createBitmap(w, h)
     android.graphics.Canvas(bitmap).apply {
@@ -659,7 +545,6 @@ private fun tileRim(w: Int, h: Int, radius: Float, width: Float, alpha: Float = 
     bitmap.frozen().asImageBitmap()
 }
 
-/** A tile's shadow, soft black under its continuous outline; [ext] px of it lie outside the tile on each side. */
 private class TileShadow(val image: ImageBitmap, val ext: Float)
 
 private fun tileShadow(w: Int, h: Int, corner: Float, blur: Float): TileShadow = baked(listOf("shadow", w, h, corner, blur)) {
@@ -678,7 +563,6 @@ private fun tileShadow(w: Int, h: Int, corner: Float, blur: Float): TileShadow =
     TileShadow(bitmap.frozen().asImageBitmap(), ext)
 }
 
-/** The high-contrast frame at its full gap; [ext] px of the picture lie outside the tile on each side. */
 private class RingFrame(val image: ImageBitmap, val ext: Float)
 
 private fun ringFrame(w: Int, h: Int, corner: Float, gap: Float, width: Float, dp: Float): RingFrame =
@@ -688,17 +572,13 @@ private fun ringFrame(w: Int, h: Int, corner: Float, gap: Float, width: Float, d
         val ext = ceil(halo + dp + 1f)
         val bitmap = createBitmap(w + 2 * ext.toInt(), h + 2 * ext.toInt())
         val canvas = android.graphics.Canvas(bitmap).apply { translate(ext, ext) }
-        // Each line follows the tile's continuous corner, centred [d] outside its edge.
         fun around(d: Float) = smoothRectPath(Rect(-d, -d, w + d, h + d), corner + d).asAndroidPath()
         fun line(lineWidth: Float, color: Color) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeWidth = lineWidth
             this.color = color.toArgb()
         }
-        // A faint dark edge outside the white one keeps the frame visible over bright sky or snow.
         canvas.drawPath(around(halo), line(2 * dp, Color.Black.copy(alpha = 0.3f)))
-        // Lit like the glass it sits on: brightest where light falls from the top left and at the
-        // far corner, still near white everywhere so it reads from across the room.
         canvas.drawPath(around(out), line(width, Color.White).apply {
             shader = LinearGradient(
                 -out, -out, w + out, h + out,
@@ -707,7 +587,6 @@ private fun ringFrame(w: Int, h: Int, corner: Float, gap: Float, width: Float, d
                 Shader.TileMode.CLAMP,
             )
         })
-        // A thin inner line of light, the glass's thickness.
         canvas.drawPath(around(out - width / 2 - 0.75f * dp), line(dp, Color.White.copy(alpha = 0.35f)))
         RingFrame(bitmap.frozen().asImageBitmap(), ext)
     }

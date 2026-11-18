@@ -2,20 +2,9 @@ package com.gathin.tvhome.ui.home
 
 import java.time.LocalDate
 
-/**
- * The Chinese calendar's date, for the large clock when the TV speaks Chinese: "九月初五", as the
- * iPhone's lock screen shows it beside the date. A table rather than android.icu's ChineseCalendar,
- * which only came in Android 7 (the Xiaomi MiTV4 sets run Android 6).
- */
 object Lunar {
     private const val FIRST_YEAR = 1901
 
-    /**
-     * One lunar year per Gregorian year it begins in, from 1901 to 2100, generated from macOS's
-     * Chinese calendar and checked against it day by day (LunarTest). Bits 0-3: after which month
-     * the leap month comes, 0 for none; bits 4-16: whether each month in turn (the leap one in its
-     * place) has 30 days; bits 17-21 and 22-23: the day and month (0 = January) of the new year.
-     */
     private val YEARS = intArrayOf(
         0x667520, 0x50ea50, 0x3b64a5, 0x6064b0, 0x48a9b0, 0x335564, 0x5a56a0, 0x44b590, 0x2d7522, 0x547520,
         0x3db256, 0x64b250, 0x4ca4b0, 0x352ab5, 0x5caad0, 0x4856a0, 0x2eb692, 0x56da90, 0x43d927, 0x68d920,
@@ -43,7 +32,6 @@ object Lunar {
     private val TENS = arrayOf("初", "十", "廿", "三")
     private val UNITS = arrayOf("一", "二", "三", "四", "五", "六", "七", "八", "九", "十")
 
-    /** [date] in the Chinese calendar, as "九月初五" or "闰六月十二"; null outside 1901-2100. */
     fun text(date: LocalDate): String? {
         val (month, day, leap) = of(date) ?: return null
         val days = when (day) {
@@ -55,11 +43,9 @@ object Lunar {
         return (if (leap) "闰" else "") + MONTHS[month - 1] + "月" + days
     }
 
-    /** The month (1-12), day and whether the month is a leap one; null outside the table. */
-    fun of(date: LocalDate): Triple<Int, Int, Boolean>? {
+    private fun of(date: LocalDate): Triple<Int, Int, Boolean>? {
         var i = date.year - FIRST_YEAR
         if (i >= YEARS.size) return null
-        // Before this year's new year, the date is still in the year that began last January or February.
         if (i >= 0 && date.isBefore(newYear(i))) i--
         if (i < 0) return null
         val info = YEARS[i]

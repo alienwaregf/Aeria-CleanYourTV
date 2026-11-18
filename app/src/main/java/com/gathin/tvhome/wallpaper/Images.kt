@@ -15,10 +15,8 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
-/** Bitmap helpers shared by the wallpaper code. All of it runs off the main thread. */
 object Images {
 
-    /** Decodes [file] no larger than needed for [w]×[h], upright, then centre-crops it to exactly that size. */
     fun decodeCover(file: File, w: Int, h: Int): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.path, bounds)
@@ -34,23 +32,16 @@ object Images {
         return cover(src, w, h).also { if (it !== src) src.recycle() }
     }
 
-    /**
-     * How the camera stored [file]'s picture (EXIF Orientation). Phones keep the sensor's pixels as
-     * they were and write the turn into the file, so a photo taken upright decoded on its side or
-     * upside down (issue #647). Normal for anything without the tag (PNG, Bing's pictures).
-     */
     fun exifOrientation(file: File): Int = runCatching {
         ExifInterface(file.path).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
     }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
 
-    /** Whether [orientation] turns the picture a quarter, so its width and height swap. */
     fun quarterTurn(orientation: Int): Boolean = when (orientation) {
         ExifInterface.ORIENTATION_TRANSPOSE, ExifInterface.ORIENTATION_ROTATE_90,
         ExifInterface.ORIENTATION_TRANSVERSE, ExifInterface.ORIENTATION_ROTATE_270 -> true
         else -> false
     }
 
-    /** [src] turned and mirrored upright for [orientation]; [src] itself when it already is, else recycled. */
     fun upright(src: Bitmap, orientation: Int): Bitmap {
         val m = Matrix()
         when (orientation) {
@@ -78,13 +69,6 @@ object Images {
         return out
     }
 
-    /**
-     * Shading baked into a home backdrop so the clock and the top row read over any picture, the way
-     * tvOS darkens the area under its app rows. Baked once, so the TV draws a single full-screen layer.
-     * Light since 1.28: the grid has its own darkened frosted background and the top row its plate,
-     * and the old shade (88% black at the bottom, 42% more on the left) made photos look dim (#157).
-     */
-    /** The home shading, top to bottom: black at these alphas at [SHADE_AT]; and [SHADE_LEFT] fading out by mid-screen. */
     val SHADE = floatArrayOf(0.12f, 0.04f, 0.22f, 0.5f)
     val SHADE_AT = floatArrayOf(0f, 0.3f, 0.66f, 1f)
     const val SHADE_LEFT = 0.2f
@@ -107,18 +91,8 @@ object Images {
         return out
     }
 
-    /**
-     * [shadeForHome] on its own, small, for a moving film: stretched over the screen in one draw.
-     * Drawn as its two gradients every frame instead, it cost the GPU about 22 ms a frame on Xiaomi
-     * MiTV-MFTR0, where the film keeps Home drawing: moving along the top row took 81 ms a frame
-     * (median; GPU 30 ms), 31 ms (GPU 13 ms) with this picture.
-     */
     val homeShade: Bitmap by lazy { shadeForHome(Bitmap.createBitmap(128, 72, Bitmap.Config.ARGB_8888)) }
 
-    /**
-     * A home backdrop frosted: shrunk and blurred three times over. Small
-     * on purpose; it is only ever seen blurred, and it is drawn stretched in a single pass.
-     */
     fun frost(b: Bitmap): Bitmap {
         val w = 320
         val h = 180
@@ -126,12 +100,11 @@ object Images {
         val px = IntArray(w * h)
         small.getPixels(px, 0, w, 0, 0, w, h)
         repeat(3) { boxBlur(px, w, h, 7) }
-        val out = small.copy(Bitmap.Config.ARGB_8888, true).also { if (it !== small) small.recycle() }
+        val out = small.copy(Bitmap.Config.ARGB_8888, true).also { if (it !== small && small !== b) small.recycle() }
         out.setPixels(px, 0, w, 0, 0, w, h)
         return out
     }
 
-    /** Fine noise, so long gradients do not band on 8-bit panels. */
     fun dither(b: Bitmap) {
         val w = b.width
         val h = b.height

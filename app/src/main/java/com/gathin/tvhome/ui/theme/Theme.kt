@@ -14,15 +14,9 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.gathin.tvhome.R
 
-/**
- * Pixels per dp of Aerial's 960×540 design canvas on this screen: 2 for a 1080p UI, 4 for a TV
- * that draws its UI at 4K. Anything rasterized ahead of time (tile art, wallpapers) is sized from
- * this too, so it stays as sharp as the text drawn live.
- */
 fun canvasDensity(metrics: android.util.DisplayMetrics): Float =
     minOf(metrics.widthPixels, metrics.heightPixels * 16 / 9) / 960f
 
-/** tvOS dark appearance. Values follow Apple's system colors for the dark, elevated context. */
 object Palette {
     val Label = Color(0xFFFFFFFF)
     val SecondaryLabel = Color(0x99EBEBF5)
@@ -35,28 +29,20 @@ object Palette {
     val Orange = Color(0xFFFF9F0A)
     val Red = Color(0xFFFF453A)
 
-    /** tvOS draws a focused control as a near-white plate with dark content. */
     val Focus = Color(0xFFF5F5F7)
     val OnFocus = Color(0xFF1D1D1F)
 }
 
 object Motion {
-    /** Strong ease-out: entrances, anything that answers the user. */
     val EaseOut = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
 
-    /** On-screen movement between two resting places. */
     val EaseInOut = CubicBezierEasing(0.77f, 0f, 0.175f, 1f)
 
-    /** iOS sheet curve, for panels sliding in. */
     val Drawer = CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
 }
 
-/** True when the TV's animator scale is 0 ("remove animations"). Motion collapses to fades. */
 val LocalReducedMotion = staticCompositionLocalOf { false }
 
-// Inter has an optical size axis. Text sizes get the 14pt master, display sizes the 32pt master,
-// the way SF Pro switches between Text and Display. Font variations need Android 8.0; before that
-// every weight would come out as Inter Regular, so those TVs use the system's Roboto instead.
 @OptIn(ExperimentalTextApi::class)
 private fun inter(opticalSize: Float) = if (Build.VERSION.SDK_INT < 26) FontFamily.SansSerif else FontFamily(
     (1..9).map { i ->
@@ -80,7 +66,6 @@ object Type {
         fontFamily = InterDisplay, fontWeight = FontWeight.W700,
         fontSize = 104.sp, letterSpacing = (-0.04).em, color = Palette.Label,
     )
-    /** Over and under the large clock: the date, and the weather. */
     val ClockDate = TextStyle(
         fontFamily = InterDisplay, fontWeight = FontWeight.W600,
         fontSize = 19.sp, letterSpacing = (-0.005).em, color = Palette.Label,
@@ -89,11 +74,6 @@ object Type {
         fontFamily = InterText, fontWeight = FontWeight.W600,
         fontSize = 16.sp, color = Palette.Label,
     )
-    /**
-     * The smaller clocks (Home's small clock, Control Center, the screensaver). Display cuts and
-     * negative tracking made their digits run together at these sizes (#494), so they take the
-     * text cut and open tracking. Size is set where used.
-     */
     val SmallClock = TextStyle(
         fontFamily = InterText, fontWeight = FontWeight.W600,
         letterSpacing = 0.05.em, color = Palette.Label,

@@ -4,20 +4,6 @@ import android.content.Context
 import androidx.core.content.edit
 import java.time.LocalDate
 
-/**
- * The few aerial films Aerial plays, kept on disk (AerialStream), shared by the aerial wallpaper and
- * every screensaver of aerials in every format, so going from one to the other is the same film
- * (owner, 2026-10-29: "从杜比的屏保到航拍壁纸切换的时候，最好是同一个视频").
- *
- * - [MAX] films, newest first. Both play them in this order, one after another, round and round;
- *   where each one is and how far in is Wallpapers.liveSpot, written by whichever plays.
- * - A new film joins once a day, at the day's first screensaver or Home's first film ([takeDaily]),
- *   and pressing right in the screensaver adds one at once ([addNew]); the oldest leaves either way.
- * - Left steps back through the films kept, which play from disk.
- *
- * Until 1.69 every screensaver shuffled all 114 films, and the wallpaper picked its own: the two
- * rarely matched, and every film was fetched again each time (issue #843).
- */
 object AerialSet {
     const val MAX = 3
 
@@ -33,7 +19,6 @@ object AerialSet {
         if (day != null) putString("day", day)
     }
 
-    /** The set, newest first; on the first use, the film the wallpaper last showed, else any one. */
     @Synchronized
     fun films(context: Context): List<Aerial> {
         val all = Aerials.all(context)
@@ -44,10 +29,6 @@ object AerialSet {
         return listOf(first)
     }
 
-    /**
-     * The films in playing order from [current]: it first, then those after it in the set, then
-     * round to those before. A film not in the set (the wallpaper's from before 1.70) joins it.
-     */
     @Synchronized
     fun playlist(context: Context, current: String?): List<Aerial> {
         var set = films(context)
@@ -62,7 +43,6 @@ object AerialSet {
         return set.drop(at) + set.take(at)
     }
 
-    /** The film a new day brings in, chosen ahead so the screensaver's start can be fetched first. */
     @Synchronized
     fun nextNew(context: Context): Aerial {
         val all = Aerials.all(context)
@@ -73,7 +53,6 @@ object AerialSet {
         return film
     }
 
-    /** A film joins the set as its newest, the oldest leaves, and the next new one is chosen afresh. */
     @Synchronized
     fun addNew(context: Context): Aerial {
         val film = nextNew(context)
@@ -84,12 +63,9 @@ object AerialSet {
         return film
     }
 
-    /** Whether today has not had its new film yet. */
     fun due(context: Context): Boolean = prefs(context).getString("day", null) != today()
 
-    /** Today's new film, if today has not had one: it joins the set (see [addNew]). */
     fun takeDaily(context: Context): Aerial? = if (due(context)) addNew(context) else null
 
-    /** Today's date; a test moves it on. */
     internal var today: () -> String = { LocalDate.now().toString() }
 }
