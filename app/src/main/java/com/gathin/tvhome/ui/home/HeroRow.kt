@@ -301,7 +301,7 @@ fun HeroRow(
             HeroPosters.load(target.backdropUrl, Wallpapers.screenW, Wallpapers.screenH)
         }
         if (bmp == null) {
-            if (d != 0 && !reduced && frontBitmap != null) {
+            if (d != 0 && frontBitmap != null) {
                 infoX.snapTo(infoSlidePx * d)
                 infoAlpha.snapTo(0f)
                 displayedItem = target
@@ -317,17 +317,6 @@ fun HeroRow(
                 displayedIndex = index
             }
         } else if (d == 0 || frontBitmap == null) {
-            frontX.snapTo(0f)
-            frontAlpha.snapTo(1f)
-            backX.snapTo(0f)
-            backAlpha.snapTo(0f)
-            infoX.snapTo(0f)
-            infoAlpha.snapTo(1f)
-            frontBitmap = bmp.asImageBitmap()
-            backBitmap = null
-            displayedItem = target
-            displayedIndex = index
-        } else if (reduced) {
             frontX.snapTo(0f)
             frontAlpha.snapTo(1f)
             backX.snapTo(0f)

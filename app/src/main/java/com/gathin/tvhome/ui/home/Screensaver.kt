@@ -7,6 +7,7 @@ import android.view.SurfaceHolder
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -53,6 +54,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.gathin.tvhome.MainActivity
@@ -88,7 +90,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.withContext
@@ -539,6 +543,10 @@ private fun SaverRatingIcon(res: Int) {
 private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
     val context = LocalContext.current
     val items = TmdbTrending.items
+    val density = LocalDensity.current
+    val infoSlidePx = with(density) { 28.dp.toPx() }
+    val screenW = Wallpapers.screenW.toFloat()
+    var saverDir by remember { mutableStateOf(1) }
     LaunchedEffect(Unit) {
         TmdbTrending.init(context)
         TmdbTrending.refreshIfStale()
@@ -549,40 +557,115 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
     LaunchedEffect(TmdbTrending.currentIndex, items.size) {
         if (items.size <= 1) return@LaunchedEffect
         delay(8_000)
+        saverDir = 1
         TmdbTrending.currentIndex = (TmdbTrending.currentIndex + 1) % items.size
     }
     LaunchedEffect(steps) {
         steps.collect { step ->
             val count = TmdbTrending.items.size
-            if (count > 0) TmdbTrending.currentIndex = (TmdbTrending.currentIndex + step).mod(count)
+            if (count > 0) {
+                saverDir = if (step >= 0) 1 else -1
+                TmdbTrending.currentIndex = (TmdbTrending.currentIndex + step).mod(count)
+            }
         }
     }
     if (items.isEmpty()) {
         Box(Modifier.fillMaxSize().background(Color.Black))
         return
     }
-    val item = items[TmdbTrending.currentIndex.coerceIn(items.indices)]
-    LaunchedEffect(item) {
-        Ratings.fetchFor(item)
-        val next = items.getOrNull((TmdbTrending.currentIndex + 1) % items.size)
+    val index = TmdbTrending.currentIndex.coerceIn(items.indices)
+    val item = items[index]
+    var frontBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    var backBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
+    val frontX = remember { Animatable(0f) }
+    val frontAlpha = remember { Animatable(1f) }
+    val backX = remember { Animatable(0f) }
+    val backAlpha = remember { Animatable(0f) }
+    var displayedItem by remember { mutableStateOf(item) }
+    var displayedIndex by remember { mutableStateOf(index) }
+    val infoX = remember { Animatable(0f) }
+    val infoAlpha = remember { Animatable(1f) }
+    LaunchedEffect(index, item.backdropUrl) {
+        val target = items.getOrNull(index) ?: return@LaunchedEffect
+        val isIndexChange = index != displayedIndex
+        val d = if (isIndexChange) saverDir else 0
+        val bmp = withContext(Dispatchers.IO) {
+            HeroPosters.load(target.backdropUrl, Wallpapers.screenW, Wallpapers.screenH)
+        }
+        if (bmp == null) {
+            if (d != 0 && frontBitmap != null) {
+                infoX.snapTo(infoSlidePx * d)
+                infoAlpha.snapTo(0f)
+                displayedItem = target
+                displayedIndex = index
+                coroutineScope {
+                    launch { infoX.animateTo(0f, tween(520, easing = Motion.Ease)) }
+                    launch { infoAlpha.animateTo(1f, tween(520, easing = Motion.Ease)) }
+                }
+            } else {
+                infoX.snapTo(0f)
+                infoAlpha.snapTo(1f)
+                displayedItem = target
+                displayedIndex = index
+            }
+        } else if (d == 0 || frontBitmap == null) {
+            frontX.snapTo(0f)
+            frontAlpha.snapTo(1f)
+            backX.snapTo(0f)
+            backAlpha.snapTo(0f)
+            infoX.snapTo(0f)
+            infoAlpha.snapTo(1f)
+            frontBitmap = bmp.asImageBitmap()
+            backBitmap = null
+            displayedItem = target
+            displayedIndex = index
+        } else {
+            backX.snapTo(screenW * 0.12f * d)
+            backAlpha.snapTo(0f)
+            frontX.snapTo(0f)
+            frontAlpha.snapTo(1f)
+            infoX.snapTo(infoSlidePx * d)
+            infoAlpha.snapTo(0f)
+            backBitmap = bmp.asImageBitmap()
+            displayedItem = target
+            displayedIndex = index
+            coroutineScope {
+                launch { backX.animateTo(0f, tween(650, easing = Motion.Ease)) }
+                launch { backAlpha.animateTo(1f, tween(650, easing = Motion.Ease)) }
+                launch { frontX.animateTo(-screenW * 0.06f * d, tween(650, easing = Motion.Ease)) }
+                launch { frontAlpha.animateTo(0f, tween(650, easing = Motion.Ease)) }
+                launch { infoX.animateTo(0f, tween(520, easing = Motion.Ease)) }
+                launch { infoAlpha.animateTo(1f, tween(520, easing = Motion.Ease)) }
+            }
+            frontBitmap = backBitmap
+            backBitmap = null
+            frontX.snapTo(0f)
+            frontAlpha.snapTo(1f)
+            backX.snapTo(0f)
+            backAlpha.snapTo(0f)
+        }
+        val next = items.getOrNull((index + 1) % items.size)
+        if (next != null && next.backdropUrl != target.backdropUrl) {
+            withContext(Dispatchers.IO) {
+                HeroPosters.load(next.backdropUrl, Wallpapers.screenW, Wallpapers.screenH)
+            }
+        }
+        val nextProviders = next?.providerUrls.orEmpty()
+        if (nextProviders.isNotEmpty()) {
+            withContext(Dispatchers.IO) { nextProviders.forEach { ProviderLogos.load(it) } }
+        }
+        Ratings.fetchFor(target)
         next?.let { Ratings.fetchFor(it) }
     }
-    var still by remember(item.backdropUrl) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(item.backdropUrl) {
-        val bmp = withContext(Dispatchers.IO) {
-            HeroPosters.load(item.backdropUrl, Wallpapers.screenW, Wallpapers.screenH)
-        }
-        if (bmp != null) still = bmp.asImageBitmap()
-    }
-    var titleLogo by remember(item.logoUrl) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(item.logoUrl) {
-        if (item.logoUrl.isBlank()) return@LaunchedEffect
-        val bmp = withContext(Dispatchers.IO) { TitleLogos.load(item.logoUrl) }
+    var titleLogo by remember(displayedItem.logoUrl) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(displayedItem.logoUrl) {
+        if (displayedItem.logoUrl.isBlank()) return@LaunchedEffect
+        val bmp = withContext(Dispatchers.IO) { TitleLogos.load(displayedItem.logoUrl) }
         if (bmp != null) titleLogo = bmp.asImageBitmap()
     }
-    var providerLogos by remember(item) { mutableStateOf<List<ImageBitmap>>(emptyList()) }
-    LaunchedEffect(item) {
-        val urls = item.providerUrls
+    var providerLogos by remember(displayedItem) { mutableStateOf<List<ImageBitmap>>(emptyList()) }
+    LaunchedEffect(displayedItem) {
+        val urls = displayedItem.providerUrls
         if (urls.isEmpty()) return@LaunchedEffect
         val bmps = withContext(Dispatchers.IO) {
             urls.mapNotNull { ProviderLogos.load(it)?.asImageBitmap() }
@@ -590,12 +673,26 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
         providerLogos = bmps
     }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        still?.let { bmp ->
+        backBitmap?.let { bmp ->
             Image(
                 bitmap = bmp,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().graphicsLayer {
+                    translationX = backX.value
+                    alpha = backAlpha.value
+                },
+            )
+        }
+        frontBitmap?.let { bmp ->
+            Image(
+                bitmap = bmp,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().graphicsLayer {
+                    translationX = frontX.value
+                    alpha = frontAlpha.value
+                },
             )
         }
         val drift = saverDrift(now)
@@ -603,8 +700,9 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
             Modifier.align(Alignment.BottomStart)
                 .padding(start = 45.dp, end = 160.dp, bottom = 44.dp)
                 .graphicsLayer {
-                    translationX = drift.x.toPx()
+                    translationX = drift.x.toPx() + infoX.value
                     translationY = -drift.y.toPx()
+                    alpha = infoAlpha.value
                 },
         ) {
             val logo = titleLogo
@@ -618,7 +716,7 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
                 )
             } else {
                 BasicText(
-                    item.title,
+                    displayedItem.title,
                     style = Type.LargeTitle,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -654,23 +752,23 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
                         .padding(horizontal = 8.dp, vertical = 3.dp),
                 ) {
                     BasicText(
-                        stringResource(if (item.mediaType == "movie") R.string.hero_movie else R.string.hero_tv),
+                        stringResource(if (displayedItem.mediaType == "movie") R.string.hero_movie else R.string.hero_tv),
                         style = Type.Caption.copy(color = Palette.Label),
                     )
                 }
                 Spacer(Modifier.width(8.dp))
                 BasicText("·", style = Type.Callout)
                 Spacer(Modifier.width(8.dp))
-                if (item.year.isNotEmpty()) {
-                    BasicText(item.year, style = Type.Callout)
+                if (displayedItem.year.isNotEmpty()) {
+                    BasicText(displayedItem.year, style = Type.Callout)
                     Spacer(Modifier.width(8.dp))
                     BasicText("·", style = Type.Callout)
                     Spacer(Modifier.width(8.dp))
                 }
                 SaverRatingIcon(R.drawable.ic_rating_tmdb)
                 Spacer(Modifier.width(4.dp))
-                BasicText(String.format(Locale.US, "%.1f", item.voteAverage), style = Type.Callout)
-                val imdb = item.imdbRating
+                BasicText(String.format(Locale.US, "%.1f", displayedItem.voteAverage), style = Type.Callout)
+                val imdb = displayedItem.imdbRating
                 if (imdb.isNotBlank()) {
                     Spacer(Modifier.width(8.dp))
                     BasicText("·", style = Type.Callout)
@@ -679,27 +777,27 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
                     Spacer(Modifier.width(4.dp))
                     BasicText(imdb + "/10", style = Type.Callout)
                 }
-                if (item.rtPercent >= 0) {
+                if (displayedItem.rtPercent >= 0) {
                     Spacer(Modifier.width(8.dp))
                     BasicText("·", style = Type.Callout)
                     Spacer(Modifier.width(8.dp))
-                    SaverRatingIcon(if (item.rtPercent >= 60) R.drawable.ic_rt_fresh else R.drawable.ic_rt_rotten)
+                    SaverRatingIcon(if (displayedItem.rtPercent >= 60) R.drawable.ic_rt_fresh else R.drawable.ic_rt_rotten)
                     Spacer(Modifier.width(4.dp))
-                    BasicText(item.rtPercent.toString() + "%", style = Type.Callout)
+                    BasicText(displayedItem.rtPercent.toString() + "%", style = Type.Callout)
                 }
-                if (item.traktRating >= 0.0) {
+                if (displayedItem.traktRating >= 0.0) {
                     Spacer(Modifier.width(8.dp))
                     BasicText("·", style = Type.Callout)
                     Spacer(Modifier.width(8.dp))
                     SaverRatingIcon(R.drawable.ic_rating_trakt)
                     Spacer(Modifier.width(4.dp))
-                    BasicText(String.format(Locale.US, "%.1f", item.traktRating), style = Type.Callout)
+                    BasicText(String.format(Locale.US, "%.1f", displayedItem.traktRating), style = Type.Callout)
                 }
             }
-            if (item.overview.isNotEmpty()) {
+            if (displayedItem.overview.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
                 BasicText(
-                    item.overview,
+                    displayedItem.overview,
                     style = Type.Body.copy(color = Palette.SecondaryLabel),
                 )
             }
