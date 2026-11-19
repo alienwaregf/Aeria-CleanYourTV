@@ -139,7 +139,7 @@ private fun LocalFilms(
             next = maxOf(next + beat, now + beat / 2)
             madeOf = film
             val at = player.currentPosition + beat / 2 + PICTURE_DECODE_MS
-            VideoSaverFrames.make(context, film, at)?.let { if (!leavingNow) VideoSaverFrames.latest = it }
+            if (!leavingNow) VideoSaverFrames.make(context, film, at)?.let { VideoSaverFrames.latest = it }
         }
     }
     LaunchedEffect(leaving) { if (leaving && follows) VideoSaverFrames.apply() }

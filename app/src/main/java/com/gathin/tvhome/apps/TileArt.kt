@@ -95,7 +95,7 @@ object TileArtFactory {
     fun fromBanner(banner: Drawable): TileArt {
         val src = (banner as? BitmapDrawable)?.bitmap
         val w = src?.width?.coerceAtMost(2 * W) ?: W
-        val h = w * 9 / 16
+        val h = (w * 9 / 16).coerceAtLeast(1)
         val back = createBitmap(w, h)
         Canvas(back).apply {
             drawColor(GRAPHITE_BOTTOM)
@@ -222,6 +222,7 @@ object TileArtFactory {
                     setLocalMatrix(android.graphics.Matrix().apply { setScale(tw / flat.width, th / flat.height); postTranslate(x, y) })
                 }
                 drawPath(smoothRect(RectF(x, y, x + tw, y + th), th * 0.14f), paint)
+                flat.recycle()
             }
         }
         return finish(back, null)
@@ -629,7 +630,10 @@ object TileArtFactory {
             for (y in 0 until H) for (x in 0 until W) if (px[y * W + x] ushr 24 != 0) {
                 l = minOf(l, x); r = maxOf(r, x); t = minOf(t, y); b = maxOf(b, y)
             }
-            if (r < 0) return@let null
+            if (r < 0) {
+                layer.recycle()
+                return@let null
+            }
             foreAt = androidx.compose.ui.geometry.Rect(l / W.toFloat(), t / H.toFloat(), (r + 1) / W.toFloat(), (b + 1) / H.toFloat())
             Bitmap.createBitmap(layer, l, t, r - l + 1, b - t + 1).also { if (it !== layer) layer.recycle() }
         }

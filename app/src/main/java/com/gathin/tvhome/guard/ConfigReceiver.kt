@@ -35,8 +35,9 @@ class ConfigReceiver : BroadcastReceiver() {
             return
         }
         if (intent.getBooleanExtra("list_sources", false)) {
-            val shown = SystemProbe.sources(context).map { it.id }.toSet()
-            val all = (SystemProbe.sources(context) + SystemProbe.inputsToCheck(context).filter { it.hidden }).distinctBy { it.id }
+            val allSources = SystemProbe.sources(context)
+            val shown = allSources.map { it.id }.toSet()
+            val all = (allSources + SystemProbe.inputsToCheck(context).filter { it.hidden }).distinctBy { it.id }
             resultData = org.json.JSONArray(all.map { s ->
                 org.json.JSONObject().put("id", s.id).put("label", s.label).put("kind", s.kind.name)
                     .put("shown", s.id in shown).apply {

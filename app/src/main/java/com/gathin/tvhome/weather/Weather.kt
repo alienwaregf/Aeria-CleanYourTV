@@ -422,6 +422,8 @@ object Weather {
         }
         if (::launcherPrefs.isInitialized && CityLookup.isKnownCity(app, hit.third)) {
             launcherPrefs.edit { putString("weather_city", hit.third) }
+        } else if (::launcherPrefs.isInitialized) {
+            launcherPrefs.edit { remove("weather_city") }
         }
         chosen = true
         place = prefs.getString("place", null)

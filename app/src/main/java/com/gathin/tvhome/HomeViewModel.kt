@@ -22,6 +22,7 @@ import com.gathin.tvhome.apps.FOLDER_KEY_PREFIX
 import com.gathin.tvhome.apps.SOURCE_KEY_PREFIX
 import com.gathin.tvhome.apps.LayoutStore
 import com.gathin.tvhome.apps.TileArt
+import com.gathin.tvhome.apps.TopShelfContent
 import com.gathin.tvhome.apps.TileArtFactory
 import com.gathin.tvhome.apps.folderEntry
 import com.gathin.tvhome.apps.sourceEntry
@@ -174,6 +175,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun reload() {
+        TopShelfContent.clearAppCache()
         if (Build.VERSION.SDK_INT >= 26) {
             packagesSeen = context.packageManager.getChangedPackages(0)?.sequenceNumber ?: packagesSeen
         }

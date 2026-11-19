@@ -7,7 +7,7 @@ import kotlin.math.sqrt
 object Cities {
     class City(val name: String, val aliases: List<String>, val province: String, val lat: Double, val lon: Double, val rank: Int, val ascii: String)
 
-    private var all: List<City>? = null
+    @Volatile private var all: List<City>? = null
 
     fun load(context: Context): List<City> = all ?: synchronized(this) {
         all ?: context.assets.open("cities-cn.tsv").bufferedReader().useLines { lines ->

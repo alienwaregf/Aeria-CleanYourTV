@@ -219,16 +219,19 @@ fun LiveWallpaper(
             return false
         }
         DiagLog.i("wallpaper picture catches up with where the film was let go")
-        withContext(kotlinx.coroutines.NonCancellable) {
+        val caughtUp = withContext(kotlinx.coroutines.NonCancellable) {
             val started = android.os.SystemClock.elapsedRealtime()
-            Wallpapers.useLiveFrame(frame, left.first, left.second)
-            if (clearsStale) DiagLog.i("wallpaper picture caught up in ${android.os.SystemClock.elapsedRealtime() - started} ms")
-            if (clearsStale && pictureStale) {
-                pictureStale = false
-                if (!keepNow && player == null) cover.snapTo(0f)
+            val ok = Wallpapers.useLiveFrame(frame, left.first, left.second)
+            if (ok) {
+                if (clearsStale) DiagLog.i("wallpaper picture caught up in ${android.os.SystemClock.elapsedRealtime() - started} ms")
+                if (clearsStale && pictureStale) {
+                    pictureStale = false
+                    if (!keepNow && player == null) cover.snapTo(0f)
+                }
             }
+            ok
         }
-        return true
+        return caughtUp
     }
 
     suspend fun goOnFromPicture() {
@@ -289,11 +292,10 @@ fun LiveWallpaper(
             cover.snapTo(0f)
             return
         }
-        Wallpapers.showLiveFrame(frame)
+        Wallpapers.useLiveFrame(frame, film, at)
         cover.snapTo(0f)
         p.stop()
         DiagLog.i("wallpaper left on its frame in ${android.os.SystemClock.elapsedRealtime() - started} ms")
-        Wallpapers.useLiveFrame(frame, film, at)
     }
 
     var glassSample by remember { mutableStateOf<GlassSample?>(null) }
@@ -786,14 +788,35 @@ internal suspend fun keyFrameDecodedInApp(context: android.content.Context, id: 
 }
 
 internal object SaverFrames {
-    class Picture(val film: String, val atMs: Long, val prepared: Wallpapers.PreparedFrame)
+    class Picture(val film: String, val atMs: Long, val prepared: Wallpapers.PreparedFrame) {
+        fun recycle() {
+            prepared.frame.recycle()
+            prepared.frost.recycle()
+        }
+    }
 
-    @Volatile var start: Picture? = null
-    @Volatile var latest: Picture? = null
+    @Volatile private var startField: Picture? = null
+    @Volatile private var latestField: Picture? = null
+
+    var start: Picture?
+        get() = startField
+        set(value) {
+            val old = startField
+            startField = value
+            if (old !== value) old?.recycle()
+        }
+
+    var latest: Picture?
+        get() = latestField
+        set(value) {
+            val old = latestField
+            latestField = value
+            if (old !== value) old?.recycle()
+        }
 
     fun clear() {
-        start = null
-        latest = null
+        startField = null
+        latestField = null
     }
 
     suspend fun make(context: android.content.Context, film: String, atMs: Long): Picture? {

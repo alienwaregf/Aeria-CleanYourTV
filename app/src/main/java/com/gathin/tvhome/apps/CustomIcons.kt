@@ -46,8 +46,11 @@ object CustomIcons {
         return try {
             tmp.outputStream().use { input.copyTo(it) }
             val bmp = Images.decodeCover(tmp, W, H) ?: return false
-            fileFor(pkg).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            bmp.recycle()
+            try {
+                fileFor(pkg).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            } finally {
+                bmp.recycle()
+            }
             true
         } finally {
             tmp.delete()

@@ -36,7 +36,7 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
 
         private val posterExecutor = Executors.newSingleThreadExecutor()
 
-        fun layout(context: Context): Int {
+        private fun layout(context: Context): Int {
             val name = context.getSharedPreferences("topshelf", Context.MODE_PRIVATE)
                 .getString(LAYOUT_PREF, "Large")
             val index = LAYOUT_NAMES.indexOf(name)
@@ -127,11 +127,11 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
             imageView.tag = uri
             posterExecutor.execute {
                 val bitmap = TopShelfContent.loadPoster(context, uri, w, h)
-                if (bitmap != null) {
-                    imageView.post {
-                        if (imageView.tag == uri) {
-                            imageView.setImageBitmap(bitmap)
-                        }
+                imageView.post {
+                    if (bitmap == null) {
+                        asked.remove(imageView)
+                    } else if (imageView.tag == uri) {
+                        imageView.setImageBitmap(bitmap)
                     }
                 }
             }

@@ -56,12 +56,12 @@ class LayoutStore(context: Context) {
                 if (inside.isEmpty()) continue
                 addAll(inside.take(9))
             } else if (key in installed) add(key)
-            else if (!key.startsWith(SOURCE_KEY_PREFIX)) continue
+            else continue
             n++
         }
     }
 
-    fun folderHolding(key: String): Folder? = folders.values.firstOrNull { key in it.apps }
+    private fun folderHolding(key: String): Folder? = folders.values.firstOrNull { key in it.apps }
 
     fun putInFolder(key: String, id: String?, newName: String): String {
         val list = order.toMutableList()

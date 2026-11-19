@@ -60,9 +60,22 @@ class HomeVideo {
 }
 
 internal object VideoSaverFrames {
-    class Picture(val film: String, val atMs: Long, val prepared: Wallpapers.PreparedFrame)
+    class Picture(val film: String, val atMs: Long, val prepared: Wallpapers.PreparedFrame) {
+        fun recycle() {
+            prepared.frame.recycle()
+            prepared.frost.recycle()
+        }
+    }
 
-    @Volatile var latest: Picture? = null
+    @Volatile private var latestField: Picture? = null
+
+    var latest: Picture?
+        get() = latestField
+        set(value) {
+            val old = latestField
+            latestField = value
+            if (old !== value) old?.recycle()
+        }
 
     suspend fun make(context: android.content.Context, film: String, atMs: Long): Picture? {
         val (frame, at) = keyFrameOfVideo(context, film, atMs, Wallpapers.screenW, Wallpapers.screenH) ?: return null
@@ -70,8 +83,8 @@ internal object VideoSaverFrames {
     }
 
     fun apply() {
-        val pick = latest ?: return
-        latest = null
+        val pick = latestField ?: return
+        latestField = null
         if (Wallpapers.applyLiveFrame(pick.prepared, pick.film, pick.atMs)) {
             DiagLog.i("video wallpaper: back from the screensaver onto its picture (${pick.film} at ${pick.atMs} ms)")
         }
@@ -211,12 +224,11 @@ fun VideoWallpaper(
         val at = p.currentPosition
         val started = android.os.SystemClock.elapsedRealtime()
         val frame = withTimeoutOrNull(LEAVE_FRAME_MS) { frameOf(film, at, held = true) } ?: return false
-        Wallpapers.showLiveFrame(frame.first)
+        Wallpapers.useLiveFrame(frame.first, film, frame.second)
         cover.snapTo(0f)
         release()
         Wallpapers.leaveVideo(film, at)
         DiagLog.i("video wallpaper left on its frame in ${android.os.SystemClock.elapsedRealtime() - started} ms")
-        Wallpapers.useLiveFrame(frame.first, film, frame.second)
         return true
     }
 

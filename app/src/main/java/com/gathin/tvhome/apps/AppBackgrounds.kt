@@ -35,7 +35,7 @@ object AppBackgrounds {
 
     fun stamp(pkg: String): Long = if (::dir.isInitialized) fileFor(pkg).lastModified() else 0L
 
-    fun load(pkg: String, w: Int, h: Int): Bitmap? = if (has(pkg)) Images.decodeCover(fileFor(pkg), w, h) else null
+    private fun load(pkg: String, w: Int, h: Int): Bitmap? = if (has(pkg)) Images.decodeCover(fileFor(pkg), w, h) else null
 
     private data class Cached(val stamp: Long, val bitmap: Bitmap, val frosted: Bitmap)
 
@@ -44,12 +44,26 @@ object AppBackgrounds {
     private const val CACHE_MAX = 4
 
     fun loadCached(pkg: String, w: Int, h: Int): Pair<Bitmap, Bitmap>? {
+        val stamp = stamp(pkg)
         synchronized(cache) {
-            val stamp = stamp(pkg)
             val hit = cache[pkg]
             if (hit != null && hit.stamp == stamp) return hit.bitmap to hit.frosted
-            val bmp = load(pkg, w, h) ?: return null
-            val frosted = Images.frost(bmp)
+        }
+        val bmp = load(pkg, w, h) ?: return null
+        val frosted = Images.frost(bmp)
+        val fresh = stamp(pkg)
+        synchronized(cache) {
+            val hit = cache[pkg]
+            if (hit != null && hit.stamp == fresh) {
+                bmp.recycle()
+                frosted.recycle()
+                return hit.bitmap to hit.frosted
+            }
+            if (fresh != stamp) {
+                bmp.recycle()
+                frosted.recycle()
+                return null
+            }
             cache[pkg] = Cached(stamp, bmp, frosted)
             while (cache.size > CACHE_MAX) cache.remove(cache.entries.first().key)
             return bmp to frosted
@@ -88,8 +102,11 @@ object AppBackgrounds {
                 c.disconnect()
             }
             val bmp = Images.decodeCover(tmp, MAX_W, MAX_H) ?: return false
-            fileFor(pkg).outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
-            bmp.recycle()
+            try {
+                fileFor(pkg).outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+            } finally {
+                bmp.recycle()
+            }
             prefs.edit().putString("app_bg_url_$pkg", url).apply()
             dropCached(pkg)
             true

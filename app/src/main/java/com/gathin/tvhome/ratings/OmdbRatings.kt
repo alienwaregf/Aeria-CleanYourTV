@@ -63,6 +63,7 @@ object OmdbRatings {
         data class Found(val result: OmdbResult) : OmdbFetch
         data object NotFound : OmdbFetch
         data object BadId : OmdbFetch
+        data object LimitReached : OmdbFetch
         data object Failed : OmdbFetch
     }
 
@@ -87,6 +88,7 @@ object OmdbRatings {
                             error.equals("Series or season not found!", ignoreCase = true) ||
                             error.equals("Series or episode not found!", ignoreCase = true) -> OmdbFetch.NotFound
                         error.equals("Incorrect IMDb ID.", ignoreCase = true) -> OmdbFetch.BadId
+                        error.equals("Request limit reached!", ignoreCase = true) -> OmdbFetch.LimitReached
                         else -> OmdbFetch.Failed
                     }
                 }

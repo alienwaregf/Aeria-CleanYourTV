@@ -24,10 +24,15 @@ import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.ContentMetadata
 import androidx.media3.datasource.cache.SimpleCache
 import com.gathin.tvhome.ratings.Ratings
+import com.gathin.tvhome.wallpaper.ScreensaverMode
+import com.gathin.tvhome.wallpaper.Wallpapers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
@@ -83,6 +88,9 @@ object TmdbTrending {
 
     val hasContent: Boolean get() = items.isNotEmpty()
 
+    fun trendingGateOpen(): Boolean =
+        Wallpapers.isTrending() || Wallpapers.screensaver == ScreensaverMode.Trending
+
     private lateinit var app: Context
     private lateinit var tmdbPrefs: SharedPreferences
     private lateinit var launcherPrefs: SharedPreferences
@@ -123,6 +131,7 @@ object TmdbTrending {
     private var prefetchJob: Job? = null
     private fun prefetch(list: List<TmdbItem>) {
         if (list.isEmpty()) return
+        if (!trendingGateOpen()) return
         prefetchJob?.cancel()
         prefetchJob = scope.launch {
             withContext(Dispatchers.IO) {
@@ -192,12 +201,15 @@ object TmdbTrending {
 
     private fun refresh(fromTick: Boolean = false) {
         if (!::launcherPrefs.isInitialized) return
+        if (!trendingGateOpen()) return
         val key = launcherPrefs.getString(KEY_TMDB_KEY, "").orEmpty().trim()
         if (key.isEmpty()) return
         lastAttempt = System.currentTimeMillis()
         job?.cancel()
         job = scope.launch {
-            val result = withContext(Dispatchers.IO) { runCatching { fetchTrending(key) } }
+            val result = withContext(Dispatchers.IO) {
+                runCatching { fetchTrending(key) }.onFailure { if (it is CancellationException) throw it }
+            }
             result.onFailure { e ->
                 failed = true
                 Log.w(TAG, "trending fetch failed", e)
@@ -230,7 +242,7 @@ object TmdbTrending {
         }
     }
 
-    private fun fetchTrending(key: String): List<TmdbItem> {
+    private suspend fun fetchTrending(key: String): List<TmdbItem> {
         val isV4 = key.startsWith("eyJ")
         val url = if (isV4) TRENDING_URL else "$TRENDING_URL&api_key=${URLEncoder.encode(key, "UTF-8")}"
         val c = URL(url).openConnection() as HttpURLConnection
@@ -250,6 +262,7 @@ object TmdbTrending {
             val filtered = parseTrending(JSONObject(body))
             if (filtered.isEmpty()) throw IOException("no usable trending items")
             return filtered.map {
+                currentCoroutineContext().ensureActive()
                 val (logo, bestBackdrop) = fetchImageDetails(key, it)
                 val providers = fetchProviderUrls(key, it)
                 it.copy(
@@ -393,6 +406,7 @@ object TmdbTrending {
     }
 
     private fun backfillDetails(list: List<TmdbItem>): List<TmdbItem> {
+        if (!trendingGateOpen()) return list
         val key = launcherPrefs.getString(KEY_TMDB_KEY, "").orEmpty().trim()
         if (key.isEmpty()) return list
         var changed = false

@@ -12,6 +12,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Calendar;
 import java.util.Locale;
+import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.json.JSONObject;
@@ -262,13 +263,66 @@ public final class QWeatherClient {
     private static boolean isDayNow(JSONObject astro) {
         try {
             if (astro == null) return true;
+            String rise = astro.optString("sunrise", "");
+            String set = astro.optString("sunset", "");
+            long riseMs = epochOf(rise);
+            long setMs = epochOf(set);
+            if (riseMs >= 0 && setMs >= 0) {
+                long now = System.currentTimeMillis();
+                return now >= riseMs && now < setMs;
+            }
             int now = Calendar.getInstance().get(Calendar.HOUR_OF_DAY) * 60 + Calendar.getInstance().get(Calendar.MINUTE);
-            int rise = minutesOf(astro.optString("sunrise", ""));
-            int set = minutesOf(astro.optString("sunset", ""));
-            if (rise < 0 || set < 0) return true;
-            return now >= rise && now < set;
+            int riseMin = minutesOf(rise);
+            int setMin = minutesOf(set);
+            if (riseMin < 0 || setMin < 0) return true;
+            return now >= riseMin && now < setMin;
         } catch (Exception unused) {
             return true;
+        }
+    }
+
+    private static long epochOf(String isoDateTime) {
+        if (isoDateTime == null || isoDateTime.length() < 16) return -1;
+        int t = isoDateTime.indexOf('T');
+        if (t < 0 || isoDateTime.length() < t + 6) return -1;
+        try {
+            int year = Integer.parseInt(isoDateTime.substring(0, 4));
+            int month = Integer.parseInt(isoDateTime.substring(5, 7));
+            int day = Integer.parseInt(isoDateTime.substring(8, 10));
+            int hour = Integer.parseInt(isoDateTime.substring(t + 1, t + 3));
+            int minute = Integer.parseInt(isoDateTime.substring(t + 4, t + 6));
+            int second = 0;
+            int i = t + 6;
+            if (i < isoDateTime.length() && isoDateTime.charAt(i) == ':') {
+                if (isoDateTime.length() < i + 3) return -1;
+                second = Integer.parseInt(isoDateTime.substring(i + 1, i + 3));
+                i += 3;
+            }
+            if (i >= isoDateTime.length()) return -1;
+            char sign = isoDateTime.charAt(i);
+            int offsetMinutes;
+            if (sign == 'Z' || sign == 'z') {
+                offsetMinutes = 0;
+            } else if (sign == '+' || sign == '-') {
+                if (isoDateTime.length() < i + 3) return -1;
+                int offHour = Integer.parseInt(isoDateTime.substring(i + 1, i + 3));
+                int offMinute = 0;
+                if (isoDateTime.length() >= i + 6 && isoDateTime.charAt(i + 3) == ':') {
+                    offMinute = Integer.parseInt(isoDateTime.substring(i + 4, i + 6));
+                } else if (isoDateTime.length() >= i + 5) {
+                    offMinute = Integer.parseInt(isoDateTime.substring(i + 3, i + 5));
+                }
+                offsetMinutes = offHour * 60 + offMinute;
+                if (sign == '-') offsetMinutes = -offsetMinutes;
+            } else {
+                return -1;
+            }
+            Calendar c = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
+            c.set(year, month - 1, day, hour, minute, second);
+            c.set(Calendar.MILLISECOND, 0);
+            return c.getTimeInMillis() - offsetMinutes * 60_000L;
+        } catch (Exception unused) {
+            return -1;
         }
     }
 

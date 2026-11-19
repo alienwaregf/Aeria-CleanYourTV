@@ -31,6 +31,7 @@ object UhdCanvas {
 
     fun choose(context: Context, on: Boolean?) {
         prefs(context).edit().apply { if (on == null) remove(FORCED) else putBoolean(FORCED, on) }.remove(SLOW).apply()
+        known = null
     }
 
     private fun compute(context: Context): Float {
@@ -148,12 +149,14 @@ object UhdCanvas {
                 return
             }
             drawing = true
+            var started = false
             try {
                 val rc = root.beginRecording()
+                started = true
                 rc.scale(root.width.toFloat() / width, root.height.toFloat() / height)
                 super.dispatchDraw(rc)
-                root.endRecording()
             } finally {
+                if (started) root.endRecording()
                 drawing = false
             }
             val before = System.nanoTime()

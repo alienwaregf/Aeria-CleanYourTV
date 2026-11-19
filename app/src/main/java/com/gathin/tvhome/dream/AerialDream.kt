@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.service.dreams.DreamService
 import android.view.KeyEvent
+import androidx.core.content.ContextCompat
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.ComposeView
@@ -103,7 +104,7 @@ class AerialDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
         super.onDreamingStarted()
         running = this
         registry.currentState = Lifecycle.State.RESUMED
-        runCatching { registerReceiver(screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF)) }
+        runCatching { ContextCompat.registerReceiver(this, screenOff, IntentFilter(Intent.ACTION_SCREEN_OFF), ContextCompat.RECEIVER_NOT_EXPORTED) }
     }
 
     override fun onDreamingStopped() {

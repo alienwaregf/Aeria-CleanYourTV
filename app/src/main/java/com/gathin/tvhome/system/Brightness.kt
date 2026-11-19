@@ -103,11 +103,14 @@ object Brightness {
             runCatching {
                 val from = mitvLevel ?: MitvPanel.level(context) ?: storedLevel(context) ?: percent
                 MitvPanel.setBacklight(context, from, next)
-                mitvLevel = next
-                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                    .edit().putInt(KEY_MITV_LEVEL, next).apply()
             }
-            return next / 100f
+            val readBack = MitvPanel.level(context)
+            if (readBack != null && kotlin.math.abs(readBack - next) <= 2) {
+                mitvLevel = readBack
+                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .edit().putInt(KEY_MITV_LEVEL, readBack).apply()
+            }
+            return readBack?.let { it / 100f }
         }
         runCatching {
             if (changhong) {

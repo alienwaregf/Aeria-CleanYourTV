@@ -75,7 +75,7 @@ object TileDiskCache {
         if (!::dir.isInitialized) return
         scope.launch {
             runCatching {
-                val tmp = File(dir, "$pkg.tmp")
+                val tmp = File(dir, "$pkg.${System.nanoTime()}.tmp")
                 DataOutputStream(tmp.outputStream().buffered()).use { out ->
                     out.writeUTF(key)
                     out.writeUTF(label)
@@ -100,7 +100,7 @@ object TileDiskCache {
         if (!::dir.isInitialized) return
         scope.launch {
             dir.listFiles()?.forEach { f ->
-                if (f.name.removeSuffix(".tile").removeSuffix(".tmp") !in packages) f.delete()
+                if (f.name.endsWith(".tile") && f.name.removeSuffix(".tile") !in packages) f.delete()
             }
         }
     }

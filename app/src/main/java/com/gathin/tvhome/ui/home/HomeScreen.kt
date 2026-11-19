@@ -419,6 +419,7 @@ fun HomeScreen(
     LaunchedEffect(vm.homePressedTick) {
         if (vm.homePressedTick == 0 || !heroFocused) return@LaunchedEffect
         withFrameNanos { }
+        heroTimerReset++
         heroFocused = false
         focusApp(0)
         vm.homeResetPending = false
@@ -426,6 +427,7 @@ fun HomeScreen(
 
     BackHandler(enabled = overlay == Overlay.None && moving == null) {
         if (heroFocused) {
+            heroTimerReset++
             heroFocused = false
             focusApp(if (focusedIndex >= 0) focusedIndex else lastFocusedIndex)
         } else {
@@ -599,7 +601,7 @@ fun HomeScreen(
             animationSpec = if (reduced) snap() else tween(durationMillis = if (heroFocused) 500 else 450, easing = Motion.Ease),
             label = "hero-dots-shift",
         )
-        LaunchedEffect(heroVisible, heroTimerReset, vm.resumed, vm.screensaverVisible) {
+        LaunchedEffect(heroVisible, heroTimerReset, TmdbTrending.currentIndex, vm.resumed, vm.screensaverVisible) {
             if (!heroVisible || !vm.resumed || vm.screensaverVisible) return@LaunchedEffect
             while (true) {
                 delay(8_000)
@@ -630,11 +632,13 @@ fun HomeScreen(
                     if (heroFocused) {
                         when (e.nativeKeyEvent.keyCode) {
                             NativeKeyEvent.KEYCODE_DPAD_UP -> {
+                                heroTimerReset++
                                 heroFocused = false
                                 runCatching { pillRequester.requestFocus() }
                                 return@onPreviewKeyEvent true
                             }
                             NativeKeyEvent.KEYCODE_DPAD_DOWN -> {
+                                heroTimerReset++
                                 heroFocused = false
                                 focusApp(if (focusedIndex >= 0) focusedIndex else lastFocusedIndex)
                                 return@onPreviewKeyEvent true
@@ -665,6 +669,7 @@ fun HomeScreen(
                         }
                     }
                     if (heroVisible && isDockApp && e.nativeKeyEvent.keyCode == NativeKeyEvent.KEYCODE_DPAD_UP) {
+                        heroTimerReset++
                         heroFocused = true
                         return@onPreviewKeyEvent true
                     }
@@ -942,6 +947,7 @@ fun HomeScreen(
                         if (e.type == KeyEventType.KeyDown && heroVisible &&
                             e.nativeKeyEvent.keyCode == NativeKeyEvent.KEYCODE_DPAD_DOWN
                         ) {
+                            heroTimerReset++
                             heroFocused = true
                             true
                         } else {
@@ -954,6 +960,7 @@ fun HomeScreen(
                     },
                 onFocused = { gained ->
                     if (gained) {
+                        if (heroFocused) heroTimerReset++
                         heroFocused = false
                         if (focusedKey == null) {
                             if (apps.isNotEmpty()) focusApp(0)

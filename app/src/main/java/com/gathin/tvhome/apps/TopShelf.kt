@@ -255,7 +255,7 @@ object TopShelfContent {
             java.io.FileOutputStream(file).use { fos ->
                 out.compress(Bitmap.CompressFormat.JPEG, 92, fos)
             }
-        }
+        }.onFailure { file.delete() }
         artCache.put(key, out)
         return out
     }
@@ -865,8 +865,17 @@ internal object TopShelfLogos {
                         return@runCatching
                     }
                     if (code != 200) return@runCatching
-                    val bytes = conn.inputStream.use { it.readBytes() }
-                    if (bytes.size > 262144) return@runCatching
+                    val bytes = conn.inputStream.use { input ->
+                        val out = java.io.ByteArrayOutputStream()
+                        val buf = ByteArray(8192)
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            out.write(buf, 0, n)
+                            if (out.size() > 262144) return@runCatching
+                        }
+                        out.toByteArray()
+                    }
                     val text = String(bytes, Charsets.UTF_8)
                     if (parse(text) == null) return@runCatching
                     java.io.FileOutputStream(file).use { it.write(bytes) }
@@ -877,7 +886,7 @@ internal object TopShelfLogos {
         }
     }
 
-    fun parse(svg: String): Logo? {
+    private fun parse(svg: String): Logo? {
         val d = dPat.matcher(svg)
         if (!d.find()) return null
         val f = fillPat.matcher(svg)

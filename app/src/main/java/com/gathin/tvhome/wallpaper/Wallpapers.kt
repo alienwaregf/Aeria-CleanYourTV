@@ -148,6 +148,7 @@ object Wallpapers {
         selectedId = id
         prefs.edit { putString("selected", id) }
         rebuildBackdrop()
+        if (id == TRENDING) TmdbTrending.refreshIfStale()
     }
 
     fun chooseScreensaver(mode: ScreensaverMode) {
@@ -334,12 +335,6 @@ object Wallpapers {
         }.onFailure { Log.w(TAG, "could not keep the backdrop for a locked boot", it) }
     }
 
-    fun showLiveFrame(frame: Bitmap) {
-        if (!moves()) return
-        backdropJob?.cancel()
-        backdrop = frame.asImageBitmap()
-    }
-
     class PreparedFrame(val frame: Bitmap, val frost: Bitmap)
 
     suspend fun prepareLiveFrame(frame: Bitmap): PreparedFrame =
@@ -347,9 +342,17 @@ object Wallpapers {
 
     fun applyLiveFrame(prepared: PreparedFrame, film: String, atMs: Long): Boolean {
         val id = selectedId
-        if (!moves()) return false
+        if (!moves()) {
+            prepared.frame.recycle()
+            prepared.frost.recycle()
+            return false
+        }
         val video = isVideo(id)
-        if (id.startsWith(VIDEO_PREFIX) && film != id.removePrefix(VIDEO_PREFIX)) return false
+        if (id.startsWith(VIDEO_PREFIX) && film != id.removePrefix(VIDEO_PREFIX)) {
+            prepared.frame.recycle()
+            prepared.frost.recycle()
+            return false
+        }
         backdropJob?.cancel()
         if (video) videoLeftHere = null else leftHere = null
         val key = if (video) "video" else "live"
@@ -371,7 +374,10 @@ object Wallpapers {
     }
 
     suspend fun useLiveFrame(frame: Bitmap, film: String, atMs: Long, wanted: () -> Boolean = { true }): Boolean {
-        if (!moves()) return false
+        if (!moves()) {
+            frame.recycle()
+            return false
+        }
         val id = selectedId
         val key = if (isVideo(id)) "video" else "live"
         val target = if (isVideo(id)) videoFrame else liveFrame
@@ -383,6 +389,8 @@ object Wallpapers {
         }
         if (!wanted() || selectedId != id) {
             part.delete()
+            frost.recycle()
+            frame.recycle()
             return false
         }
         backdropJob?.cancel()

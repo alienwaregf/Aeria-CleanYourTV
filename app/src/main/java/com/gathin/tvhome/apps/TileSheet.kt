@@ -54,8 +54,11 @@ object TileSheet {
             canvas.drawText(shown, x + w / 2f, y + h + 32f, text)
         }
         val out = File(dir, "$name.png")
-        out.outputStream().use { sheet.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        sheet.recycle()
+        try {
+            out.outputStream().use { sheet.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        } finally {
+            sheet.recycle()
+        }
         out.setReadable(true, false)
         Log.i(TAG, "Wrote ${tiles.size} tiles to $out")
         return out

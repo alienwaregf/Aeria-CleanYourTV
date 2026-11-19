@@ -485,7 +485,10 @@ object TileFaces {
         val key = (w.toLong() shl 32) or h.toLong()
         synchronized(made) { made[back]?.get(key) }?.let { return it }
         val face = tileFace(back, w, h, radius, rimWidth)
-        synchronized(made) { made.getOrPut(back) { HashMap(2) }[key] = face }
+        synchronized(made) {
+            made[back]?.get(key)?.let { face.asAndroidBitmap().recycle(); return it }
+            made.getOrPut(back) { HashMap(2) }[key] = face
+        }
         return face
     }
 

@@ -357,6 +357,10 @@ object Motion {
         onUpdate(from)
         spring.animateTo(to)
         spring.stepNow()
+        if (!spring.isRunning() && PROGRESS[key] === spring) {
+            PROGRESS.remove(key)
+            onDone?.invoke()
+        }
     }
 
     private fun stillness(moving: Boolean) {
@@ -454,16 +458,6 @@ object Motion {
                 return
             }
             settled(index)
-        }
-
-        fun stop() {
-            for (i in springs.indices) {
-                val spring = springs[i]
-                if (spring != null && spring.isRunning()) {
-                    spring.snapTo(spring.target())
-                }
-                settled(i)
-            }
         }
 
         private fun settled(index: Int) {

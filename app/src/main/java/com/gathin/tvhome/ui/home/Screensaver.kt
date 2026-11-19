@@ -567,7 +567,7 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
         val next = items.getOrNull((TmdbTrending.currentIndex + 1) % items.size)
         next?.let { Ratings.fetchFor(it) }
     }
-    var still by remember { mutableStateOf<ImageBitmap?>(null) }
+    var still by remember(item.backdropUrl) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(item.backdropUrl) {
         val bmp = withContext(Dispatchers.IO) {
             HeroPosters.load(item.backdropUrl, Wallpapers.screenW, Wallpapers.screenH)
