@@ -89,6 +89,7 @@ import com.gathin.tvhome.system.NetKind
 import com.gathin.tvhome.system.SystemProbe
 import com.gathin.tvhome.system.HisenseSources
 import com.gathin.tvhome.system.KonkaSources
+import com.gathin.tvhome.system.WhaleyBoot
 import com.gathin.tvhome.system.HomeReopen
 import com.gathin.tvhome.system.LaunchFallback
 import com.gathin.tvhome.system.settingsLaunchIntent
@@ -177,6 +178,7 @@ class MainActivity : ComponentActivity() {
         }
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null && reopenAsHome()) return
+        WhaleyBoot.turnOffPowerLight(this)
         startReal(savedInstanceState)
     }
 
