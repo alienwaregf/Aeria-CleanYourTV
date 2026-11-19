@@ -448,7 +448,8 @@ fun HeroRow(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        for (bmp in providers) {
+                        val shown = providers.take(9)
+                        for (bmp in shown) {
                             val ratio = if (bmp.height > 0) bmp.width.toFloat() / bmp.height.toFloat() else 1f
                             Image(
                                 bitmap = bmp,
@@ -456,6 +457,9 @@ fun HeroRow(
                                 contentScale = ContentScale.Fit,
                                 modifier = Modifier.height(18.dp).aspectRatio(ratio),
                             )
+                        }
+                        if (providers.size > shown.size) {
+                            BasicText("+${providers.size - shown.size}", style = Type.Callout)
                         }
                     }
                     Spacer(Modifier.width(8.dp))
