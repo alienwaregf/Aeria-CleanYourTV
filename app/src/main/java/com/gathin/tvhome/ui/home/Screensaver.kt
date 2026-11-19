@@ -14,14 +14,23 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -33,14 +42,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import com.gathin.tvhome.MainActivity
+import com.gathin.tvhome.R
 import com.gathin.tvhome.system.SystemScreensaver
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -54,12 +67,15 @@ import com.gathin.tvhome.system.DiagLog
 import com.gathin.tvhome.ui.components.Dissolve
 import com.gathin.tvhome.ui.components.diagLayer
 import com.gathin.tvhome.ui.theme.Motion
+import com.gathin.tvhome.ui.theme.Palette
 import com.gathin.tvhome.ui.theme.Type
 import com.gathin.tvhome.wallpaper.AerialStream
 import com.gathin.tvhome.wallpaper.Aerial
 import com.gathin.tvhome.wallpaper.AerialSet
 import androidx.compose.runtime.mutableStateListOf
 import com.gathin.tvhome.settings.AerialSettings
+import com.gathin.tvhome.ratings.Ratings
+import com.gathin.tvhome.tmdb.TmdbTrending
 import com.gathin.tvhome.wallpaper.AerialFormats
 import com.gathin.tvhome.wallpaper.AerialQuality
 import com.gathin.tvhome.wallpaper.Aerials
@@ -68,10 +84,13 @@ import com.gathin.tvhome.wallpaper.Wallpapers
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.withContext
 import java.time.LocalDateTime
+import java.util.Locale
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -96,6 +115,7 @@ fun Screensaver(visible: Boolean, apps: List<AppEntry>, now: LocalDateTime, skip
         val context = LocalContext.current
         var aerialFailed by remember { mutableStateOf(false) }
         var videosFailed by remember { mutableStateOf(false) }
+        var videosEmpty by remember { mutableStateOf(false) }
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             when (Wallpapers.screensaver) {
                 ScreensaverMode.Aerial -> if (aerialFailed) ClockSaver(apps, now) else AerialSaver(
@@ -105,7 +125,12 @@ fun Screensaver(visible: Boolean, apps: List<AppEntry>, now: LocalDateTime, skip
                     },
                 )
                 ScreensaverMode.Clock, ScreensaverMode.System -> ClockSaver(apps, now)
-                ScreensaverMode.Videos -> if (videosFailed) ClockSaver(apps, now) else VideoSaver(skips.steps, leaving = !visible, onUnavailable = { videosFailed = true })
+                ScreensaverMode.Videos -> when {
+                    videosEmpty -> Box(Modifier.fillMaxSize().background(Color.Black))
+                    videosFailed -> ClockSaver(apps, now)
+                    else -> VideoSaver(skips.steps, leaving = !visible, onUnavailable = { videosFailed = true }, onEmpty = { videosEmpty = true })
+                }
+                ScreensaverMode.Trending -> TrendingSaver(now, skips.steps)
             }
         }
     }
@@ -134,22 +159,6 @@ sealed interface SaverCarry {
 
 }
 
-
-fun androidx.compose.ui.graphics.drawscope.DrawScope.drawDrawingIn(image: ImageBitmap, push: Float, alpha: Float = 1f) {
-    val s = 1f + 0.08f * push
-    val drift = 24.dp.toPx() * push
-    withTransform({
-        translate(left = drift)
-        scale(s, s, center)
-    }) {
-        drawImage(
-            image,
-            dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
-            alpha = alpha,
-            filterQuality = FilterQuality.Low,
-        )
-    }
-}
 
 fun saverCarriesWallpaper(context: android.content.Context): Boolean = when {
     Wallpapers.selectedId == Wallpapers.LIVE -> Wallpapers.screensaver == ScreensaverMode.Aerial && AerialFormats.screensaverCarriesWallpaper(context)
@@ -510,3 +519,185 @@ private fun ClockSaver(apps: List<AppEntry>, now: LocalDateTime) {
 }
 
 private data class Scene(val light: ImageBitmap?, val x: Float, val y: Float)
+
+@Composable
+private fun SaverRatingIcon(res: Int) {
+    val painter = painterResource(res)
+    val ratio = painter.intrinsicSize.let { if (it.height > 0f) it.width / it.height else 1f }
+    Image(
+        painter = painter,
+        contentDescription = null,
+        contentScale = ContentScale.Fit,
+        modifier = Modifier.height(18.dp).aspectRatio(ratio),
+    )
+}
+
+@Composable
+private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
+    val context = LocalContext.current
+    val items = TmdbTrending.items
+    var index by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        TmdbTrending.init(context)
+        TmdbTrending.refreshIfStale()
+    }
+    LaunchedEffect(items.size) {
+        if (items.isNotEmpty() && index >= items.size) index = 0
+    }
+    LaunchedEffect(index, items.size) {
+        if (items.size <= 1) return@LaunchedEffect
+        delay(8_000)
+        index = (index + 1) % items.size
+    }
+    LaunchedEffect(steps) {
+        steps.collect { step ->
+            val count = TmdbTrending.items.size
+            if (count > 0) index = (index + step).mod(count)
+        }
+    }
+    if (items.isEmpty()) {
+        Box(Modifier.fillMaxSize().background(Color.Black))
+        return
+    }
+    val item = items[index.coerceIn(items.indices)]
+    LaunchedEffect(item) {
+        Ratings.fetchFor(item)
+        val next = items.getOrNull((index + 1) % items.size)
+        next?.let { Ratings.fetchFor(it) }
+    }
+    var still by remember { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(item.backdropUrl) {
+        val bmp = withContext(Dispatchers.IO) {
+            HeroPosters.load(item.backdropUrl, Wallpapers.screenW, Wallpapers.screenH)
+        }
+        if (bmp != null) still = bmp.asImageBitmap()
+    }
+    var titleLogo by remember(item.logoUrl) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(item.logoUrl) {
+        if (item.logoUrl.isBlank()) return@LaunchedEffect
+        val bmp = withContext(Dispatchers.IO) { TitleLogos.load(item.logoUrl) }
+        if (bmp != null) titleLogo = bmp.asImageBitmap()
+    }
+    var providerLogos by remember(item) { mutableStateOf<List<ImageBitmap>>(emptyList()) }
+    LaunchedEffect(item) {
+        val urls = item.providerUrls
+        if (urls.isEmpty()) return@LaunchedEffect
+        val bmps = withContext(Dispatchers.IO) {
+            urls.mapNotNull { ProviderLogos.load(it)?.asImageBitmap() }
+        }
+        providerLogos = bmps
+    }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        still?.let { bmp ->
+            Image(
+                bitmap = bmp,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        val drift = saverDrift(now)
+        Column(
+            Modifier.align(Alignment.BottomStart)
+                .padding(start = 45.dp, end = 160.dp, bottom = 44.dp)
+                .graphicsLayer {
+                    translationX = drift.x.toPx()
+                    translationY = -drift.y.toPx()
+                },
+        ) {
+            val logo = titleLogo
+            if (logo != null) {
+                Image(
+                    bitmap = logo,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    alignment = Alignment.CenterStart,
+                    modifier = Modifier.sizeIn(maxWidth = 390.dp, maxHeight = 135.dp),
+                )
+            } else {
+                BasicText(
+                    item.title,
+                    style = Type.LargeTitle,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                val providers = providerLogos
+                if (providers.isNotEmpty()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        for (bmp in providers) {
+                            val ratio = if (bmp.height > 0) bmp.width.toFloat() / bmp.height.toFloat() else 1f
+                            Image(
+                                bitmap = bmp,
+                                contentDescription = null,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.height(18.dp).aspectRatio(ratio),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
+                Box(
+                    Modifier.clip(RoundedCornerShape(6.dp))
+                        .background(Color.White.copy(alpha = 0.16f))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                ) {
+                    BasicText(
+                        stringResource(if (item.mediaType == "movie") R.string.hero_movie else R.string.hero_tv),
+                        style = Type.Caption.copy(color = Palette.Label),
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                BasicText("·", style = Type.Callout)
+                Spacer(Modifier.width(8.dp))
+                if (item.year.isNotEmpty()) {
+                    BasicText(item.year, style = Type.Callout)
+                    Spacer(Modifier.width(8.dp))
+                    BasicText("·", style = Type.Callout)
+                    Spacer(Modifier.width(8.dp))
+                }
+                SaverRatingIcon(R.drawable.ic_rating_tmdb)
+                Spacer(Modifier.width(4.dp))
+                BasicText(String.format(Locale.US, "%.1f", item.voteAverage), style = Type.Callout)
+                val imdb = item.imdbRating
+                if (imdb.isNotBlank()) {
+                    Spacer(Modifier.width(8.dp))
+                    BasicText("·", style = Type.Callout)
+                    Spacer(Modifier.width(8.dp))
+                    SaverRatingIcon(R.drawable.ic_rating_imdb)
+                    Spacer(Modifier.width(4.dp))
+                    BasicText(imdb + "/10", style = Type.Callout)
+                }
+                if (item.rtPercent >= 0) {
+                    Spacer(Modifier.width(8.dp))
+                    BasicText("·", style = Type.Callout)
+                    Spacer(Modifier.width(8.dp))
+                    SaverRatingIcon(if (item.rtPercent >= 60) R.drawable.ic_rt_fresh else R.drawable.ic_rt_rotten)
+                    Spacer(Modifier.width(4.dp))
+                    BasicText(item.rtPercent.toString() + "%", style = Type.Callout)
+                }
+                if (item.traktRating >= 0.0) {
+                    Spacer(Modifier.width(8.dp))
+                    BasicText("·", style = Type.Callout)
+                    Spacer(Modifier.width(8.dp))
+                    SaverRatingIcon(R.drawable.ic_rating_trakt)
+                    Spacer(Modifier.width(4.dp))
+                    BasicText(String.format(Locale.US, "%.1f", item.traktRating), style = Type.Callout)
+                }
+            }
+            if (item.overview.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                BasicText(
+                    item.overview,
+                    style = Type.Body.copy(color = Palette.SecondaryLabel),
+                )
+            }
+        }
+        Labels(caption = null, now = now, showTime = true, shade = false)
+    }
+}

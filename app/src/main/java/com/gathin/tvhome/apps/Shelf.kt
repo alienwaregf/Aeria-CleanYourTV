@@ -72,8 +72,6 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
 
     fun view(): View = view
 
-    fun at(): Int = shownAt
-
     fun cardsEntry(): View? {
         if (cardsFor == null || cards.visibility != View.VISIBLE || away) {
             return null
@@ -99,9 +97,6 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
                 (top.visibility != View.VISIBLE || top.alpha < 0.999f)))
     }
 
-    fun freshArt() {
-        TopShelfContent.freshArt(context)
-    }
 
 
     fun content(map: Map<String, List<ShelfCard>>) {
@@ -151,8 +146,9 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
     }
 
     fun refresh() {
+        val list = cardsOf(app)
         if (!away) {
-            art(if (cardsOf(app) != null) app else null)
+            art(if (list != null) app else null)
         }
         if (cards.layoutChanged()) {
             cardsFor = null
@@ -163,9 +159,9 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
             return
         }
         if (topVisible == (staged() && app != null) &&
-            ((!topVisible || glowMatches) && (cardsFor != null || cardsOf(app) == null))
+            ((!topVisible || glowMatches) && (cardsFor != null || list == null))
         ) {
-            if ((cards.visibility == View.VISIBLE) == (cardsOf(app) != null)) {
+            if ((cards.visibility == View.VISIBLE) == (list != null)) {
                 return
             }
         }

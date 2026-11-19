@@ -19,10 +19,12 @@ import com.gathin.tvhome.apps.SourceDevice
 import com.gathin.tvhome.apps.SourceLooks
 import com.gathin.tvhome.apps.TileArtFactory
 import com.gathin.tvhome.settings.AerialSettings
+import com.gathin.tvhome.ratings.Ratings
 import com.gathin.tvhome.system.Diagnostics
 import com.gathin.tvhome.system.currentNetwork
 import com.gathin.tvhome.settings.FocusStyle
 import com.gathin.tvhome.SystemSlimmingActivity
+import com.gathin.tvhome.tmdb.TmdbTrending
 import com.gathin.tvhome.weather.Weather
 import androidx.core.graphics.createBitmap
 import com.google.zxing.BarcodeFormat
@@ -164,6 +166,21 @@ class PhoneServer private constructor(private val context: Context, private val 
                     onMain { Weather.setQWeatherKey(key) }
                     json(state())
                 }
+                session.method == Method.POST && path == "/api/tmdb-key" -> {
+                    val key = form(session)["key"].orEmpty()
+                    onMain { TmdbTrending.setKey(key) }
+                    json(state())
+                }
+                session.method == Method.POST && path == "/api/omdb-key" -> {
+                    val key = form(session)["key"].orEmpty()
+                    onMain { Ratings.setOmdbKey(key) }
+                    json(state())
+                }
+                session.method == Method.POST && path == "/api/trakt-client-id" -> {
+                    val id = form(session)["id"].orEmpty()
+                    onMain { Ratings.setTraktClientId(id) }
+                    json(state())
+                }
                 session.method == Method.POST && path == "/api/weather/qweather-host" -> {
                     val host = form(session)["host"].orEmpty()
                     onMain { Weather.setQWeatherHost(host) }
@@ -209,7 +226,7 @@ class PhoneServer private constructor(private val context: Context, private val 
                     val look = SourceLooks.of(src.id)
                     val label = look?.let { it.name ?: it.device?.let { d -> context.getString(d.label) } } ?: src.label
                     put(JSONObject().put("key", a.key).put("label", label).put("default", src.label).put("custom", CustomIcons.has(a.key)).put("stamp", CustomIcons.stamp(a.key))
-                        .put("source", true).put("port", src.label).put("name", look?.name ?: "").put("device", look?.device?.key ?: "").put("look", look.hashCode()))
+                        .put("source", true).put("port", src.label).put("name", look?.name ?: "").put("device", look?.device?.key ?: ""))
                 }
                 apps.forEach { (a, label) ->
                     val icon = when {
@@ -233,12 +250,6 @@ class PhoneServer private constructor(private val context: Context, private val 
                         .put("pinned", src.id in AerialSettings.pinnedSources))
                 }
             })
-            .put("folders", JSONArray().apply {
-                AppCatalog.folders.forEach { e ->
-                    val f = e.folder ?: return@forEach
-                    put(JSONObject().put("id", f.id).put("key", e.key).put("name", f.name).put("count", f.apps.size).put("stamp", e.art.hashCode()))
-                }
-            })
             .put("weather", JSONObject().apply {
                 put("place", Weather.place ?: "")
                 put("chosen", Weather.chosen)
@@ -249,9 +260,22 @@ class PhoneServer private constructor(private val context: Context, private val 
                 put("qweatherHostSet", Weather.qweatherHostSet())
                 Weather.now?.let { put("celsius", it.celsius); put("kind", it.kind.name.lowercase()); it.aqi?.let { a -> put("aqi", a) } }
             })
+            .put("tmdb", JSONObject().apply {
+                val tmdbKey = context.getSharedPreferences("launcher_settings", Context.MODE_PRIVATE).getString("tmdb_key", "").orEmpty()
+                put("keyMasked", if (tmdbKey.isEmpty()) "" else if (tmdbKey.length <= 4) "••••" else "••••" + tmdbKey.takeLast(4))
+                put("keySet", tmdbKey.isNotBlank())
+            })
+            .put("ratings", JSONObject().apply {
+                val prefs = context.getSharedPreferences("launcher_settings", Context.MODE_PRIVATE)
+                val omdbKey = prefs.getString("omdb_key", "").orEmpty()
+                put("omdbKeyMasked", if (omdbKey.isEmpty()) "" else if (omdbKey.length <= 4) "••••" else "••••" + omdbKey.takeLast(4))
+                put("omdbKeySet", omdbKey.isNotBlank())
+                val traktId = prefs.getString("trakt_client_id", "").orEmpty()
+                put("traktClientIdMasked", if (traktId.isEmpty()) "" else if (traktId.length <= 4) "••••" else "••••" + traktId.takeLast(4))
+                put("traktClientIdSet", traktId.isNotBlank())
+            })
             .put("slimming", JSONObject().apply {
                 val slim = context.getSharedPreferences("launcher_settings", Context.MODE_PRIVATE)
-                put("folder", slim.getString("slimming_folder", "") ?: "")
                 put("label", slim.getString("slimming_label", "") ?: "")
                 put("date", slim.getString("slimming_date", "") ?: "")
                 put("notes", slim.getString("slimming_notes", "") ?: "")
@@ -331,7 +355,7 @@ class PhoneServer private constructor(private val context: Context, private val 
         session.parseBody(files)
         val pkg = session.parameters["app"]?.firstOrNull().orEmpty()
         if (!installed(pkg)) return text(Response.Status.BAD_REQUEST, "unknown app")
-        val f = files.values.map(::File).firstOrNull { it.exists() && it.length() > 0 }
+        val f = files.values.map(::File).filter { it.exists() && it.length() > 0 }.maxWithOrNull(compareBy({ it.length() }, { it.name }))
             ?: return text(Response.Status.BAD_REQUEST, "no picture")
         val saved = f.inputStream().use { CustomIcons.save(pkg, it, context.cacheDir) }
         if (saved) onMain { CustomIcons.changed() }

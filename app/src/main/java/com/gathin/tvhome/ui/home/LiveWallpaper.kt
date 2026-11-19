@@ -214,7 +214,10 @@ fun LiveWallpaper(
             DiagLog.i("wallpaper picture did not catch up (copy ${pixelCopy}, file frames stuck ${FileFramesStuck.now(context)})")
             return false
         }
-        if ((cover.value > 0f && !underFilm) || Wallpapers.leftLiveSpot() != left) return false
+        if ((cover.value > 0f && !underFilm) || Wallpapers.leftLiveSpot() != left) {
+            frame.recycle()
+            return false
+        }
         DiagLog.i("wallpaper picture catches up with where the film was let go")
         withContext(kotlinx.coroutines.NonCancellable) {
             val started = android.os.SystemClock.elapsedRealtime()
@@ -616,8 +619,12 @@ private suspend fun captureOnce(view: SurfaceView, w: Int = view.width, h: Int =
         FilmFrames.copyWasSlow()
     }
     if (unread == "green") copyLostColour = true
-    if (result != PixelCopy.SUCCESS || unread != null) DiagLog.i("wallpaper frame copy: result $result, $unread, $took ms")
-    return bitmap.takeIf { result == PixelCopy.SUCCESS && unread == null }
+    if (result != PixelCopy.SUCCESS || unread != null) {
+        DiagLog.i("wallpaper frame copy: result $result, $unread, $took ms")
+        bitmap.recycle()
+        return null
+    }
+    return bitmap
 }
 
 private class FrameReader(private val context: android.content.Context) {
@@ -701,11 +708,14 @@ private class FrameReader(private val context: android.content.Context) {
         }
         if (!quiet || frame == null) DiagLog.i("wallpaper ${if (exact) "frame" else if (nearest) "key frame" else "glass frame"} decoded: ${frame != null} in ${android.os.SystemClock.elapsedRealtime() - started} ms")
         val sized = frame?.let {
-            val sized = if (it.width == w && it.height == h) it else Bitmap.createScaledBitmap(it, w, h, true)
-            if (sized.isMutable && sized.config == Bitmap.Config.ARGB_8888) sized else sized.copy(Bitmap.Config.ARGB_8888, true)
+            val scaled = if (it.width == w && it.height == h) it else Bitmap.createScaledBitmap(it, w, h, true)
+                .also { s -> if (s !== it) it.recycle() }
+            if (scaled.isMutable && scaled.config == Bitmap.Config.ARGB_8888) scaled
+            else scaled.copy(Bitmap.Config.ARGB_8888, true).also { c -> if (c !== scaled) scaled.recycle() }
         }
         if (sized != null && unreadable(sized) == "green") {
             DiagLog.i("wallpaper decoded frame is green; not used")
+            sized.recycle()
             return null
         }
         return sized
@@ -769,6 +779,7 @@ internal suspend fun keyFrameDecodedInApp(context: android.content.Context, id: 
     if (!quiet) DiagLog.i("wallpaper key frame decoded in the app in ${android.os.SystemClock.elapsedRealtime() - started} ms (read ${frame.readMs} ms, ${frame.sampleBytes / 1024} KB${if (frame.indexKept) ", index kept" else ""}; ${frame.codec} ${frame.decodeMs} ms, to RGB ${frame.convertMs} ms)")
     if (unreadable(frame.bitmap) == "green") {
         DiagLog.i("wallpaper decoded frame is green; not used")
+        frame.bitmap.recycle()
         return null
     }
     return frame

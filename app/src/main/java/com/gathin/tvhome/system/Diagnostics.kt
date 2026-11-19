@@ -178,6 +178,7 @@ object Diagnostics {
         TvInputInfo.TYPE_VGA -> "vga"
         TvInputInfo.TYPE_DISPLAY_PORT -> "dp"
         TvInputInfo.TYPE_DVI -> "dvi"
+        TvInputInfo.TYPE_OTHER -> "other"
         else -> type.toString()
     }
 

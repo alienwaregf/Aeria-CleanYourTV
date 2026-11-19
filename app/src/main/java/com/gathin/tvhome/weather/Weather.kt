@@ -2,8 +2,6 @@ package com.gathin.tvhome.weather
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
 import com.gathin.tvhome.R
 import com.gathin.tvhome.CityLookup
 import com.gathin.tvhome.QWeatherClient
@@ -141,40 +139,19 @@ object Weather {
 
     private var failed = false
 
-    private const val KEYED_INTERVAL_MS = 30 * 60 * 1000L
     private const val LAUNCHER_PREFS = "launcher_settings"
     private lateinit var launcherPrefs: SharedPreferences
     var weatherSource by mutableStateOf("openmeteo"); private set
     private fun isKeyedSource() = weatherSource == "qweather"
-    private val keyedHandler = Handler(Looper.getMainLooper())
-    private var keyedTicking = false
-    private val keyedTick = object : Runnable {
-        override fun run() {
-            if (!keyedTicking) return
-            if (isKeyedSource()) refreshKeyedIfDue()
-            keyedHandler.postDelayed(this, KEYED_INTERVAL_MS)
-        }
-    }
-
-    fun startKeyedTick() {
-        if (keyedTicking) return
-        keyedTicking = true
-        keyedHandler.postDelayed(keyedTick, KEYED_INTERVAL_MS)
-    }
-
-    fun stopKeyedTick() {
-        keyedTicking = false
-        keyedHandler.removeCallbacks(keyedTick)
-    }
-
-    fun refreshKeyedIfDue() {
-        if (!started || !isKeyedSource()) return
-        if (System.currentTimeMillis() - lastAttempt >= KEYED_INTERVAL_MS) refresh()
-    }
 
     fun refreshKeyedOnResume() {
         if (!started || !isKeyedSource()) return
         if (System.currentTimeMillis() - lastAttempt < 60_000L) return
+        refresh()
+    }
+
+    fun refreshClockTick() {
+        if (!started) return
         refresh()
     }
 
@@ -197,7 +174,7 @@ object Weather {
     }
 
     fun setQWeatherHost(host: String) {
-        val h = host.trim().removePrefix("https://").removePrefix("http://").substringBefore("/").trim()
+        val h = host.trim().lowercase().removePrefix("https://").removePrefix("http://").substringBefore("/").trim()
         launcherPrefs.edit { if (h.isEmpty()) remove("weather_qweather_host") else putString("weather_qweather_host", h) }
         lastAttempt = 0L
         refresh()
@@ -214,7 +191,7 @@ object Weather {
 
     fun qweatherHostSet(): Boolean = qweatherHost().isNotBlank()
 
-    fun chosenCity(): String = if (::launcherPrefs.isInitialized) launcherPrefs.getString("weather_city", "").orEmpty() else ""
+    private fun chosenCity(): String = if (::launcherPrefs.isInitialized) launcherPrefs.getString("weather_city", "").orEmpty() else ""
 
     private fun kindFromSkycon(skycon: String): WeatherKind = when (skycon) {
         "LIGHT_RAIN" -> WeatherKind.LightRain
@@ -237,7 +214,7 @@ object Weather {
         else -> when {
             skycon.startsWith("CLEAR") -> WeatherKind.Clear
             skycon.startsWith("PARTLY_CLOUDY") -> WeatherKind.PartlyCloudy
-            else -> WeatherKind.Rain
+            else -> WeatherKind.Cloudy
         }
     }
 
@@ -281,7 +258,7 @@ object Weather {
         )
         alertTitle = result.alertTitle
         place = result.city
-        chosen = chosenCity().isNotEmpty()
+        chosen = chosenCity().isNotEmpty() || prefs.getBoolean("chosen", false)
         prefs.edit {
             putLong("fetched_at", System.currentTimeMillis())
             putInt("celsius", result.temperatureC.roundToInt())
@@ -328,6 +305,7 @@ object Weather {
             if (reading != null) {
                 Log.i(TAG, "weather read")
                 now = reading
+                alertTitle = null
                 prefs.edit {
                     putLong("fetched_at", System.currentTimeMillis())
                     putInt("celsius", reading.celsius)

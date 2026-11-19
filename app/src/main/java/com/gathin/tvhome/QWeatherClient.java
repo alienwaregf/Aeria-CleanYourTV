@@ -85,6 +85,18 @@ public final class QWeatherClient {
         });
     }
 
+    private static String[] chosenWeatherCity(Context context, SharedPreferences launcherPrefs) {
+        if (!launcherPrefs.getString("weather_city", "").trim().isEmpty()) return null;
+        SharedPreferences weather = context.getSharedPreferences("weather", 0);
+        if (!weather.getBoolean("chosen", false)) return null;
+        float lat = weather.getFloat("lat", Float.NaN);
+        float lon = weather.getFloat("lon", Float.NaN);
+        if (Float.isNaN(lat) || Float.isNaN(lon)) return null;
+        String place = weather.getString("place", "").trim();
+        if (place.isEmpty()) return null;
+        return new String[]{"", place, String.valueOf(lat), String.valueOf(lon)};
+    }
+
     private static Result fetch(Context context) throws Exception {
         SharedPreferences prefs = context.getSharedPreferences("launcher_settings", 0);
         String key = prefs.getString("weather_qweather_key", "").trim();
@@ -95,7 +107,10 @@ public final class QWeatherClient {
         if (host.isEmpty() || host.contains("/")) {
             return null;
         }
-        String[] city = CityLookup.resolveCity(context, prefs);
+        String[] city = chosenWeatherCity(context, prefs);
+        if (city == null) {
+            city = CityLookup.resolveCity(context, prefs);
+        }
         if (city == null) {
             return null;
         }
@@ -240,7 +255,7 @@ public final class QWeatherClient {
         if ("512".equals(code) || "513".equals(code)) return "HEAVY_HAZE";
         if ("503".equals(code) || "507".equals(code) || "508".equals(code)) return "SAND";
         if ("504".equals(code)) return "DUST";
-        if ("900".equals(code) || "901".equals(code) || "999".equals(code)) return "CLEAR" + suffix;
+        if ("900".equals(code) || "901".equals(code)) return "CLEAR" + suffix;
         return "CLOUDY";
     }
 
@@ -292,10 +307,11 @@ public final class QWeatherClient {
         c.setRequestProperty("Accept", "application/json");
         c.setRequestProperty("Accept-Encoding", "identity");
         c.setRequestProperty("X-QW-Api-Key", key);
+        InputStream in = null;
         try {
             int code = c.getResponseCode();
             if (code < 200 || code >= 300) throw new Exception("HTTP " + code);
-            InputStream in = c.getInputStream();
+            in = c.getInputStream();
             String encoding = c.getContentEncoding();
             if (encoding != null && encoding.toLowerCase(Locale.US).contains("gzip")) {
                 in = new GZIPInputStream(in);
@@ -307,6 +323,12 @@ public final class QWeatherClient {
             in.close();
             return new JSONObject(new String(out.toByteArray(), StandardCharsets.UTF_8));
         } finally {
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (Exception ignored) {
+                }
+            }
             c.disconnect();
         }
     }

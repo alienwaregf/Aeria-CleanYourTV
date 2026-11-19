@@ -36,6 +36,8 @@ object Palette {
 object Motion {
     val EaseOut = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
 
+    val Ease = CubicBezierEasing(0.2f, 0f, 0f, 1f)
+
     val EaseInOut = CubicBezierEasing(0.77f, 0f, 0.175f, 1f)
 
     val Drawer = CubicBezierEasing(0.32f, 0.72f, 0f, 1f)

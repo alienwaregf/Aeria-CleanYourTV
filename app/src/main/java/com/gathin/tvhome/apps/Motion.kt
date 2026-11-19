@@ -3,9 +3,6 @@ package com.gathin.tvhome.apps
 import android.animation.ValueAnimator
 import android.content.Context
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.util.Log
 import android.util.Property
 import android.view.View
 import android.view.ViewGroup
@@ -169,27 +166,16 @@ object Motion {
     )
 
 
-    private const val GATE_LIMIT_MS: Long = 2000L
-
     private val PRECISION: FloatArray = floatArrayOf(0.001f, 0.001f, 0.5f, 0.5f, 0.004f)
 
     private val PROPS: Array<Property<View, Float>> = arrayOf(
         View.SCALE_X, View.SCALE_Y, View.TRANSLATION_X, View.TRANSLATION_Y, View.ALPHA,
     )
 
-    private val MAIN: Handler = Handler(Looper.getMainLooper())
     private val PROGRESS: WeakHashMap<Any, Spring> = WeakHashMap()
     private val MOVING: MutableList<(Boolean) -> Unit> = ArrayList()
 
     private val movingViews: WeakHashMap<View, Moving> = WeakHashMap()
-
-    private var gate: Int = 0
-    private var gateName: String? = null
-    private var gateReverse: IntArray = intArrayOf()
-    private var gated: Boolean = false
-    private var held: Int = 0
-    private var nearNext: (() -> Unit)? = null
-    private var replay: ((Int) -> Unit)? = null
 
     class Spec(
         val omegaUp: Float,
@@ -218,11 +204,6 @@ object Motion {
         return Follow(view, name, flowSpec?.omegaUp ?: 30.0f, EASED.contains(name), onUpdate)
     }
 
-    fun spring(name: String, start: Float, listener: Spring.Listener): Spring {
-        val flowSpec = FLOW[name]
-        return Spring(flowSpec?.omegaUp ?: 30.0f, flowSpec?.zetaUp ?: 1.0f, start, listener)
-    }
-
     fun step(
         name: String,
         context: Context,
@@ -243,14 +224,6 @@ object Motion {
         }
     }
 
-    fun realMs(ms: Long): Long {
-        if (Build.VERSION.SDK_INT < 33) {
-            return ms
-        }
-        val scale = ValueAnimator.getDurationScale()
-        return if (scale > 0.0f) (ms / scale).toLong() else ms
-    }
-
     fun change(name: String, view: View, run: () -> Unit, onDone: (() -> Unit)? = null) {
         val flowSpec = spec(name)
         if (flowSpec == null || !view.isAttachedToWindow) {
@@ -258,7 +231,7 @@ object Motion {
             onDone?.invoke()
             return
         }
-        val arrival = Arrival(onDone, nearNext)
+        val arrival = Arrival(onDone)
         val before = FloatArray(PROPS.size)
         for (i in PROPS.indices) {
             before[i] = PROPS[i].get(view)
@@ -331,20 +304,6 @@ object Motion {
         group.invalidate()
     }
 
-    fun change(name: String, view: View, run: () -> Unit, onNear: (() -> Unit)?, onDone: (() -> Unit)?) {
-        nearNext = onNear
-        try {
-            change(name, view, run, onDone)
-        } finally {
-            nearNext = null
-        }
-    }
-
-    fun now(view: View, run: () -> Unit) {
-        movingViews[view]?.stop()
-        run()
-    }
-
 
     fun finish(key: Any) {
         val spring = PROGRESS.remove(key)
@@ -365,6 +324,11 @@ object Motion {
         val old = PROGRESS.remove(key)
         if (old != null) {
             old.snapTo(old.value())
+        }
+        if (from == to) {
+            onUpdate(to)
+            onDone?.invoke()
+            return
         }
         if (flowSpec == null) {
             onUpdate(to)
@@ -395,8 +359,6 @@ object Motion {
         spring.stepNow()
     }
 
-    fun moving(): Boolean = Moving.running > 0
-
     private fun stillness(moving: Boolean) {
         val snapshot = ArrayList(MOVING)
         for (consumer in snapshot) {
@@ -404,87 +366,15 @@ object Motion {
         }
     }
 
-    fun transition(
-        name: String,
-        view: View,
-        run: () -> Unit,
-        onDone: (() -> Unit)? = null,
-        vararg reverse: Int,
-    ) {
-        transition(name, view, run, null, onDone, *reverse)
-    }
-
-    fun transition(
-        name: String,
-        view: View,
-        run: () -> Unit,
-        onNear: (() -> Unit)?,
-        onDone: (() -> Unit)?,
-        vararg reverse: Int,
-    ) {
-        val heldGate = hold(name, reverse)
-        nearNext = {
-            if (heldGate == gate) {
-                release()
-                onNear?.invoke()
-            }
-        }
-        change(name, view, run) {
-            if (heldGate == gate) {
-                release()
-            }
-            onDone?.invoke()
-        }
-        nearNext = null
-    }
-
-    private fun hold(name: String, reverse: IntArray): Int {
-        val id = gate + 1
-        gate = id
-        gated = true
-        gateName = name
-        gateReverse = reverse
-        MAIN.postDelayed({
-            if (id == gate && gated) {
-                Log.w("FlowMotion", "gate $name never settled: keys let go after 2000 ms")
-                release()
-            }
-        }, GATE_LIMIT_MS)
-        return id
-    }
-
-    private fun release() {
-        gated = false
-        val heldKey = held
-        held = 0
-        if (heldKey != 0) {
-            Log.d("FlowMotion", "replay key $heldKey after $gateName")
-        }
-        val replayFn = replay
-        if (heldKey == 0 || replayFn == null) {
-            return
-        }
-        replayFn(heldKey)
-    }
-
     private class Arrival(
         private val done: (() -> Unit)?,
-        private val near: (() -> Unit)?,
     ) {
-        private var far: Int = 0
         private var pending: Int = 0
         private var ran: Boolean = false
-        private var ranNear: Boolean = false
         private var sealed: Boolean = false
 
         fun add() {
             pending++
-            far++
-        }
-
-        fun nearly() {
-            far--
-            check()
         }
 
         fun arrived() {
@@ -499,10 +389,6 @@ object Motion {
 
         private fun check() {
             if (sealed) {
-                if (far <= 0 && !ranNear) {
-                    ranNear = true
-                    near?.invoke()
-                }
                 if (pending > 0 || ran) {
                     return
                 }
@@ -521,8 +407,6 @@ object Motion {
 
         private val springs: Array<Spring?> = arrayOfNulls(PROPS.size)
         private val arrivals: Array<Arrival?> = arrayOfNulls(PROPS.size)
-        private val travel: FloatArray = FloatArray(PROPS.size)
-        private val near: BooleanArray = BooleanArray(PROPS.size)
 
         fun go(index: Int, from: Float, to: Float, spec: Spec, arrival: Arrival) {
             val up = to > from
@@ -542,9 +426,6 @@ object Motion {
             }
             val prevArrival = arrivals[index]
             if (prevArrival != null) {
-                if (!near[index]) {
-                    prevArrival.nearly()
-                }
                 prevArrival.arrived()
             } else {
                 val wasRunning = running
@@ -554,8 +435,6 @@ object Motion {
                 }
             }
             arrivals[index] = arrival
-            travel[index] = abs(to - from)
-            near[index] = false
             arrival.add()
             val wasRunning = spring.isRunning()
             spring.animateTo(to)
@@ -571,12 +450,6 @@ object Motion {
         private fun onSpringUpdate(index: Int, value: Float) {
             Motion.PROPS[index].set(view, value)
             val spring = springs[index] ?: return
-            if (!near[index] && arrivals[index] != null &&
-                abs(spring.target() - value) <= maxOf(Motion.PRECISION[index], travel[index] * 0.02f)
-            ) {
-                near[index] = true
-                arrivals[index]?.nearly()
-            }
             if (spring.isRunning()) {
                 return
             }
@@ -599,10 +472,6 @@ object Motion {
             running -= 1
             if (running == 0) {
                 Motion.stillness(false)
-            }
-            if (!near[index]) {
-                near[index] = true
-                arrival.nearly()
             }
             arrival.arrived()
         }

@@ -41,6 +41,7 @@ object CustomIcons {
     fun load(pkg: String): Bitmap? = if (has(pkg)) BitmapFactory.decodeFile(fileFor(pkg).path) else null
 
     fun save(pkg: String, input: InputStream, cacheDir: File): Boolean {
+        if (!::dir.isInitialized) return false
         val tmp = File.createTempFile("icon", ".bin", cacheDir)
         return try {
             tmp.outputStream().use { input.copyTo(it) }
@@ -54,6 +55,7 @@ object CustomIcons {
     }
 
     fun clear(pkg: String) {
+        if (!::dir.isInitialized) return
         fileFor(pkg).delete()
     }
 

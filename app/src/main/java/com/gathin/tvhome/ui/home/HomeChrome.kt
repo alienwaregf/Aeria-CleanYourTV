@@ -193,14 +193,13 @@ fun HomeBackground(
     filmStopped: () -> Float = { 0f },
     toSaver: () -> Float = { 0f },
     filmGlass: ImageBitmap? = null,
-    saverImage: ImageBitmap? = null,
-    saverReveal: () -> Float = { 0f },
-    saverPush: () -> Float = { 0f },
     lift: () -> Float = { 0f },
+    plateSlide: () -> Float = { 0f },
     wallpaper: String? = null,
     glassAwaitsStop: Boolean = false,
     gridGlass: ImageBitmap? = null,
     middle: @Composable () -> Unit = {},
+    hero: @Composable () -> Unit = {},
 ) {
     val shade = remember { Images.homeShade.asImageBitmap() }
     Box(Modifier.fillMaxSize()) {
@@ -213,14 +212,11 @@ fun HomeBackground(
             Pictures(backdrop, gridGlass ?: frosted, filmGlass.takeIf { glassAwaitsStop }, wallpaper, scroll, collapse, cover, filmStopped, toSaver)
         }
         Box(Modifier.fillMaxSize()) { middle() }
-        if (saverImage != null) Canvas(Modifier.fillMaxSize()) {
-            val a = saverReveal()
-            if (a > 0.01f) drawDrawingIn(saverImage, saverPush(), a)
-        }
+        Box(Modifier.fillMaxSize()) { hero() }
         Box(Modifier.fillMaxSize().diagLayer("plate")) {
             val still = Wallpapers.filmGlassless && Wallpapers.moves() && (frosted ?: backdrop) != null
             val film = filmGlass.takeUnless { Wallpapers.filmGlassless }
-            Plate(if (still) filmGlass ?: frosted ?: backdrop else frosted ?: backdrop, film, film != null, Wallpapers.filmGlassless, plate, scroll, collapse, cover, filmStopped, toSaver, lift, still)
+            Plate(if (still) filmGlass ?: frosted ?: backdrop else frosted ?: backdrop, film, film != null, Wallpapers.filmGlassless, plate, scroll, collapse, cover, filmStopped, toSaver, lift, still, slide = plateSlide)
         }
     }
 }
@@ -236,8 +232,6 @@ private fun Pictures(
     cover: () -> Float,
     filmStopped: () -> Float,
     toSaver: () -> Float,
-    backdropInstant: Boolean = false,
-    backdropDurationMs: Int = 450,
 ) {
     fun gridGlass(): Float = (((scroll() / collapse).coerceIn(0f, 1f) - 0.3f) / 0.4f).coerceIn(0f, 1f) * (1f - toSaver())
     fun moving(): Boolean = filmGlass != null && cover() > 0.01f && filmStopped() < 0.99f
@@ -248,7 +242,7 @@ private fun Pictures(
     }
     val ambient: @Composable (ImageBitmap?) -> Unit = { bmp ->
         LaunchedEffect(bmp) {
-            android.util.Log.i("AerialDiag", "diag backdrop ${bmp?.width}x${bmp?.height} frosted=${frosted == null} instant=$backdropInstant")
+            android.util.Log.i("AerialDiag", "diag backdrop ${bmp?.width}x${bmp?.height} frosted=${frosted == null}")
         }
         val own = remember(bmp, frosted == null) {
             bmp?.takeIf { frosted == null && it.width <= 256 }?.let(::plateTinted)
@@ -266,17 +260,13 @@ private fun Pictures(
             if (own != null && g > 0.01f) drawImage(own, dstSize = full, filterQuality = FilterQuality.Low, alpha = g)
         }
     }
-    if (backdropInstant) {
-        ambient(backdrop)
-    } else {
-        Dissolve(
-            targetState = backdrop,
-            durationMs = backdropDurationMs,
-            easing = Motion.EaseOut,
-            modifier = Modifier.fillMaxSize(),
-            label = "ambient",
-        ) { bmp -> ambient(bmp) }
-    }
+    Dissolve(
+        targetState = backdrop,
+        durationMs = 450,
+        easing = Motion.EaseOut,
+        modifier = Modifier.fillMaxSize(),
+        label = "ambient",
+    ) { bmp -> ambient(bmp) }
     AnimatedContent(
         targetState = held,
         contentKey = { it.second },
@@ -302,7 +292,7 @@ private fun Pictures(
 }
 
 @Composable
-private fun Plate(glass: ImageBitmap?, film: ImageBitmap?, filmPlate: Boolean, deepSmoke: Boolean, plate: Rect?, scroll: () -> Float, collapse: Float, cover: () -> Float, filmStopped: () -> Float, toSaver: () -> Float, lift: () -> Float, stillOverFilm: Boolean = false, swapInstant: Boolean = false) {
+private fun Plate(glass: ImageBitmap?, film: ImageBitmap?, filmPlate: Boolean, deepSmoke: Boolean, plate: Rect?, scroll: () -> Float, collapse: Float, cover: () -> Float, filmStopped: () -> Float, toSaver: () -> Float, lift: () -> Float, stillOverFilm: Boolean = false, slide: () -> Float = { 0f }) {
     var shown by remember { mutableStateOf(glass) }
     var under by remember { mutableStateOf<ImageBitmap?>(null) }
     val swap = remember { Animatable(1f) }
@@ -318,17 +308,11 @@ private fun Plate(glass: ImageBitmap?, film: ImageBitmap?, filmPlate: Boolean, d
             swap.snapTo(1f)
             return@LaunchedEffect
         }
-        if (swapInstant) {
-            shown = glass
-            under = null
-            swap.snapTo(1f)
-        } else {
-            under = shown.takeIf { swap.value > 0.5f } ?: under
-            shown = glass
-            swap.snapTo(0f)
-            swap.animateTo(1f, tween(450, easing = Motion.EaseOut))
-            under = null
-        }
+        under = shown.takeIf { swap.value > 0.5f } ?: under
+        shown = glass
+        swap.snapTo(0f)
+        swap.animateTo(1f, tween(450, easing = Motion.EaseOut))
+        under = null
     }
     val density = LocalDensity.current
     var screen by remember { mutableStateOf(Size.Zero) }
@@ -342,10 +326,8 @@ private fun Plate(glass: ImageBitmap?, film: ImageBitmap?, filmPlate: Boolean, d
         android.util.Log.i("AerialDiag", "diag plate bake ${android.os.SystemClock.uptimeMillis() - start}ms ${glass.width}x${glass.height}")
         return result
     }
-    var topFor by remember { mutableStateOf<ImageBitmap?>(null) }
     val top by produceState<ImageBitmap?>(null, shown, plate, screen) {
         value = baked(shown)
-        topFor = shown
     }
     val bottom by produceState<ImageBitmap?>(null, under, plate, screen) { value = baked(under) }
     var filmTop by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -385,7 +367,7 @@ private fun Plate(glass: ImageBitmap?, film: ImageBitmap?, filmPlate: Boolean, d
         val edge = smoke
         if (!stillOverFilm && edge != null && (filmPlate || cover() > 0.01f) && alpha < 0.99f && base > 0.01f) {
             val p = (scroll() / collapse).coerceIn(0f, 1f)
-            val r = plate.translate(0f, -scroll() - lift()).inflate(PlateSwell.toPx() * smooth((p / 0.55f).coerceIn(0f, 1f)))
+            val r = plate.translate(0f, -scroll() - lift() + slide()).inflate(PlateSwell.toPx() * smooth((p / 0.55f).coerceIn(0f, 1f)))
             val t = filmSwap.value
             val under = filmBottom
             if (frame != null && t < 1f && under != null) {
@@ -404,11 +386,11 @@ private fun Plate(glass: ImageBitmap?, film: ImageBitmap?, filmPlate: Boolean, d
         val rest = 1f - smooth((p / 0.55f).coerceIn(0f, 1f))
         if (alpha < 0.01f) return@Canvas
         val grow = PlateSwell.toPx() * (1f - rest)
-        val r = plate.translate(0f, -scroll() - lift()).inflate(grow)
+        val r = plate.translate(0f, -scroll() - lift() + slide()).inflate(grow)
         val t = swap.value
         val below = bottom.takeIf { under != null }
         if (t < 1f) below?.let { drawBaked(it, r, alpha) }
-        if (!swapInstant || topFor == glass) top?.let { drawBaked(it, r, if (below != null) alpha * t else alpha) }
+        top?.let { drawBaked(it, r, if (below != null) alpha * t else alpha) }
     }
 }
 
@@ -558,14 +540,15 @@ fun ShelfClock(
                 val range = if (w.high != null && w.low != null) stringResource(R.string.weather_high_low_qweather, w.high, w.low) else null
                 val aqi = w.aqi?.substringBeforeLast(' ')?.takeIf { it.isNotEmpty() }
                 val name = w.conditionText?.takeIf { it.isNotEmpty() } ?: stringResource(conditionName(w))
-                val detail = listOfNotNull(name, aqi, range).joinToString(" ")
+                val detail = listOfNotNull(aqi, range).joinToString(" ")
                 Row(aside.padding(top = 18.dp).capBox(Type.ClockDetail.fontSize), verticalAlignment = Alignment.CenterVertically) {
                     place?.let { BasicText(it, style = Type.ClockDetail.copy(fontWeight = FontWeight.W500, shadow = shadow), modifier = Modifier.padding(end = 7.dp)) }
-                    BasicText(emojiFor(w), style = Type.ClockDetail.copy(fontSize = 18.sp, shadow = shadow), modifier = Modifier.padding(end = 7.dp))
                     BasicText(
                         buildAnnotatedString {
-                            append("${w.celsius}°C")
-                            withStyle(second) { append("  $detail") }
+                            withStyle(SpanStyle(fontSize = 18.sp)) { append(emojiFor(w)) }
+                            withStyle(second) { append(name) }
+                            append(" ${w.celsius}°C")
+                            if (detail.isNotEmpty()) withStyle(second) { append(" $detail") }
                         },
                         style = Type.ClockDetail.copy(shadow = shadow),
                     )
@@ -774,6 +757,12 @@ fun StatusPill(
             if (network.vpn) VpnBadge(fg)
             if (showTime) {
                 BasicText(timeText(now), style = Type.Headline.copy(color = fg))
+                Weather.now?.takeIf { AerialSettings.showWeather }?.let { w ->
+                    BasicText(
+                        "${emojiFor(w)}${stringResource(R.string.weather_temperature, w.celsius)}",
+                        style = Type.Headline.copy(color = fg),
+                    )
+                }
             }
             GlyphIcon(Glyph.Switches, fg, 17.dp)
         }

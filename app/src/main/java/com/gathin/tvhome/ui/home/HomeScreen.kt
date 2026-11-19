@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntOffsetAsState
 import androidx.compose.animation.core.snap
@@ -21,6 +22,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.rememberSplineBasedDecay
+import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -28,11 +30,14 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -52,6 +57,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
@@ -98,6 +104,7 @@ import androidx.compose.runtime.snapshotFlow
 import com.gathin.tvhome.system.DiagLog
 import com.gathin.tvhome.system.LaunchFallback
 import com.gathin.tvhome.system.SystemProbe
+import com.gathin.tvhome.tmdb.TmdbTrending
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.CoroutineStart
@@ -220,6 +227,7 @@ fun HomeScreen(
     val requesters = remember { HashMap<String, FocusRequester>() }
     fun requester(key: String) = requesters.getOrPut(key) { FocusRequester() }
     val pillRequester = remember { FocusRequester() }
+    val heroRequester = remember { FocusRequester() }
     val appContext = LocalContext.current
     val firmwareInputPanel = remember {
         SystemProbe.tclInputPanel(appContext) != null || SystemProbe.coocaaInputPanel(appContext)
@@ -230,25 +238,39 @@ fun HomeScreen(
     var indexAfterOverlay by remember { mutableStateOf(0) }
     var pillFocused by remember { mutableStateOf(false) }
     var lastFocusedIndex by remember { mutableStateOf(0) }
+    var heroFocused by remember { mutableStateOf(false) }
+    var heroIndex by remember { mutableStateOf(0) }
+    var heroDir by remember { mutableStateOf(0) }
+    var heroTimerReset by remember { mutableStateOf(0) }
     val focusedIndex = apps.indexOfFirst { it.key == focusedKey }
     val columns = AerialSettings.homeColumns
     val focusedRow = if (pillFocused || focusedIndex < 0) 0 else focusedIndex / columns
     val isDockApp = !pillFocused && focusedIndex in 0 until columns
     var focusBg by remember { mutableStateOf<ImageBitmap?>(null) }
     var focusBgFrosted by remember { mutableStateOf<ImageBitmap?>(null) }
+    val focusBgHit = remember(focusedKey, isDockApp, AppBackgrounds.version, Wallpapers.selectedId, focusBg, focusBgFrosted) {
+        val key = focusedKey
+        if (!isDockApp || key == null || Wallpapers.moves() || Wallpapers.isTrending()) null
+        else AppBackgrounds.peekCached(key)?.let { (bmp, frost) -> bmp.asImageBitmap() to frost.asImageBitmap() }
+    }
+    val focusBgShown = focusBgHit?.first
+    val focusBgFrostedShown = focusBgHit?.second
     LaunchedEffect(focusedKey, isDockApp, AppBackgrounds.version, Wallpapers.selectedId) {
         val key = focusedKey
         android.util.Log.i("AerialDiag", "diag focus dock=$isDockApp key=$key moves=${Wallpapers.moves()}")
         if (!isDockApp) return@LaunchedEffect
-        if (key == null || Wallpapers.moves() || !AppBackgrounds.has(key)) {
+        if (key == null || Wallpapers.moves() || Wallpapers.isTrending() || !AppBackgrounds.has(key)) {
             focusBg = null
             focusBgFrosted = null
             return@LaunchedEffect
         }
+        if (AppBackgrounds.peekCached(key) != null) return@LaunchedEffect
+        focusBg = null
+        focusBgFrosted = null
         val (bmp, frost) = withContext(Dispatchers.IO) {
             AppBackgrounds.loadCached(key, Wallpapers.screenW, Wallpapers.screenH)
         } ?: return@LaunchedEffect
-        if (focusedKey != key || !isDockApp || Wallpapers.moves()) return@LaunchedEffect
+        if (focusedKey != key || !isDockApp || Wallpapers.moves() || Wallpapers.isTrending()) return@LaunchedEffect
         focusBg = bmp.asImageBitmap()
         focusBgFrosted = frost.asImageBitmap()
         android.util.Log.i("AerialDiag", "diag focusBg loaded ${bmp.width}x${bmp.height}")
@@ -285,7 +307,7 @@ fun HomeScreen(
             shelfHost.shelf.focus(null, focusedIndex)
             return@LaunchedEffect
         }
-        if (Wallpapers.moves()) {
+        if (Wallpapers.moves() || Wallpapers.isTrending()) {
             shelfHost.shelf.focus(null, focusedIndex)
             return@LaunchedEffect
         }
@@ -332,9 +354,6 @@ fun HomeScreen(
         if (liveFilm.stopped) 1f else 0f,
         tween(if (liveFilm.stopped) 250 else 900, easing = Motion.EaseOut), label = "film-stopped",
     )
-    var saverImage by remember { mutableStateOf<ImageBitmap?>(null) }
-    val saverReveal = remember { Animatable(0f) }
-    val saverPush = remember { Animatable(0f) }
     val carrying = filmSaver
     val toSaver = remember { Animatable(0f) }
     LaunchedEffect(carrying) {
@@ -398,11 +417,24 @@ fun HomeScreen(
         }
     }
 
+    LaunchedEffect(vm.homePressedTick) {
+        if (vm.homePressedTick == 0 || !heroFocused) return@LaunchedEffect
+        withFrameNanos { }
+        heroFocused = false
+        focusApp(0)
+        vm.homeResetPending = false
+    }
+
     BackHandler(enabled = overlay == Overlay.None && moving == null) {
-        val scrolled = dragged && scroll.value > 1f
-        dragged = false
-        if (focusedRow > 0 || scrolled) focusApp(focusedIndex.coerceAtLeast(0) % columns)
-        else if (AerialSettings.backStartsScreensaver) onStartScreensaver()
+        if (heroFocused) {
+            heroFocused = false
+            focusApp(if (focusedIndex >= 0) focusedIndex else lastFocusedIndex)
+        } else {
+            val scrolled = dragged && scroll.value > 1f
+            dragged = false
+            if (focusedRow > 0 || scrolled) focusApp(focusedIndex.coerceAtLeast(0) % columns)
+            else if (AerialSettings.backStartsScreensaver) onStartScreensaver()
+        }
     }
 
     BoxWithConstraints(
@@ -551,15 +583,92 @@ fun HomeScreen(
         }
         val shelfAway = overlay != Overlay.None || vm.screensaverVisible || moving != null || inGrid
         LaunchedEffect(shelfAway) { shelfHost.shelf.away(shelfAway) }
+        val heroVisible = Wallpapers.selectedId == Wallpapers.TRENDING && TmdbTrending.hasContent &&
+            overlay == Overlay.None && !Wallpapers.moves() && moving == null && !inGrid && !previewActive
         val shelfHasCards = TopShelfContent.shelfEnabled(appContext) && shelfCardsData &&
-            !Wallpapers.moves() &&
+            !Wallpapers.moves() && !Wallpapers.isTrending() &&
             overlay == Overlay.None && !vm.screensaverVisible && moving == null && !inGrid
         val shelfUp = shelfHasCards
+        val dockSlide by animateFloatAsState(
+            targetValue = if (heroFocused) with(density) { (metrics.screenH - metrics.topRowY + 30.dp).toPx() } else 0f,
+            animationSpec = if (reduced) snap() else tween(durationMillis = if (heroFocused) 500 else 450, easing = Motion.Ease),
+            label = "hero-dock-slide",
+        )
+        val dotsBottomInset = metrics.screenH - metrics.topRowY
+        val dotsShift by animateDpAsState(
+            targetValue = if (heroFocused) dotsBottomInset - 10.dp + HeroRestLift else 0.dp,
+            animationSpec = if (reduced) snap() else tween(durationMillis = if (heroFocused) 500 else 450, easing = Motion.Ease),
+            label = "hero-dots-shift",
+        )
+        LaunchedEffect(heroVisible, heroTimerReset, heroFocused, vm.resumed, vm.screensaverVisible) {
+            if (!heroVisible || heroFocused || !vm.resumed || vm.screensaverVisible) return@LaunchedEffect
+            while (true) {
+                delay(8_000)
+                val count = TmdbTrending.items.size
+                if (count > 0) {
+                    heroDir = 1
+                    heroIndex = (heroIndex + 1) % count
+                }
+            }
+        }
+        LaunchedEffect(heroIndex, heroVisible) {
+            if (!heroVisible) return@LaunchedEffect
+            Wallpapers.refreshTrendingStill(heroIndex)
+        }
+        LaunchedEffect(TmdbTrending.items.size) {
+            val count = TmdbTrending.items.size
+            if (count > 0 && heroIndex >= count) {
+                heroDir = 0
+                heroIndex = 0
+            }
+        }
         Box(
             Modifier
                 .fillMaxSize()
                 .onPreviewKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                    if (heroFocused && !heroVisible && overlay == Overlay.None) heroFocused = false
+                    if (heroFocused) {
+                        when (e.nativeKeyEvent.keyCode) {
+                            NativeKeyEvent.KEYCODE_DPAD_UP -> {
+                                heroFocused = false
+                                runCatching { pillRequester.requestFocus() }
+                                return@onPreviewKeyEvent true
+                            }
+                            NativeKeyEvent.KEYCODE_DPAD_DOWN -> {
+                                heroFocused = false
+                                focusApp(if (focusedIndex >= 0) focusedIndex else lastFocusedIndex)
+                                return@onPreviewKeyEvent true
+                            }
+                            NativeKeyEvent.KEYCODE_DPAD_LEFT -> {
+                                val count = TmdbTrending.items.size
+                                if (count > 0) {
+                                    heroDir = -1
+                                    heroIndex = (heroIndex - 1 + count) % count
+                                }
+                                heroTimerReset++
+                                return@onPreviewKeyEvent true
+                            }
+                            NativeKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                val count = TmdbTrending.items.size
+                                if (count > 0) {
+                                    heroDir = 1
+                                    heroIndex = (heroIndex + 1) % count
+                                }
+                                heroTimerReset++
+                                return@onPreviewKeyEvent true
+                            }
+                            NativeKeyEvent.KEYCODE_DPAD_CENTER, NativeKeyEvent.KEYCODE_ENTER,
+                            NativeKeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                return@onPreviewKeyEvent true
+                            }
+                            else -> return@onPreviewKeyEvent false
+                        }
+                    }
+                    if (heroVisible && isDockApp && e.nativeKeyEvent.keyCode == NativeKeyEvent.KEYCODE_DPAD_UP) {
+                        heroFocused = true
+                        return@onPreviewKeyEvent true
+                    }
                     val focusedCard = shelfHost.shelf.view().findFocus()
                     when (e.nativeKeyEvent.keyCode) {
                         NativeKeyEvent.KEYCODE_DPAD_LEFT,
@@ -624,39 +733,73 @@ fun HomeScreen(
             LaunchedEffect(clip) { Wallpapers.showClipGlass(clip) }
             val clipGlass = Wallpapers.clipGlass?.takeIf { it.first == clip }?.second
             HomeBackground(
-                backdrop = if (isDockApp && !shelfCardsData) focusBg ?: (Wallpapers.backdrop ?: ambientApp?.art?.backdrop)
+                backdrop = if (isDockApp && !shelfCardsData) focusBgShown ?: (Wallpapers.backdrop ?: ambientApp?.art?.backdrop)
                     else Wallpapers.backdrop ?: ambientApp?.art?.backdrop,
                 middle = if (Wallpapers.moves()) { {} } else { { ShelfHostView(shelfHost) } },
-                frosted = if (isDockApp && !shelfCardsData) focusBgFrosted ?: Wallpapers.frosted.takeIf { Wallpapers.backdrop != null }
+                hero = {
+                    if (heroVisible) {
+                        HeroRow(
+                            items = TmdbTrending.items,
+                            index = heroIndex.coerceIn(0, (TmdbTrending.items.size - 1).coerceAtLeast(0)),
+                            dir = heroDir,
+                            focused = heroFocused,
+                            focusRequester = heroRequester,
+                            bottomInset = metrics.screenH - metrics.topRowY,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                },
+                frosted = if (isDockApp && !shelfCardsData) focusBgFrostedShown ?: Wallpapers.frosted.takeIf { Wallpapers.backdrop != null }
                     else Wallpapers.frosted.takeIf { Wallpapers.backdrop != null },
                 plate = plate,
                 scroll = { scroll.value },
+                plateSlide = { dockSlide },
                 collapse = collapsePx,
                 cover = { filmCover.value },
                 shadeMoving = sourceInput != null,
                 filmStopped = { filmStopped },
                 toSaver = { toSaver.value },
                 filmGlass = (Wallpapers.filmFrost ?: Wallpapers.frosted).takeIf { Wallpapers.moves() && Wallpapers.backdrop != null },
-                saverImage = saverImage,
-                saverReveal = { saverReveal.value },
-                saverPush = { saverPush.value },
                 lift = { lift },
                 wallpaper = when {
-                    isDockApp && focusBg != null && !shelfCardsData -> "appbg:$focusedKey"
+                    isDockApp && focusBgShown != null && !shelfCardsData -> "appbg:$focusedKey"
                     else -> Wallpapers.selectedId
                 },
                 glassAwaitsStop = Wallpapers.selectedId == Wallpapers.LIVE && clipGlass == null,
                 gridGlass = clipGlass,
             )
 
+            if (heroVisible) {
+                val dotIndex = heroIndex.coerceIn(0, (TmdbTrending.items.size - 1).coerceAtLeast(0))
+                Row(
+                    Modifier.align(Alignment.BottomCenter).padding(bottom = dotsBottomInset + 12.dp + HeroRestLift).offset(y = dotsShift),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    for (i in TmdbTrending.items.indices) {
+                        key(i) {
+                            if (i > 0) Spacer(Modifier.width(5.dp))
+                            val dotAlpha by animateFloatAsState(
+                                targetValue = if (i == dotIndex) 1f else 0.35f,
+                                animationSpec = tween(250),
+                                label = "hero-dot-alpha",
+                            )
+                            Box(
+                                Modifier.size(5.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = dotAlpha)),
+                            )
+                        }
+                    }
+                }
+            }
 
             Box(
                 Modifier
                     .fillMaxSize()
-                    .offset { IntOffset(0, -scroll.value.roundToInt()) },
+                    .offset { IntOffset(0, (-scroll.value + dockSlide).roundToInt()) },
             ) {
                 val clockRight = AerialSettings.clockRight
-                if (AerialSettings.largeClock && !shelfUp) {
+                if (AerialSettings.largeClock && !shelfUp && !heroVisible && !Wallpapers.isTrending() && !inGrid) {
                     ShelfClock(
                         now = now,
                         alignEnd = clockRight,
@@ -673,7 +816,7 @@ fun HomeScreen(
                         saving = vm.screensaverVisible,
                         away = carrying,
                     )
-                } else if (!clockRight && !shelfUp) {
+                } else if (!clockRight && !shelfUp && !heroVisible && !Wallpapers.isTrending() && !inGrid) {
                     CornerClock(
                         now = now,
                         modifier = Modifier
@@ -770,7 +913,7 @@ fun HomeScreen(
                 .graphicsLayer { alpha = if (overlay is Overlay.ControlCenter) 0f else 1f },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (!AerialSettings.largeClock && AerialSettings.clockRight && !shelfUp) {
+            if (!AerialSettings.largeClock && AerialSettings.clockRight && !shelfUp && !heroVisible && !Wallpapers.isTrending() && !inGrid) {
                 CornerClock(
                     now = now,
                     modifier = Modifier
@@ -787,7 +930,7 @@ fun HomeScreen(
             StatusPill(
                 now = now,
                 network = vm.network,
-                showTime = shelfHasCards || (if (dragged) pastShelf else inGrid),
+                showTime = shelfHasCards || heroVisible || (if (dragged) pastShelf else inGrid),
                 enabled = gridEnabled && moving == null,
                 focusRequester = pillRequester,
                 modifier = Modifier
@@ -796,12 +939,23 @@ fun HomeScreen(
                         val key = focusedKey
                         if (key != null && apps.indexOfFirst { it.key == key } in 0 until columns) down = requester(key)
                     }
+                    .onPreviewKeyEvent { e ->
+                        if (e.type == KeyEventType.KeyDown && heroVisible &&
+                            e.nativeKeyEvent.keyCode == NativeKeyEvent.KEYCODE_DPAD_DOWN
+                        ) {
+                            heroFocused = true
+                            true
+                        } else {
+                            false
+                        }
+                    }
                     .graphicsLayer {
                         alpha = 1f - (toSaver.value * 2f).coerceIn(0f, 1f)
                         compositingStrategy = CompositingStrategy.ModulateAlpha
                     },
                 onFocused = { gained ->
                     if (gained) {
+                        heroFocused = false
                         if (focusedKey == null) {
                             if (apps.isNotEmpty()) focusApp(0)
                         } else {

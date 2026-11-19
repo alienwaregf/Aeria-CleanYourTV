@@ -16,7 +16,6 @@ import com.gathin.tvhome.wallpaper.Images
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.LinkedHashMap
 
 enum class ShelfSource { WATCH_NEXT, PREVIEW }
 
@@ -62,7 +61,7 @@ object TopShelfContent {
         val mark = markOf(context, app.pkg, app.label, foreground, app.icon, app.banner, screenW, color)
         val markPx = (210f / 960f * screenW).toInt().coerceAtLeast(1)
         val markDrawable = foreground ?: app.icon ?: app.banner
-        val cacheable = tileMark(app.pkg, markPx) != null || markDrawable == null ||
+        val cacheable = hasTileMark(app.pkg) || markDrawable == null ||
             run {
                 val nativePx = pixels(if (foreground != null) foreground else markDrawable)
                 val scaled = if (foreground != null) nativePx / MAX_UPSCALE else nativePx.toFloat()
@@ -137,7 +136,7 @@ object TopShelfContent {
                     }
                 } catch (t: Throwable) {
                     android.util.Log.w("FlowUpNext", "read row failed", t)
-                    break
+                    continue
                 }
             }
         }
@@ -441,8 +440,11 @@ object TopShelfContent {
         }.getOrNull()
     }
 
+    internal fun hasTileMark(pkg: String): Boolean =
+        pkg == "com.android.tv.settings" || pkg == "com.android.vending"
+
     internal fun tileMark(pkg: String, sizePx: Int): Bitmap? {
-        if (pkg != "com.android.tv.settings" && pkg != "com.android.vending") return null
+        if (!hasTileMark(pkg)) return null
         val bmp = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
         if (pkg != "com.android.tv.settings") {
@@ -450,11 +452,11 @@ object TopShelfContent {
             return bmp
         }
         val f = sizePx.toFloat()
-        settingsGear(canvas, f / 2f, f / 2f, f * 0.36f, false)
+        settingsGear(canvas, f / 2f, f / 2f, f * 0.36f)
         return bmp
     }
 
-    private fun settingsGear(canvas: Canvas, cx: Float, cy: Float, r: Float, withHalo: Boolean) {
+    private fun settingsGear(canvas: Canvas, cx: Float, cy: Float, r: Float) {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = -1447446
             setShadowLayer(0.035f * r, 0f, 0.02f * r, 1493172224)
@@ -462,10 +464,6 @@ object TopShelfContent {
         val paint2 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = -4013371
             setShadowLayer(0.025f * r, 0f, 0.015f * r, 1073741824)
-        }
-        if (withHalo) {
-            val paint3 = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 436207616 }
-            canvas.drawCircle(cx, cy, r * 0.8f, paint3)
         }
         val inner = 0.55f * r
         val gear1 = gear(cx, cy, inner, 0.66f * r, 24, 0.26, 0.16)

@@ -184,7 +184,8 @@ private fun MainPage(
     val networkFocus = remember { FocusRequester() }
     val settingsFocus = remember { FocusRequester() }
     var cameFrom by remember { mutableStateOf(first) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(poll) {
+        if (!poll) return@LaunchedEffect
         while (vm.sources.isEmpty()) {
             vm.refreshSources()
             delay(3000)

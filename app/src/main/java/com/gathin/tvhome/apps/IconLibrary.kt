@@ -27,7 +27,7 @@ object IconLibrary {
         if (::dir.isInitialized) return
         dir = File(context.filesDir, "library").apply { mkdirs() }
         prefs = context.applicationContext.getSharedPreferences("icon_library", Context.MODE_PRIVATE)
-        index = parse(File(dir, "index.json").takeIf { it.exists() }?.readText())
+        index = parse(runCatching { File(dir, "index.json").takeIf { it.exists() }?.readText() }.getOrNull())
     }
 
     private fun fileFor(pkg: String): File? {
@@ -57,6 +57,7 @@ object IconLibrary {
     }
 
     fun choose(pkg: String, pick: Pick?) {
+        if (!::prefs.isInitialized) return
         val library = prefs.getStringSet("use_library", emptySet())!! - pkg
         val own = prefs.getStringSet("use_own", emptySet())!! - pkg
         prefs.edit {
@@ -94,7 +95,7 @@ object IconLibrary {
 
     private fun parse(text: String?): Map<String, String> = runCatching {
         val icons = JSONObject(text ?: return emptyMap()).getJSONObject("icons")
-        buildMap { icons.keys().forEach { pkg -> if (CustomIcons.isValidKey(pkg)) put(pkg, icons.getString(pkg)) } }
+        buildMap { icons.keys().forEach { pkg -> if (CustomIcons.isValidKey(pkg)) runCatching { put(pkg, icons.getString(pkg)) } } }
     }.getOrDefault(emptyMap())
 
 }

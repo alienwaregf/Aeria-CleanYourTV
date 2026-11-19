@@ -11,9 +11,11 @@ object Cities {
 
     fun load(context: Context): List<City> = all ?: synchronized(this) {
         all ?: context.assets.open("cities-cn.tsv").bufferedReader().useLines { lines ->
-            lines.filter { !it.startsWith("#") && it.isNotBlank() }.map { line ->
+            lines.filter { !it.startsWith("#") && it.isNotBlank() }.mapNotNull { line ->
                 val c = line.split('\t')
-                City(c[0], c[1].split(',').filter { it.isNotEmpty() }, c[2], c[3].toDouble(), c[4].toDouble(), c[5].toInt(), c[6])
+                if (c.size < 7) null else runCatching {
+                    City(c[0], c[1].split(',').filter { it.isNotEmpty() }, c[2], c[3].toDouble(), c[4].toDouble(), c[5].toInt(), c[6])
+                }.getOrNull()
             }.toList()
         }.also { all = it }
     }

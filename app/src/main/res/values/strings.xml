@@ -87,6 +87,7 @@
     <string name="wx_sleet">Sleet</string>
     <string name="wp_live">Moving aerial films. They play while Home is on the top row (either row in two rows) and stop on the frame showing when you go further down to the apps, which stays as the picture; the next film picks up from there.</string>
     <string name="wp_auto_note">Light taken from the selected app\'s artwork.</string>
+    <string name="wp_trending_note">Today\'s trending movies and TV from TMDB, full screen, rotating every 8 seconds. Add your TMDB key on the phone page.</string>
     <string name="wp_screensaver">Screensaver</string>
     <string name="ss_aerial">Aerial</string>
     <string name="ss_clock">Clock</string>
@@ -131,6 +132,10 @@
     <string name="st_home_standard">Two Rows</string>
     <string name="st_home_one_row">One Row</string>
     <string name="st_home_layout_hint">One Row puts only the top row on screen, low down, so more of the wallpaper shows, a family photo say. Two Rows shows the top of the second row too. Press down for the rest.</string>
+    <string name="st_hero">Trending</string>
+    <string name="hero_movie">Movie</string>
+    <string name="hero_tv">TV Series</string>
+
     <string name="st_plate">Top Row</string>
     <string name="st_plate_hint">A plate of frosted glass under the top row, as on Apple TV, or the apps straight on the wallpaper.</string>
     <string name="st_plate_glass">Glass</string>
@@ -237,7 +242,9 @@
     <string name="tile_xiaowei_call">Xiaowei Call</string>
     <string name="tile_kids">Kids</string>
     <string name="ss_videos">Videos</string>
-    <string name="ss_videos_hint">Add MP4 or MOV films from the phone page. Plays offline; the clock is shown when no film can play.</string>
+    <string name="ss_videos_hint">Add MP4 or MOV films from the phone page. Plays offline; the screen stays black when there is no film.</string>
+    <string name="ss_trending">Trending</string>
+    <string name="ss_trending_hint">TMDB trending titles, one every 8 seconds. The screen stays black until the first fetch succeeds.</string>
     <string name="ss_system">System</string>
     <string name="ss_system_hint">The TV\'s own screensaver, as it came with the TV (Xiaomi\'s pictures, for one). Aerial shows none of its own.</string>
     <string name="wp_videos_note">Your own videos, sent from the phone, silent and one after another. They move like the aerial films and stop on the frame showing.</string>

@@ -40,7 +40,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.withContext
 
 @Composable
-internal fun VideoSaver(steps: SharedFlow<Int>, leaving: Boolean = false, onUnavailable: () -> Unit) {
+internal fun VideoSaver(steps: SharedFlow<Int>, leaving: Boolean = false, onUnavailable: () -> Unit, onEmpty: () -> Unit) {
     val context = LocalContext.current
     val start = remember { if (Wallpapers.isVideo()) HomeVideo.start() else null }
     val wallpaper = remember { Wallpapers.isVideo() }
@@ -49,7 +49,7 @@ internal fun VideoSaver(steps: SharedFlow<Int>, leaving: Boolean = false, onUnav
             (if (wallpaper) Wallpapers.videoFilms() else emptyList()).ifEmpty { ScreensaverVideos.all(context).shuffled() }
         }
     }
-    LocalFilms(films, start, follows = wallpaper, leaving, steps, onUnavailable)
+    LocalFilms(films, start, follows = wallpaper, leaving, steps, onUnavailable, onEmpty)
 }
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -61,6 +61,7 @@ private fun LocalFilms(
     leaving: Boolean,
     steps: SharedFlow<Int>,
     onUnavailable: () -> Unit,
+    onEmpty: () -> Unit,
 ) {
     val context = LocalContext.current
     val player = remember {
@@ -145,7 +146,7 @@ private fun LocalFilms(
     LaunchedEffect(films) {
         val list = films ?: return@LaunchedEffect
         DiagLog.i("local screensaver: ${list.size} films")
-        if (list.isEmpty()) { onUnavailable(); return@LaunchedEffect }
+        if (list.isEmpty()) { onEmpty(); return@LaunchedEffect }
         val first = list.indexOfFirst { it.id == start?.first }
         if (first >= 0) DiagLog.i("local screensaver goes on from the wallpaper: ${start?.first} at ${start?.second} ms")
         player.setMediaItems(

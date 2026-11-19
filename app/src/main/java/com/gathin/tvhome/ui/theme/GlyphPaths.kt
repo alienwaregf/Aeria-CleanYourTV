@@ -1,5 +1,8 @@
 package com.gathin.tvhome.ui.theme
 
+// Generated from Material Symbols Rounded, filled, weight 400 (Apache License 2.0,
+// https://github.com/google/material-design-icons). Path data in the symbols' 960-unit box,
+// whose y runs from -960 to 0.
 @Suppress("SpellCheckingInspection")
 internal object GlyphPaths {
     const val WIFI_1 = "M480-127q-36 0-63-27t-27-63q0-36 27-63t63-27q36 0 63 27t27 63q0 36-27 63t-63 27Z"

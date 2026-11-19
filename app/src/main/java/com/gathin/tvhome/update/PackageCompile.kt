@@ -35,8 +35,8 @@ internal object PackageCompile {
             out[1].close()
             err[1].close()
         }
-        val printed = ParcelFileDescriptor.AutoCloseInputStream(out[0]).bufferedReader().readText() +
-            ParcelFileDescriptor.AutoCloseInputStream(err[0]).bufferedReader().readText()
+        val printed = ParcelFileDescriptor.AutoCloseInputStream(out[0]).bufferedReader().use { it.readText() } +
+            ParcelFileDescriptor.AutoCloseInputStream(err[0]).bufferedReader().use { it.readText() }
         return printed.trim()
     }
 }

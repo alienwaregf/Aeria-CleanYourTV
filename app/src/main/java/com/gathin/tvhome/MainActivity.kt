@@ -92,6 +92,8 @@ import com.gathin.tvhome.system.KonkaSources
 import com.gathin.tvhome.system.HomeReopen
 import com.gathin.tvhome.system.LaunchFallback
 import com.gathin.tvhome.system.settingsLaunchIntent
+import com.gathin.tvhome.ratings.Ratings
+import com.gathin.tvhome.tmdb.TmdbTrending
 import com.gathin.tvhome.weather.Weather
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -117,6 +119,7 @@ class MainActivity : ComponentActivity() {
         override fun onAvailable(network: Network) = runOnUiThread {
             vm.refreshNetwork()
             Weather.refreshIfStale(networkCameUp = true)
+            TmdbTrending.refreshIfStale()
         }
         override fun onLost(network: Network) = runOnUiThread { vm.refreshNetwork() }
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = runOnUiThread { vm.refreshNetwork() }
@@ -211,6 +214,9 @@ class MainActivity : ComponentActivity() {
         val uhd = UhdCanvas.scale(this)
         Wallpapers.init(this)
         Weather.init(this)
+        TmdbTrending.init(this)
+        Ratings.init(this)
+        startClockTick()
         Aerials.refreshIfStale(this)
         lifecycleScope.launch(Dispatchers.IO) { SelfCompile.init(this@MainActivity) }
         CustomIcons.init(this)
@@ -281,6 +287,20 @@ class MainActivity : ComponentActivity() {
         if (fromLocked) {
             if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) startWork()
             if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) resumeWork()
+        }
+    }
+
+    private fun startClockTick() {
+        lifecycleScope.launch {
+            while (true) {
+                val now = System.currentTimeMillis()
+                val next = ((now / CLOCK_TICK_MS) + 1) * CLOCK_TICK_MS
+                delay(next - now)
+                if (vm.resumed) {
+                    Weather.refreshClockTick()
+                    TmdbTrending.refreshClockTick()
+                }
+            }
         }
     }
 
@@ -727,6 +747,7 @@ class MainActivity : ComponentActivity() {
             else cm.registerNetworkCallback(NetworkRequest.Builder().removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(), networkCallback)
         }
         Weather.refreshIfStale()
+        TmdbTrending.refreshIfStale()
     }
 
     override fun onResume() {
@@ -747,8 +768,8 @@ class MainActivity : ComponentActivity() {
         restartIdleTimer()
         GuardSetup.setHomeInFront(this, true)
         HomeGuardService.onAerialResumed()
-        Weather.startKeyedTick()
         Weather.refreshKeyedOnResume()
+        TmdbTrending.refreshIfStale()
         vm.refreshSystem()
         if (!resumedInProcess) {
             resumedInProcess = true
@@ -776,7 +797,6 @@ class MainActivity : ComponentActivity() {
         super.onPause()
         if (locked) return
         vm.resumed = false
-        Weather.stopKeyedTick()
         DiagLog.i("onPause")
         leftForAnApp = openedAppSinceHome
         GuardSetup.setHomeInFront(this, false)
@@ -911,6 +931,8 @@ class MainActivity : ComponentActivity() {
         private const val FALLBACK_FOCUS_MS = 400L
 
         private const val SAVER_AHEAD_MS = 8_000L
+
+        private const val CLOCK_TICK_MS = 30 * 60 * 1000L
 
         private var dreamFailsNow = false
 

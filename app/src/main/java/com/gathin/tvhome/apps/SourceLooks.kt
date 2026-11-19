@@ -69,10 +69,13 @@ object SourceLooks {
         app = context.applicationContext
         val json = runCatching { JSONObject(app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null) ?: "{}") }
             .getOrDefault(JSONObject())
-        all = json.keys().asSequence().associateWith { id ->
-            val o = json.getJSONObject(id)
-            SourceLook(SourceDevice.of(o.optString("device")), o.optString("name").takeIf { it.isNotBlank() })
-        }.filterValues { it.device != null || it.name != null }
+        val looks = HashMap<String, SourceLook>()
+        for (id in json.keys()) {
+            val o = json.optJSONObject(id) ?: continue
+            val look = SourceLook(SourceDevice.of(o.optString("device")), o.optString("name").takeIf { it.isNotBlank() })
+            if (look.device != null || look.name != null) looks[id] = look
+        }
+        all = looks
     }
 
     fun of(inputId: String): SourceLook? = all[inputId]

@@ -97,6 +97,7 @@ import com.gathin.tvhome.system.SystemScreensaver
 import com.gathin.tvhome.wallpaper.Wallpaper
 import com.gathin.tvhome.wallpaper.WallpaperKind
 import com.gathin.tvhome.wallpaper.Wallpapers
+import com.gathin.tvhome.tmdb.TmdbTrending
 import com.gathin.tvhome.weather.Weather
 import com.gathin.tvhome.weather.WeatherKind
 import kotlinx.coroutines.Dispatchers
@@ -263,6 +264,7 @@ fun WallpaperSheet(
                         R.string.ss_kind,
                         when {
                             Wallpapers.screensaver == ScreensaverMode.Videos -> stringResource(R.string.ss_videos_hint)
+                            Wallpapers.screensaver == ScreensaverMode.Trending -> stringResource(R.string.ss_trending_hint)
                             Wallpapers.screensaver == ScreensaverMode.System -> stringResource(R.string.ss_system_hint)
                             AerialSettings.backStartsScreensaver -> stringResource(R.string.ss_back_hint)
                             else -> null
@@ -284,7 +286,7 @@ fun WallpaperSheet(
                             AerialSettings.aerialQuality, AerialSettings::chooseAerialQuality,
                         )
                     }
-                    if (Wallpapers.screensaver == ScreensaverMode.Aerial) Choices(
+                    if (Wallpapers.screensaver == ScreensaverMode.Aerial || Wallpapers.screensaver == ScreensaverMode.Trending) Choices(
                         R.string.ss_show_time, stringResource(R.string.ss_show_time_hint), note,
                         listOf(true to R.string.st_on, false to R.string.st_off),
                         AerialSettings.screensaverClock, AerialSettings::chooseScreensaverClock,
@@ -370,6 +372,7 @@ private fun WallpaperRows(takeFocus: Boolean) {
     val list = remember(items, selected, videosTitle) {
         buildList {
             addAll(items.filter { it.kind == WallpaperKind.Live })
+            addAll(items.filter { it.kind == WallpaperKind.Trending })
             val videos = items.filter { it.kind == WallpaperKind.Video && it.id != Wallpapers.VIDEOS }
             if (videos.size > 1 || selected == Wallpapers.VIDEOS) add(Wallpaper(Wallpapers.VIDEOS, WallpaperKind.Video, videosTitle))
             addAll(videos)
@@ -405,6 +408,7 @@ private fun wallpaperNote(wp: Wallpaper): String? = when {
     wp.kind == WallpaperKind.Video -> stringResource(R.string.wp_video_note)
     wp.kind == WallpaperKind.Source -> stringResource(R.string.wp_source_note)
     wp.kind == WallpaperKind.Auto -> stringResource(R.string.wp_auto_note)
+    wp.kind == WallpaperKind.Trending -> stringResource(R.string.wp_trending_note)
     else -> null
 }
 
@@ -413,7 +417,11 @@ private val CardCorner = 12.dp
 @Composable
 private fun WallpaperCard(wp: Wallpaper, focusRequester: FocusRequester?, onFocused: () -> Unit) {
     val selected = Wallpapers.selectedId == wp.id
-    val picture = if (wp.kind == WallpaperKind.Live || wp.kind == WallpaperKind.Video) Wallpapers.pictureVersion else 0
+    val picture = when (wp.kind) {
+        WallpaperKind.Live, WallpaperKind.Video -> Wallpapers.pictureVersion
+        WallpaperKind.Trending -> TmdbTrending.items.size
+        else -> 0
+    }
     val density = LocalDensity.current
     val cardW = with(density) { 168.dp.roundToPx() }
     val cardH = with(density) { 94.dp.roundToPx() }
@@ -451,7 +459,7 @@ private fun WallpaperCard(wp: Wallpaper, focusRequester: FocusRequester?, onFocu
                         contentAlignment = Alignment.Center,
                     ) { GlyphIcon(Glyph.Check, Palette.OnFocus, 13.dp) }
                 }
-                if (wp.kind == WallpaperKind.Live || wp.kind == WallpaperKind.Video) {
+                if (wp.kind == WallpaperKind.Live || wp.kind == WallpaperKind.Video || wp.kind == WallpaperKind.Trending) {
                     GlyphIcon(Glyph.Play, Color.White, 22.dp, Modifier.align(Alignment.BottomStart).padding(7.dp))
                 }
                 if (wp.kind == WallpaperKind.Source) {
@@ -521,6 +529,7 @@ private fun ScreensaverChoice(onStart: () -> Unit) {
             ScreensaverMode.Aerial to R.string.ss_aerial,
             ScreensaverMode.Clock to R.string.ss_clock,
             ScreensaverMode.Videos to R.string.ss_videos,
+            ScreensaverMode.Trending to R.string.ss_trending,
             ScreensaverMode.System to R.string.ss_system,
         ).forEach { (mode, label) ->
             Chip(stringResource(label), on = Wallpapers.screensaver == mode) { Wallpapers.chooseScreensaver(mode) }

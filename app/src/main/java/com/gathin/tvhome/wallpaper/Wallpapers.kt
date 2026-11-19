@@ -15,7 +15,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.edit
 import com.gathin.tvhome.ui.components.UhdCanvas
 import com.gathin.tvhome.BuildConfig
+import com.gathin.tvhome.R
 import com.gathin.tvhome.guard.GuardSetup
+import com.gathin.tvhome.tmdb.TmdbTrending
+import com.gathin.tvhome.ui.home.HeroPosters
 import com.gathin.tvhome.system.DiagLog
 import com.gathin.tvhome.ui.home.fileFramesJam
 import kotlinx.coroutines.CoroutineScope
@@ -29,7 +32,7 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-enum class WallpaperKind { Auto, Live, Video, Source }
+enum class WallpaperKind { Auto, Live, Video, Source, Trending }
 
 data class Wallpaper(
     val id: String,
@@ -39,7 +42,7 @@ data class Wallpaper(
 )
 
 enum class ScreensaverMode(val key: String) {
-    Aerial("aerial"), Clock("clock"), Videos("videos"), System("system");
+    Aerial("aerial"), Clock("clock"), Videos("videos"), Trending("trending"), System("system");
 
     companion object {
         fun of(key: String?) = entries.firstOrNull { it.key == key } ?: Aerial
@@ -53,6 +56,7 @@ object Wallpapers {
     const val AUTO = "auto"
     const val LIVE = "aerial:live"
     const val VIDEOS = "videos:mine"
+    const val TRENDING = "trending:tmdb"
     const val VIDEO_PREFIX = "video:"
     const val SOURCE_PREFIX = "source:"
     private const val SOURCE_PICTURE = "hills_night"
@@ -79,6 +83,8 @@ object Wallpapers {
     fun moves(id: String = selectedId) = id == LIVE || isVideo(id)
 
     fun isVideo(id: String = selectedId) = id == VIDEOS || id.startsWith(VIDEO_PREFIX)
+
+    fun isTrending(id: String = selectedId) = id == TRENDING
 
     fun videoFilms(id: String = selectedId): List<ScreensaverVideo> {
         val all = ScreensaverVideos.all(app)
@@ -161,7 +167,17 @@ object Wallpapers {
             ?: Gradients.render(Gradients.presets.first(), w, h)
         WallpaperKind.Video -> videoPicture(wp.id, w, h) ?: Gradients.render(Gradients.presets.first(), w, h)
         WallpaperKind.Source -> Gradients.byKey(SOURCE_PICTURE)?.let { Gradients.render(it, w, h) }
+        WallpaperKind.Trending -> trendingPicture(w, h) ?: transparentPicture(w, h)
     }
+
+    private fun trendingPicture(w: Int, h: Int): Bitmap? {
+        val item = TmdbTrending.items.firstOrNull() ?: return null
+        HeroPosters.peek(item.backdropUrl, w, h)?.let { return it }
+        return HeroPosters.peek(item.backdropUrl, screenW, screenH)?.let { Images.cover(it, w, h) }
+    }
+
+    private fun transparentPicture(w: Int, h: Int) =
+        Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
 
     private fun videoPicture(id: String, w: Int, h: Int): Bitmap? =
         videoFrame.takeIf { videoFrameIsOf(id) }?.let { Images.decodeCover(it, w, h) } ?: firstVideoFrame(id, w, h)
@@ -176,7 +192,12 @@ object Wallpapers {
         if (poster.exists()) return
         val part = File(poster.path + ".part")
         runCatching {
-            part.outputStream().use { Images.cover(frame, POSTER_W, POSTER_H).compress(Bitmap.CompressFormat.JPEG, 85, it) }
+            val covered = Images.cover(frame, POSTER_W, POSTER_H)
+            try {
+                part.outputStream().use { covered.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+            } finally {
+                if (covered !== frame) covered.recycle()
+            }
             check(part.renameTo(poster))
         }.onFailure { part.delete(); Log.w(TAG, "could not keep a video's poster", it) }
     }
@@ -191,7 +212,9 @@ object Wallpapers {
             mmr.setDataSource(film.file.path)
             val frame = mmr.getFrameAtTime(0) ?: return null.also { DiagLog.i("video poster: no frame of ${film.id}") }
             keepPoster(film, frame)
-            Images.cover(frame, w, h)
+            val covered = Images.cover(frame, w, h)
+            if (covered !== frame) frame.recycle()
+            covered
         } catch (e: Exception) {
             DiagLog.i("video poster: ${film.id} not read (${e.javaClass.simpleName})")
             null
@@ -222,13 +245,14 @@ object Wallpapers {
                 frosted = null
                 return@launch
             }
+            if (id == TRENDING && TmdbTrending.items.isNotEmpty()) return@launch
             val wp = resolve(id)
             val key = wp?.let(::bakedKey)
             if (key != null && key == bakedKey && backdrop != null) return@launch
             val (bmp, frost) = withContext(Dispatchers.Default) {
                 val picture = wp?.let { picture(it, screenW, screenH) }
                 val frost = picture?.let(Images::frost)
-                if (wp?.kind == WallpaperKind.Live || wp?.kind == WallpaperKind.Video) picture to frost
+                if (wp?.kind == WallpaperKind.Live || wp?.kind == WallpaperKind.Video || wp?.kind == WallpaperKind.Trending) picture to frost
                 else picture?.let(Images::shadeForHome) to frost
             }
             backdrop = bmp?.asImageBitmap()
@@ -237,6 +261,24 @@ object Wallpapers {
         }
     }
 
+    fun refreshTrendingStill(index: Int) {
+        if (!isTrending()) return
+        val item = TmdbTrending.items.getOrNull(index) ?: return
+        backdropJob?.cancel()
+        backdropJob = scope.launch {
+            val entry = withContext(Dispatchers.IO) {
+                HeroPosters.peekEntry(item.backdropUrl, screenW, screenH)
+                    ?: HeroPosters.load(item.backdropUrl, screenW, screenH)?.let {
+                        HeroPosters.peekEntry(item.backdropUrl, screenW, screenH)
+                    }
+            } ?: return@launch
+            if (!isTrending()) return@launch
+            val current = TmdbTrending.items.getOrNull(index) ?: return@launch
+            if (current.id != item.id || current.mediaType != item.mediaType) return@launch
+            backdrop = entry.still.asImageBitmap()
+            frosted = entry.frost.asImageBitmap()
+        }
+    }
 
     private var bakedKey: String? = null
 
@@ -257,6 +299,7 @@ object Wallpapers {
             val home = BitmapFactory.decodeFile(File(bakedDir, "home.jpg").path) ?: return
             val frost = BitmapFactory.decodeFile(File(bakedDir, "frost.png").path) ?: return
             if (home.width != screenW || home.height != screenH) return
+            if (frost.width != 320 || frost.height != 180) return
             backdrop = home.asImageBitmap()
             frosted = frost.asImageBitmap()
             bakedKey = key
@@ -464,17 +507,21 @@ object Wallpapers {
 
     suspend fun keepClipGlass(clip: String, frame: Bitmap, showing: () -> String?) {
         if (clip in clipGlassMade) return
-        clipGlassMade += clip
         val file = File(clipGlassDir, "$clip.png")
-        val bmp = withContext(Dispatchers.IO) {
-            if (file.exists()) return@withContext BitmapFactory.decodeFile(file.path)
+        val (bmp, kept) = withContext(Dispatchers.IO) {
+            if (file.exists()) {
+                BitmapFactory.decodeFile(file.path)?.let { return@withContext it to true }
+                file.delete()
+            }
             val started = System.nanoTime()
             val frost = Images.frost(frame)
             DiagLog.i("clip glass made in ${(System.nanoTime() - started) / 1_000_000} ms")
-            runCatching { file.outputStream().use { frost.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+            var kept = false
+            runCatching { file.outputStream().use { kept = frost.compress(Bitmap.CompressFormat.PNG, 100, it) } }
                 .onFailure { Log.w(TAG, "could not keep the clip's glass", it) }
-            frost
-        } ?: return
+            frost to kept
+        }
+        if (kept) clipGlassMade += clip
         if (showing() == clip) clipGlass = clip to bmp.asImageBitmap()
     }
 
@@ -486,12 +533,13 @@ object Wallpapers {
         val zh = Locale.getDefault().language == "zh"
         val auto = Wallpaper(AUTO, WallpaperKind.Auto, if (zh) "跟随 App" else "Follow App")
         val live = Wallpaper(LIVE, WallpaperKind.Live, if (zh) "航拍" else "Aerial")
+        val trending = Wallpaper(TRENDING, WallpaperKind.Trending, app.getString(R.string.st_hero))
         val films = ScreensaverVideos.all(app)
         val videos = if (films.isEmpty()) emptyList() else
             listOf(Wallpaper(VIDEOS, WallpaperKind.Video, if (zh) "我的视频 · 轮播" else "My Videos, In Turn")) +
                 films.map { Wallpaper(VIDEO_PREFIX + it.id, WallpaperKind.Video, it.name.substringBeforeLast('.').ifBlank { it.name }) }
         val inputs = sources.map { (id, name) -> Wallpaper(SOURCE_PREFIX + id, WallpaperKind.Source, name) }
-        items = listOf(live) + videos + auto + inputs
+        items = listOf(live) + trending + videos + auto + inputs
     }
 
 }

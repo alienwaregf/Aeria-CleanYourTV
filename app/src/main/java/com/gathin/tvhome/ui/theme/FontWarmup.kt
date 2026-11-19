@@ -18,8 +18,8 @@ object FontWarmup {
             runCatching {
                 val resolver = createFontFamilyResolver(app)
                 val faces = listOf(
-                    InterText to FontWeight.W500, InterText to FontWeight.W600,
-                    InterDisplay to FontWeight.W500, InterDisplay to FontWeight.W600,
+                    InterText to FontWeight.W500, InterText to FontWeight.W600, InterText to FontWeight.W700,
+                    InterDisplay to FontWeight.W500, InterDisplay to FontWeight.W600, InterDisplay to FontWeight.W700,
                 ).mapNotNull { (family, weight) -> resolver.resolve(family, weight).value as? Typeface }
                 val paint = TextPaint(TextPaint.ANTI_ALIAS_FLAG).apply { textSize = 28f }
                 for (face in faces.ifEmpty { listOf(Typeface.DEFAULT) }) {

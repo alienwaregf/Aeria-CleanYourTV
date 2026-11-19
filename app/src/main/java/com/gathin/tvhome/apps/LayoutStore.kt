@@ -166,10 +166,15 @@ class LayoutStore(context: Context) {
 
     private fun readFolders(json: String?): Map<String, Folder> = runCatching {
         val array = JSONArray(json ?: return@runCatching emptyMap())
-        (0 until array.length()).associate { i ->
-            val o = array.getJSONObject(i)
-            val apps = o.getJSONArray("apps").let { a -> (0 until a.length()).map(a::getString) }
-            o.getString("id") to Folder(o.getString("id"), o.getString("name"), apps)
+        buildMap {
+            for (i in 0 until array.length()) {
+                runCatching {
+                    val o = array.getJSONObject(i)
+                    val apps = o.getJSONArray("apps").let { a -> (0 until a.length()).map(a::getString) }
+                    val id = o.getString("id")
+                    put(id, Folder(id, o.getString("name"), apps))
+                }
+            }
         }
     }.getOrDefault(emptyMap())
 }

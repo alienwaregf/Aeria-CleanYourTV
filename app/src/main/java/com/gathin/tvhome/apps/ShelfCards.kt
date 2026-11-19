@@ -217,6 +217,7 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
 
     private fun left(): Float {
         val inset = px(45f).toFloat()
+        if (cards.isEmpty()) return inset
         val total = cards.size * px(cardW() + cardGap()).toFloat() - px(cardGap())
         return if (total <= width - inset * 2f) (width - total) / 2f else inset
     }

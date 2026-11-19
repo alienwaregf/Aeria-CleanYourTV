@@ -150,7 +150,7 @@ object AerialStream {
             val cache = cache(context)
             val key = key(film, quality)
             val known = ContentMetadata.getContentLength(cache.getContentMetadata(key))
-            if (known > 0 && cache.isCached(key, 0, LEAD_BYTES) && cache.isCached(key, known - TAIL_BYTES, TAIL_BYTES)) return@runInterruptible
+            if (known > TAIL_BYTES && cache.isCached(key, 0, LEAD_BYTES) && cache.isCached(key, known - TAIL_BYTES, TAIL_BYTES)) return@runInterruptible
             val started = SystemClock.elapsedRealtime()
             runCatching {
                 val uri = android.net.Uri.parse(url(film, quality, overHttp))
@@ -158,7 +158,7 @@ object AerialStream {
                 ContentMetadataMutations().also { ContentMetadataMutations.setContentLength(it, length) }
                     .let { cache.applyContentMetadataMutations(key, it) }
                 val writer = CacheDataSource.Factory().setCache(cache).setUpstreamDataSourceFactory(http())
-                for ((position, size) in listOf(0L to LEAD_BYTES, length - TAIL_BYTES to TAIL_BYTES)) {
+                for ((position, size) in listOf(0L to LEAD_BYTES, maxOf(0L, length - TAIL_BYTES) to TAIL_BYTES)) {
                     val spec = DataSpec.Builder().setUri(uri).setKey(key).setPosition(position).setLength(size).build()
                     CacheWriter(writer.createDataSource(), spec, null, null).cache()
                 }

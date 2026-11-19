@@ -182,8 +182,6 @@ object AerialSettings {
 
     fun relock() { unlockedUntil = 0L }
 
-    fun pinMatches(pin: String): Boolean = pinHash != null && hash(pin) == pinHash
-
     fun choosePin(pin: String?, arrows: Boolean = false) {
         pinHash = pin?.let(::hash)
         pinSet = pinHash != null

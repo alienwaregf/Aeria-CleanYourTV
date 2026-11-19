@@ -64,6 +64,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
     private List<String> folders;
     private String currentLabel;
     private boolean loading;
+    private int loadGen;
     private String pendingFolder;
 
     @Override
@@ -174,6 +175,8 @@ public final class SystemSlimmingActivity extends ComponentActivity {
     private void loadAll() {
         if (loading) return;
         loading = true;
+        loadGen++;
+        final int gen = loadGen;
         runOnUiThread(() -> {
             ui.setShowRetry(false);
             if (ui.getRecommended().isEmpty() && ui.getOptional().isEmpty()) ui.setStatusText(getString(R.string.slimming_loading));
@@ -183,6 +186,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
             if (useFolders == null) useFolders = snapshotFolders();
             final List<String> found = useFolders;
             runOnUiThread(() -> {
+                if (gen != loadGen) return;
                 folders = found;
                 if (folders == null) {
                     ui.setStatusText(getString(R.string.slimming_failed_folders));
@@ -211,11 +215,13 @@ public final class SystemSlimmingActivity extends ComponentActivity {
 
     private void loadList(String folder, boolean autoHigh) {
         pendingFolder = folder;
+        loadGen++;
+        final int gen = loadGen;
         new Thread(() -> {
             String today = LocalDate.now().toString();
             String label = folder;
             String notes = "";
-            String tvJson = fetchText(EXAMPLES_RAW + folder + "/tv.json", null);
+            String tvJson = fetchText(EXAMPLES_RAW + folder + "/tv.json");
             if (tvJson == null) tvJson = snapshotTvJson(folder);
             if (tvJson != null) {
                 try {
@@ -266,6 +272,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
             final String useDate = date;
             final boolean useAutoHigh = autoHigh;
             runOnUiThread(() -> {
+                if (gen != loadGen) return;
                 loading = false;
                 if (useDebloat == null) {
                     ui.setStatusText(getString(R.string.slimming_failed, useFolder));
@@ -354,7 +361,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
     }
 
     private static List<String> liveFolders() {
-        String json = fetchText(EXAMPLES_API, null);
+        String json = fetchText(EXAMPLES_API);
         if (json == null) return null;
         try {
             JSONArray arr = new JSONArray(json);
@@ -454,7 +461,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
         }
     }
 
-    private static String fetchText(String urlStr, String etag) {
+    private static String fetchText(String urlStr) {
         byte[] b = fetchBytes(urlStr, 1024 * 1024);
         if (b == null) return null;
         try {
@@ -505,7 +512,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
             if (space > 0) s = s.substring(0, space);
             int tab = s.indexOf('\t');
             if (tab > 0) s = s.substring(0, tab);
-            if (!s.isEmpty()) rec.add(s);
+            if (isPackageName(s)) rec.add(s);
         }
         return new Debloat(new ArrayList<>(rec), new ArrayList<>(opt));
     }
@@ -672,7 +679,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
         if (debloat.isEmpty()) return;
         String label = folder;
         String notes = "";
-        String tvJson = fetchText(EXAMPLES_RAW + folder + "/tv.json", null);
+        String tvJson = fetchText(EXAMPLES_RAW + folder + "/tv.json");
         if (tvJson != null) {
             try {
                 JSONObject o = new JSONObject(tvJson);

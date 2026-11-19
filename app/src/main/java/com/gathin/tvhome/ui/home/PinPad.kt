@@ -57,7 +57,7 @@ import com.gathin.tvhome.ui.theme.Motion
 import com.gathin.tvhome.ui.theme.Palette
 import com.gathin.tvhome.ui.theme.Type
 
-enum class PinMode { Unlock, Verify, Create }
+enum class PinMode { Unlock, Create }
 
 private const val PIN_LENGTH = 4
 
@@ -99,7 +99,6 @@ private fun PinPanel(mode: PinMode, onDone: () -> Unit, onCancel: () -> Unit) {
     fun complete(pin: String) {
         when (mode) {
             PinMode.Unlock -> if (AerialSettings.unlock(pin)) onDone() else error = R.string.pin_wrong
-            PinMode.Verify -> if (AerialSettings.pinMatches(pin)) onDone() else error = R.string.pin_wrong
             PinMode.Create -> when (val earlier = first) {
                 null -> { first = pin; error = null }
                 pin -> { AerialSettings.choosePin(pin, arrows = arrows == true); onDone() }

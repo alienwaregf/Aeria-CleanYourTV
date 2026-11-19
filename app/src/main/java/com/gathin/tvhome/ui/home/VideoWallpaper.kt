@@ -199,6 +199,7 @@ fun VideoWallpaper(
         Wallpapers.leaveVideo(film, at)
         val spot = Wallpapers.videoSpot()
         if (spot?.first == film && kotlin.math.abs(spot.second - at) < SAME_SPOT_MS) return
+        catchUp?.cancel()
         catchUp = scope.launch {
             frameOf(film, at, held = false)?.let { (frame, moment) -> Wallpapers.useLiveFrame(frame, film, moment) }
         }
@@ -330,6 +331,7 @@ internal suspend fun keyFrameOfVideo(context: android.content.Context, id: Strin
     DiagLog.i("video wallpaper key frame decoded in the app in ${android.os.SystemClock.elapsedRealtime() - started} ms (${frame.codec} ${frame.decodeMs} ms, ${frame.timeMs - atMs} ms off)")
     if (unreadable(frame.bitmap) == "green") {
         DiagLog.i("video wallpaper decoded frame is green; not used")
+        frame.bitmap.recycle()
         return null
     }
     return frame.bitmap to frame.timeMs
@@ -344,9 +346,10 @@ private fun fileFrame(context: android.content.Context, id: String, atMs: Long, 
     return try {
         mmr.setDataSource(film.file.path)
         val frame = mmr.getFrameAtTime(atMs * 1000, MediaMetadataRetriever.OPTION_CLOSEST) ?: return null
-        com.gathin.tvhome.wallpaper.Images.cover(frame, w, h).let {
-            if (it.isMutable && it.config == Bitmap.Config.ARGB_8888) it else it.copy(Bitmap.Config.ARGB_8888, true)
-        }
+        val covered = com.gathin.tvhome.wallpaper.Images.cover(frame, w, h)
+        if (covered !== frame) frame.recycle()
+        if (covered.isMutable && covered.config == Bitmap.Config.ARGB_8888) covered
+        else covered.copy(Bitmap.Config.ARGB_8888, true).also { if (it !== covered) covered.recycle() }
     } catch (e: Exception) {
         DiagLog.i("video wallpaper frame not decoded: ${e.javaClass.simpleName}")
         null

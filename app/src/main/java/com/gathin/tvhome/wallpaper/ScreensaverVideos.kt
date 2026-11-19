@@ -30,17 +30,37 @@ object ScreensaverVideos {
             }.getOrNull()
         }.sortedBy { it.id }
 
+    private var reservedBytes = 0L
+    private var reservedSlots = 0
+
+    @Synchronized
     fun room(context: Context, pending: Long = 0): Long {
         val films = all(context)
-        if (films.size >= MAX_VIDEOS) return 0
+        if (films.size + reservedSlots >= MAX_VIDEOS) return 0
         val stored = films.sumOf { it.file.length() }
-        val free = directory(context).usableSpace + pending
+        val free = directory(context).usableSpace + pending - reservedBytes
         return minOf((free + stored) / 2 - stored, free - KEEP_FREE_BYTES, MAX_FILE_BYTES).coerceAtLeast(0)
     }
 
+    @Synchronized
+    private fun reserve(context: Context, length: Long): Boolean {
+        if (length > room(context)) return false
+        reservedBytes += length
+        reservedSlots++
+        return true
+    }
+
+    @Synchronized
+    private fun release(length: Long) {
+        reservedBytes = (reservedBytes - length).coerceAtLeast(0)
+        reservedSlots = (reservedSlots - 1).coerceAtLeast(0)
+    }
+
     fun receive(context: Context, input: InputStream, length: Long, name: String): ScreensaverVideo? {
-        if (length <= 0 || length > room(context) || titleOf(name) == null) return null
+        if (length <= 0 || titleOf(name) == null) return null
+        if (!reserve(context, length)) return null
         val part = File(directory(context), "import-${UUID.randomUUID().toString().replace("-", "")}.part")
+        var held = true
         return try {
             part.outputStream().use { out ->
                 val buffer = ByteArray(256 * 1024)
@@ -52,15 +72,20 @@ object ScreensaverVideos {
                     left -= n
                 }
             }
+            held = false
+            release(length)
             add(context, part, name)
         } catch (e: IOException) {
             Log.w("AerialVideos", "screensaver video upload broke off", e)
             null
-        } finally { part.delete() }
+        } finally {
+            if (held) release(length)
+            part.delete()
+        }
     }
 
     @Synchronized
-    fun add(context: Context, upload: File, name: String): ScreensaverVideo? {
+    private fun add(context: Context, upload: File, name: String): ScreensaverVideo? {
         val root = directory(context)
         root.listFiles()?.filter { it.name.startsWith("import-") && it.lastModified() < System.currentTimeMillis() - 3_600_000 }
             ?.forEach { it.deleteRecursively() }

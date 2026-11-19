@@ -301,6 +301,7 @@
     <button class="item" role="radio" data-mode="aerial"><span class="txt"><span data-i18n="ss_aerial"></span><span class="sub" data-i18n="hint_aerial"></span></span><svg class="tick" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
     <button class="item" role="radio" data-mode="clock"><span class="txt"><span data-i18n="ss_clock"></span><span class="sub" data-i18n="hint_clock"></span></span><svg class="tick" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
     <button class="item" role="radio" data-mode="videos"><span class="txt"><span data-i18n="ss_videos"></span><span class="sub" data-i18n="hint_videos"></span></span><svg class="tick" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
+    <button class="item" role="radio" data-mode="trending"><span class="txt"><span data-i18n="ss_trending"></span><span class="sub" data-i18n="hint_trending"></span></span><svg class="tick" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
   </div>
   <p class="foot" id="ssFoot"></p>
   <div class="list" id="ssTimeBox" style="margin-top:10px">
@@ -354,6 +355,23 @@
   <p class="foot" id="wxQwHostLink" hidden><a class="link" href="https://console.qweather.com/setting" target="_blank" rel="noopener"><span data-i18n="wx_qw_host_link"></span></a></p>
   <p class="foot" id="wxQwCredit" hidden><span data-i18n="wx_qw_credit"></span></p>
   <p class="foot" id="wxHint"></p>
+
+  <h2 data-i18n="tmdb_h"></h2>
+  <div class="list">
+    <form class="item field" id="tmdbKeyForm">
+      <input id="tmdbKey" type="password" data-i18n-placeholder="tmdb_key_ph" autocomplete="off">
+      <button class="link" id="tmdbKeyBtn" data-i18n="tmdb_key_save"></button>
+    </form>
+    <form class="item field" id="omdbKeyForm">
+      <input id="omdbKey" type="password" data-i18n-placeholder="omdb_key_ph" autocomplete="off">
+      <button class="link" id="omdbKeyBtn" data-i18n="omdb_key_save"></button>
+    </form>
+    <form class="item field" id="traktClientIdForm">
+      <input id="traktClientId" type="password" data-i18n-placeholder="trakt_key_ph" autocomplete="off">
+      <button class="link" id="traktClientIdBtn" data-i18n="trakt_key_save"></button>
+    </form>
+  </div>
+  <p class="foot"><span data-i18n="tmdb_credit"></span></p>
 
   <h2 data-i18n="this_tv"></h2>
   <div class="list">
@@ -420,7 +438,7 @@ const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 let state = null, stateJson = '';
 
-const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "ss_clock", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "hint_clock", "g_live", "g_live_sub", "g_auto", "toast_wallpaper", "aria_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "aria_rename", "toast_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "toast_tv_updated", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "ss_videos", "hint_videos", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "bg_url_ph", "bg_url_hint", "toast_bg_set", "toast_bg_bad", "this_tv", "folder_count", "folder_ph", "inputs_h", "inputs_hint", "rename_hint_app", "was_named", "arrange_hint", "arrange_unready", "hidden_h", "hidden_none", "hidden_locked", "show_app", "hide_app", "to_folder", "new_folder", "out_of_folder", "ungroup", "ungroup_confirm", "folder_hint", "toast_hidden", "toast_shown", "toast_in_folder", "toast_out_folder", "toast_ungrouped", "tab_looks", "looks_title", "show_on_home", "source_device", "source_plain", "source_device_hint", "tv_model", "sw_always", "sw_always_sub", "sw_weather", "sw_saver_time", "sw_saver_time_sub", "icon_h", "icon_library", "icon_own", "icon_custom", "toast_icon_picked", "drop_hint", "drop_sub", "drop_none", "toast_diag_paste", "tab_slimming", "slimming_h", "slimming_refresh", "slimming_daily_on", "slimming_daily_off", "slimming_no_list", "slimming_list_line", "wx_source", "wx_source_openmeteo", "slim_cmd_h", "slim_cmd_hint", "slim_cmd_mac", "slim_cmd_win", "slim_cmd_ip", "slim_cmd_mac_sub", "wx_source_qweather", "wx_qw_key_ph", "wx_qw_key_save", "wx_qw_key_saved", "wx_qw_host_ph", "wx_qw_host_save", "wx_qw_host_saved", "wx_qw_credit", "wx_qw_host_link"];
+const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "ss_clock", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "hint_clock", "g_live", "g_live_sub", "g_auto", "toast_wallpaper", "aria_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "aria_rename", "toast_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "toast_tv_updated", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "ss_videos", "hint_videos", "ss_trending", "hint_trending", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "bg_url_ph", "bg_url_hint", "toast_bg_set", "toast_bg_bad", "this_tv", "folder_count", "folder_ph", "inputs_h", "inputs_hint", "rename_hint_app", "was_named", "arrange_hint", "arrange_unready", "hidden_h", "hidden_none", "hidden_locked", "show_app", "hide_app", "to_folder", "new_folder", "out_of_folder", "ungroup", "ungroup_confirm", "folder_hint", "toast_hidden", "toast_shown", "toast_in_folder", "toast_out_folder", "toast_ungrouped", "tab_looks", "looks_title", "show_on_home", "source_device", "source_plain", "source_device_hint", "tv_model", "sw_always", "sw_always_sub", "sw_weather", "sw_saver_time", "sw_saver_time_sub", "icon_h", "icon_library", "icon_own", "icon_custom", "toast_icon_picked", "drop_hint", "drop_sub", "drop_none", "toast_diag_paste", "tab_slimming", "slimming_h", "slimming_refresh", "slimming_daily_on", "slimming_daily_off", "slimming_no_list", "slimming_list_line", "wx_source", "wx_source_openmeteo", "slim_cmd_h", "slim_cmd_hint", "slim_cmd_mac", "slim_cmd_win", "slim_cmd_ip", "slim_cmd_mac_sub", "wx_source_qweather", "wx_qw_key_ph", "wx_qw_key_save", "wx_qw_key_saved", "wx_qw_host_ph", "wx_qw_host_save", "wx_qw_host_saved", "wx_qw_credit", "wx_qw_host_link", "tmdb_h", "tmdb_key_ph", "tmdb_key_save", "tmdb_key_saved", "tmdb_credit", "omdb_key_ph", "omdb_key_save", "omdb_key_saved", "trakt_key_ph", "trakt_key_save", "trakt_key_saved"];
 const TEXTS = {
  "zh": [
   "屏幕保护程序",
@@ -480,11 +498,13 @@ const TEXTS = {
   "请长按文本框全选后复制",
   "语言",
   "视频",
-  "离线轮播已添加的视频；没有可播放的视频时显示时钟。",
+  "离线轮播已添加的视频；没有可播放的视频时黑屏。",
+  "资深影迷",
+  "资深影迷轮播，8 秒换一张；没拉到内容时黑屏。",
   "我的视频",
   "添加视频",
   "可以当屏保，也可以在「动态」壁纸里选。MP4 / MOV，建议 1080p H.264。每段最多 2 GB，所有视频最多占电视剩余空间的一半，现在还能放 {room} GB。",
-  "还没有视频，屏保暂时显示时钟。",
+  "还没有视频，屏保暂时黑屏。",
   "删除“{name}”？",
   "视频：添加 {n} 段，失败 {failed} 段",
   "无法保存，请检查视频格式和电视剩余空间",
@@ -545,8 +565,8 @@ const TEXTS = {
   "我换的图片",
   "已换图标",
   "松开即可发送到电视",
-  "照片用作壁纸，视频加入屏保",
-  "只能发送照片和视频（MP4、MOV）",
+  "视频加入屏保或动态壁纸（MP4、MOV）",
+  "只能发送视频（MP4、MOV）",
   "诊断信息已复制。在 GitHub 打开的页面里，把它粘贴到「诊断信息」一栏。",
   "系统瘦身",
   "系统瘦身",
@@ -572,6 +592,17 @@ const TEXTS = {
   "Host 已保存",
   "天气数据由和风天气提供",
   "在和风控制台查看 API Host ↗",
+  "TMDB 资深影迷",
+  "粘贴 TMDB API Key 或 Read Access Token",
+  "保存 Key",
+  "Key 已保存",
+  "趋势数据由 TMDB 提供",
+  "粘贴 OMDb API Key",
+  "保存 Key",
+  "Key 已保存",
+  "粘贴 Trakt Client ID",
+  "保存 ID",
+  "ID 已保存",
 ],
  "en": [
   "Screensaver",
@@ -631,11 +662,13 @@ const TEXTS = {
   "Long-press the text box, select all and copy",
   "Language",
   "Videos",
-  "Loops your videos offline; shows the clock when none can play.",
+  "Loops your videos offline; the screen stays black when none can play.",
+  "Trending",
+  "TMDB trending titles, one every 8 seconds. The screen stays black until the first fetch succeeds.",
   "My videos",
   "Add videos",
   "For the screensaver, or as a moving wallpaper. MP4 / MOV, 1080p H.264 recommended. Up to 2 GB each; all films together take at most half the TV's free space. Room for {room} GB now.",
-  "No videos yet; the screensaver shows the clock until you add some.",
+  "No videos yet; the screensaver stays black until you add some.",
   "Delete “{name}”?",
   "Videos: {n} added, {failed} failed",
   "Could not save; check the format and free space on the TV",
@@ -696,8 +729,8 @@ const TEXTS = {
   "My Picture",
   "Picture changed",
   "Drop to send to the TV",
-  "Photos become wallpapers, videos join the screensaver",
-  "Only photos and videos (MP4, MOV) can be sent",
+  "Videos for the screensaver or a moving wallpaper (MP4 / MOV)",
+  "Only videos (MP4 / MOV) can be sent",
   "Diagnostics copied. On the GitHub page that opens, paste them into Diagnostics.",
   "Slimming",
   "System slimming",
@@ -723,6 +756,17 @@ const TEXTS = {
   "Host saved",
   "Weather data by QWeather",
   "View API Host in the QWeather console ↗",
+  "TMDB Trending",
+  "Paste your TMDB API Key or Read Access Token",
+  "Save Key",
+  "Key saved",
+  "Trending data by TMDB",
+  "Paste your OMDb API Key",
+  "Save Key",
+  "Key saved",
+  "Paste your Trakt Client ID",
+  "Save ID",
+  "ID saved",
 ]
 };
 const LANGS = Object.keys(TEXTS);
@@ -895,7 +939,7 @@ function renderWallpapers() {
   $('#heroTitle').textContent = titleOf(state.selected);
   const root = $('#sections'); root.replaceChildren();
   for (const [kind, title, sub] of groups) {
-    let list = state.wallpapers.filter(w => w.kind === kind || (kind === 'live' && w.kind === 'video'));
+    let list = state.wallpapers.filter(w => w.kind === kind || (kind === 'live' && (w.kind === 'video' || w.kind === 'trending')));
     if (kind === 'live' && list.filter(w => w.kind === 'video').length < 3 && state.selected !== 'videos:mine') list = list.filter(w => w.id !== 'videos:mine');
     if (!list.length) continue;
     root.appendChild(el('h2', 'big', title));
@@ -1039,6 +1083,11 @@ function renderWeatherExtra() {
   $('#wxQwHostLink').hidden = !qweather;
   $('#wxQwKey').placeholder = w.qweatherKeySet ? (w.qweatherKeyMasked || '') : t('wx_qw_key_ph');
   $('#wxQwHost').placeholder = (w.qweatherHostSet && w.qweatherHost) ? w.qweatherHost : t('wx_qw_host_ph');
+  const tm = state.tmdb || {};
+  $('#tmdbKey').placeholder = tm.keySet ? (tm.keyMasked || '') : t('tmdb_key_ph');
+  const rt = state.ratings || {};
+  $('#omdbKey').placeholder = rt.omdbKeySet ? (rt.omdbKeyMasked || '') : t('omdb_key_ph');
+  $('#traktClientId').placeholder = rt.traktClientIdSet ? (rt.traktClientIdMasked || '') : t('trakt_key_ph');
 }
 $('#wxSource').onchange = async e => {
   try { take(await api('api/weather/source', { source: e.target.value })); } catch (err) { toast(t('toast_set_fail')); }
@@ -1052,6 +1101,21 @@ $('#wxQwHostForm').onsubmit = async e => {
   e.preventDefault();
   const host = $('#wxQwHost').value.trim(); if (!host) return;
   try { take(await api('api/weather/qweather-host', { host })); $('#wxQwHost').value = ''; toast(t('wx_qw_host_saved')); } catch (err) { toast(t('toast_set_fail')); }
+};
+$('#tmdbKeyForm').onsubmit = async e => {
+  e.preventDefault();
+  const key = $('#tmdbKey').value.trim(); if (!key) return;
+  try { take(await api('api/tmdb-key', { key })); $('#tmdbKey').value = ''; toast(t('tmdb_key_saved')); } catch (err) { toast(t('toast_set_fail')); }
+};
+$('#omdbKeyForm').onsubmit = async e => {
+  e.preventDefault();
+  const key = $('#omdbKey').value.trim(); if (!key) return;
+  try { take(await api('api/omdb-key', { key })); $('#omdbKey').value = ''; toast(t('omdb_key_saved')); } catch (err) { toast(t('toast_set_fail')); }
+};
+$('#traktClientIdForm').onsubmit = async e => {
+  e.preventDefault();
+  const id = $('#traktClientId').value.trim(); if (!id) return;
+  try { take(await api('api/trakt-client-id', { id })); $('#traktClientId').value = ''; toast(t('trakt_key_saved')); } catch (err) { toast(t('toast_set_fail')); }
 };
 function renderInputs() {
   const inputs = state.inputs || [];

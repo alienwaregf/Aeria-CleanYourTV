@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="app_name">CleanYourTV懒人版</string>
     <string name="guard_name">CleanYourTV懒人版</string>
     <string name="guard_description">在不允许更换桌面的电视上，让 CleanYourTV懒人版 保持为主屏幕。不会读取任何屏幕内容。</string>
 
@@ -86,6 +87,7 @@
     <string name="wx_sleet">雨夹雪</string>
     <string name="wp_live">动态航拍。在主屏幕第一排（双排时前两排）一直播放，再往下进入其余 App 时停在当前画面并留作壁纸，下次从这一帧接着播。</string>
     <string name="wp_auto_note">取所选 App 图片里的颜色做背景。</string>
+    <string name="wp_trending_note">资深影迷：TMDB 今日热门电影和电视剧，全屏轮播，8 秒换一张。TMDB Key 在手机页输入。</string>
     <string name="wp_screensaver">屏幕保护程序</string>
     <string name="ss_aerial">航拍</string>
     <string name="ss_clock">时钟</string>
@@ -130,6 +132,10 @@
     <string name="st_home_standard">双排</string>
     <string name="st_home_one_row">单排</string>
     <string name="st_home_layout_hint">单排：只显示第一排，放在屏幕下方，露出更多壁纸，比如家庭合照。双排：下面露出第二排。按下键看其余 App。</string>
+    <string name="st_hero">资深影迷</string>
+    <string name="hero_movie">电影</string>
+    <string name="hero_tv">电视剧</string>
+
     <string name="st_plate">第一排底板</string>
     <string name="st_plate_hint">第一排下面垫一块磨砂玻璃，像 Apple TV 一样；或者让 App 直接放在壁纸上。</string>
     <string name="st_plate_glass">玻璃</string>
@@ -216,7 +222,7 @@
     <string name="weather_sleet">雨夹雪</string>
     <string name="weather_temperature">%1$d℃</string>
     <string name="weather_high_low">最高 %1$d℃  最低 %2$d℃</string>
-    <string name="weather_high_low_qweather">最高 %1$d°C  最低 %2$d°C</string>
+    <string name="weather_high_low_qweather">最高%1$d°C 最低%2$d°C</string>
     <string name="severe_day_tomorrow">明天</string>
     <string name="severe_day_after">后天</string>
     <string name="severe_day_3">大后天</string>
@@ -236,7 +242,9 @@
     <string name="tile_xiaowei_call">小微畅聊</string>
     <string name="tile_kids">儿童</string>
     <string name="ss_videos">视频</string>
-    <string name="ss_videos_hint">扫码从手机添加 MP4 或 MOV 视频，离线轮播；没有可播放的视频时显示时钟。</string>
+    <string name="ss_videos_hint">扫码从手机添加 MP4 或 MOV 视频，离线轮播；没有可播放的视频时黑屏。</string>
+    <string name="ss_trending">资深影迷</string>
+    <string name="ss_trending_hint">资深影迷轮播，8 秒换一张；没拉到内容时黑屏。</string>
     <string name="ss_system">系统内置</string>
     <string name="ss_system_hint">用电视自带的屏保（比如小米的那些画面），Aerial 不再显示自己的屏保。</string>
     <string name="wp_videos_note">你从手机发来的视频，静音、一个接一个播放。和航拍一样会动，按键时停在当前画面。</string>
@@ -251,6 +259,9 @@
     <string name="ss_show_time">时间</string>
     <string name="ss_show_time_hint">航拍屏保上的时间。时间和地名会不时挪一点位置，避免烧屏。</string>
 
+    <string name="on">开</string>
+    <string name="off">关</string>
+    <string name="not_available">此电视不支持</string>
     <string name="system_slimming">系统瘦身</string>
     <string name="slimming_open">打开</string>
     <string name="slimming_device">设备：%1$s</string>

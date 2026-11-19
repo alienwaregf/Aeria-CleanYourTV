@@ -122,8 +122,6 @@ class AerialDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
     companion object {
         private var running: AerialDream? = null
 
-        val showing: Boolean get() = running != null
-
         fun endForHome(): Boolean {
             val dream = running ?: return false
             DiagLog.i("dream ended by Home")

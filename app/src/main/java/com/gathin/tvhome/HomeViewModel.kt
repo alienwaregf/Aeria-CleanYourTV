@@ -100,6 +100,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     var homeResetPending by mutableStateOf(false)
 
+    var homePressedTick by mutableStateOf(0)
+
     var lastInputAt by mutableLongStateOf(0L)
 
     var resumed by mutableStateOf(false)
@@ -474,6 +476,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         AerialSettings.relock()
         overlay = Overlay.None
         movingKey = null
+        homePressedTick++
         if (resetFocus) homeResetPending = true
     }
 

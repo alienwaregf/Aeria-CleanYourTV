@@ -185,6 +185,7 @@ internal class SvgPath private constructor(private val s: String) {
         }
         val num = rx * rx * ry * ry - rx * rx * y1p * y1p - ry * ry * x1p * x1p
         val den = rx * rx * y1p * y1p + ry * ry * x1p * x1p
+        if (den == 0.0) return
         val coef = (if (largeArc == sweep) -1 else 1) * kotlin.math.sqrt(kotlin.math.max(0.0, num / den))
         val cxp = coef * (rx * y1p / ry)
         val cyp = coef * -(ry * x1p / rx)

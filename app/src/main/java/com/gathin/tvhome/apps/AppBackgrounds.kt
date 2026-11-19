@@ -56,6 +56,14 @@ object AppBackgrounds {
         }
     }
 
+    fun peekCached(pkg: String): Pair<Bitmap, Bitmap>? {
+        synchronized(cache) {
+            val hit = cache[pkg] ?: return null
+            if (hit.stamp != stamp(pkg)) return null
+            return hit.bitmap to hit.frosted
+        }
+    }
+
     fun dropCached(pkg: String) {
         synchronized(cache) { cache.remove(pkg) }
     }
