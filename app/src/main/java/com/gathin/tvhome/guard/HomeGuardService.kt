@@ -1143,6 +1143,9 @@ class HomeGuardService : AccessibilityService() {
         CoocaaHome.launcher(this)?.takeIf { isActivity(it.packageName, it.className) }?.let { own ->
             stockHomes = stockHomes + (own.packageName to (setOf(own.className) + stockHomes[own.packageName].orEmpty()))
         }
+        CoocaaHome.modeScreen(this)?.takeIf { isActivity(it.packageName, it.className) }?.let { mode ->
+            stockHomes = stockHomes + (mode.packageName to (stockHomes[mode.packageName].orEmpty() + mode.className))
+        }
         knownStockHomes = stockHomes
     }
 
@@ -1385,7 +1388,10 @@ class HomeGuardService : AccessibilityService() {
         private val FIRMWARE_HOMES_WITHOUT_FILTER = mapOf(
             "com.skyworth.panasonichome" to listOf("com.skyworth.panasonichome.MainActivity"),
             "com.coocaa.aigc.home" to listOf("com.coocaa.aigc.home.home.rootpage.HomeActivity"),
-            "com.tianci.movieplatform" to listOf("com.coocaa.homepage.vast.HomePageActivity"),
+            "com.tianci.movieplatform" to listOf(
+                "com.coocaa.homepage.vast.HomePageActivity",
+                "com.ccos.cooui.movieplatform.ElderMainActivity",
+            ),
             "com.mylejia.launcher" to listOf("com.mylejia.launcher.activity.DesktopActivity"),
             "com.tcl.cyberui" to listOf("com.tcl.cyberui.MainActivity"),
             "com.jamdeo.tv.vod" to listOf("com.ju.main.launcher.LauncherActivity"),
