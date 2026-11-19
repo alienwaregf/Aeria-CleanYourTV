@@ -21,7 +21,7 @@ object BootOpen {
     private const val HOME_BOOT = "home_key_boot"
     private const val HOME_BOOT_ID = "home_key_boot_id"
 
-    private val BOOT_ID: String? by lazy {
+    internal val BOOT_ID: String? by lazy {
         runCatching { java.io.File("/proc/sys/kernel/random/boot_id").readText().trim() }
             .getOrNull()?.takeIf { it.isNotEmpty() }
     }

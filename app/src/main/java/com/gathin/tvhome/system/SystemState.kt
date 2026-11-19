@@ -335,6 +335,11 @@ object SystemProbe {
     fun skyworthPicturePanel(context: Context): Boolean =
         runCatching { context.packageManager.getServiceInfo(SKYWORTH_PICTURE_PANEL, 0) }.isSuccess
 
+    private fun tclSettingsWindow(): Intent =
+        Intent("com.tcl.settings.SHOW_WINDOW").setPackage("com.tcl.settings")
+            .putExtra("Type", "Settings")
+            .putExtra("flag", "1")
+
     fun openPictureSettings(context: Context): Boolean {
         ChanghongSettings.intent(context, ChanghongSettings.PICTURE)?.let {
             if (ChanghongSettings.open(context, it)) return true
@@ -354,9 +359,7 @@ object SystemProbe {
             }.isSuccess
             if (activityShown) return true
 
-            val shown = runCatching {
-                context.startService(Intent("com.tcl.settings.SHOW_WINDOW").setPackage("com.tcl.settings"))
-            }.getOrNull() != null
+            val shown = runCatching { context.startService(tclSettingsWindow()) }.getOrNull() != null
             if (shown) return true
         }
         if (skyworthPicturePanel(context)) {

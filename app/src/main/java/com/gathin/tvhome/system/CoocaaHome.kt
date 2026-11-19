@@ -12,6 +12,13 @@ object CoocaaHome {
             .firstOrNull { isLauncher(context, it) }
     }
 
+    fun modeScreen(context: Context): ComponentName? {
+        val pkg = property("persist.service.homepage.pkg").orEmpty()
+        val cls = property("persist.service.model.cls").orEmpty()
+        if (pkg.isEmpty() || !cls.contains('.')) return null
+        return ComponentName(pkg, cls).takeIf { isLauncher(context, it) }
+    }
+
     fun isLauncher(context: Context, component: ComponentName): Boolean =
         component.packageName.isNotEmpty() && component.className.isNotEmpty() &&
             component.packageName != context.packageName &&
