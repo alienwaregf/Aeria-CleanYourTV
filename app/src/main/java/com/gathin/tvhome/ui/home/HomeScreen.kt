@@ -239,7 +239,6 @@ fun HomeScreen(
     var pillFocused by remember { mutableStateOf(false) }
     var lastFocusedIndex by remember { mutableStateOf(0) }
     var heroFocused by remember { mutableStateOf(false) }
-    var heroIndex by remember { mutableStateOf(0) }
     var heroDir by remember { mutableStateOf(0) }
     var heroTimerReset by remember { mutableStateOf(0) }
     val focusedIndex = apps.indexOfFirst { it.key == focusedKey }
@@ -600,26 +599,26 @@ fun HomeScreen(
             animationSpec = if (reduced) snap() else tween(durationMillis = if (heroFocused) 500 else 450, easing = Motion.Ease),
             label = "hero-dots-shift",
         )
-        LaunchedEffect(heroVisible, heroTimerReset, heroFocused, vm.resumed, vm.screensaverVisible) {
-            if (!heroVisible || heroFocused || !vm.resumed || vm.screensaverVisible) return@LaunchedEffect
+        LaunchedEffect(heroVisible, heroTimerReset, vm.resumed, vm.screensaverVisible) {
+            if (!heroVisible || !vm.resumed || vm.screensaverVisible) return@LaunchedEffect
             while (true) {
                 delay(8_000)
                 val count = TmdbTrending.items.size
                 if (count > 0) {
                     heroDir = 1
-                    heroIndex = (heroIndex + 1) % count
+                    TmdbTrending.currentIndex = (TmdbTrending.currentIndex + 1) % count
                 }
             }
         }
-        LaunchedEffect(heroIndex, heroVisible) {
+        LaunchedEffect(TmdbTrending.currentIndex, heroVisible) {
             if (!heroVisible) return@LaunchedEffect
-            Wallpapers.refreshTrendingStill(heroIndex)
+            Wallpapers.refreshTrendingStill(TmdbTrending.currentIndex)
         }
         LaunchedEffect(TmdbTrending.items.size) {
             val count = TmdbTrending.items.size
-            if (count > 0 && heroIndex >= count) {
+            if (count > 0 && TmdbTrending.currentIndex >= count) {
                 heroDir = 0
-                heroIndex = 0
+                TmdbTrending.currentIndex = 0
             }
         }
         Box(
@@ -644,7 +643,7 @@ fun HomeScreen(
                                 val count = TmdbTrending.items.size
                                 if (count > 0) {
                                     heroDir = -1
-                                    heroIndex = (heroIndex - 1 + count) % count
+                                    TmdbTrending.currentIndex = (TmdbTrending.currentIndex - 1 + count) % count
                                 }
                                 heroTimerReset++
                                 return@onPreviewKeyEvent true
@@ -653,7 +652,7 @@ fun HomeScreen(
                                 val count = TmdbTrending.items.size
                                 if (count > 0) {
                                     heroDir = 1
-                                    heroIndex = (heroIndex + 1) % count
+                                    TmdbTrending.currentIndex = (TmdbTrending.currentIndex + 1) % count
                                 }
                                 heroTimerReset++
                                 return@onPreviewKeyEvent true
@@ -740,7 +739,7 @@ fun HomeScreen(
                     if (heroVisible) {
                         HeroRow(
                             items = TmdbTrending.items,
-                            index = heroIndex.coerceIn(0, (TmdbTrending.items.size - 1).coerceAtLeast(0)),
+                            index = TmdbTrending.currentIndex.coerceIn(0, (TmdbTrending.items.size - 1).coerceAtLeast(0)),
                             dir = heroDir,
                             focused = heroFocused,
                             focusRequester = heroRequester,
@@ -770,7 +769,7 @@ fun HomeScreen(
             )
 
             if (heroVisible) {
-                val dotIndex = heroIndex.coerceIn(0, (TmdbTrending.items.size - 1).coerceAtLeast(0))
+                val dotIndex = TmdbTrending.currentIndex.coerceIn(0, (TmdbTrending.items.size - 1).coerceAtLeast(0))
                 Row(
                     Modifier.align(Alignment.BottomCenter).padding(bottom = dotsBottomInset + 12.dp + HeroRestLift).offset(y = dotsShift),
                     verticalAlignment = Alignment.CenterVertically,

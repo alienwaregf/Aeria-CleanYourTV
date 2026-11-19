@@ -6,6 +6,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
@@ -77,6 +78,8 @@ object TmdbTrending {
 
     var items by mutableStateOf<List<TmdbItem>>(emptyList())
         private set
+
+    var currentIndex by mutableIntStateOf(0)
 
     val hasContent: Boolean get() = items.isNotEmpty()
 

@@ -28,14 +28,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -536,33 +539,32 @@ private fun SaverRatingIcon(res: Int) {
 private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
     val context = LocalContext.current
     val items = TmdbTrending.items
-    var index by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
         TmdbTrending.init(context)
         TmdbTrending.refreshIfStale()
     }
     LaunchedEffect(items.size) {
-        if (items.isNotEmpty() && index >= items.size) index = 0
+        if (items.isNotEmpty() && TmdbTrending.currentIndex >= items.size) TmdbTrending.currentIndex = 0
     }
-    LaunchedEffect(index, items.size) {
+    LaunchedEffect(TmdbTrending.currentIndex, items.size) {
         if (items.size <= 1) return@LaunchedEffect
         delay(8_000)
-        index = (index + 1) % items.size
+        TmdbTrending.currentIndex = (TmdbTrending.currentIndex + 1) % items.size
     }
     LaunchedEffect(steps) {
         steps.collect { step ->
             val count = TmdbTrending.items.size
-            if (count > 0) index = (index + step).mod(count)
+            if (count > 0) TmdbTrending.currentIndex = (TmdbTrending.currentIndex + step).mod(count)
         }
     }
     if (items.isEmpty()) {
         Box(Modifier.fillMaxSize().background(Color.Black))
         return
     }
-    val item = items[index.coerceIn(items.indices)]
+    val item = items[TmdbTrending.currentIndex.coerceIn(items.indices)]
     LaunchedEffect(item) {
         Ratings.fetchFor(item)
-        val next = items.getOrNull((index + 1) % items.size)
+        val next = items.getOrNull((TmdbTrending.currentIndex + 1) % items.size)
         next?.let { Ratings.fetchFor(it) }
     }
     var still by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -696,6 +698,24 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
                     item.overview,
                     style = Type.Body.copy(color = Palette.SecondaryLabel),
                 )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                for (i in items.indices) {
+                    key(i) {
+                        if (i > 0) Spacer(Modifier.width(5.dp))
+                        val dotAlpha by animateFloatAsState(
+                            targetValue = if (i == TmdbTrending.currentIndex.coerceIn(items.indices)) 1f else 0.35f,
+                            animationSpec = tween(250),
+                            label = "saver-dot-alpha",
+                        )
+                        Box(
+                            Modifier.size(5.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = dotAlpha)),
+                        )
+                    }
+                }
             }
         }
         Labels(caption = null, now = now, showTime = true, shade = false)
