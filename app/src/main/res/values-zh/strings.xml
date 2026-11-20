@@ -90,7 +90,6 @@
     <string name="wp_trending_note">资深影迷：TMDB 今日热门电影和电视剧，全屏轮播，8 秒换一张。TMDB Key 在手机页输入。</string>
     <string name="wp_screensaver">屏幕保护程序</string>
     <string name="ss_aerial">航拍</string>
-    <string name="ss_clock">时钟</string>
     <string name="wp_phone_title">用手机或电脑设置</string>
     <string name="wp_phone_body">扫码，或在电脑浏览器打开下面的地址，可以发照片和视频、更换 App 图标、设置天气城市。需要和电视连接同一网络。</string>
     <string name="wp_phone_offline">电视联网后即可用手机或电脑设置。</string>
@@ -98,9 +97,6 @@
     <string name="ss_delay">开始时间</string>
     <string name="ss_minutes">%d 分钟</string>
     <string name="ss_never">从不</string>
-    <string name="ss_delay_system">跟随系统</string>
-    <string name="ss_delay_system_off">跟随系统 · 已关闭</string>
-    <string name="ss_delay_system_minutes">跟随系统 · %d 分钟</string>
     <string name="ss_back_hint">提示：在主页第一行按返回键，也可以立即开始屏保。</string>
     <string name="ss_back">返回键</string>
     <string name="ss_back_on">开始屏保</string>
@@ -245,8 +241,8 @@
     <string name="ss_videos_hint">扫码从手机添加 MP4 或 MOV 视频，离线轮播；没有可播放的视频时黑屏。</string>
     <string name="ss_trending">资深影迷</string>
     <string name="ss_trending_hint">资深影迷轮播，8 秒换一张；没拉到内容时黑屏。</string>
-    <string name="ss_system">系统内置</string>
-    <string name="ss_system_hint">用电视自带的屏保（比如小米的那些画面），Aerial 不再显示自己的屏保。</string>
+    <string name="ss_system">待机显示</string>
+    <string name="ss_system_hint">纯黑背景上只显示时钟，白天白色、晚上暗红色。</string>
     <string name="wp_videos_note">你从手机发来的视频，静音、一个接一个播放。和航拍一样会动，按键时停在当前画面。</string>
     <string name="wp_videos_rotate">我的视频 · 轮播</string>
     <string name="wp_video_note">你从手机发来的这个视频，静音、循环播放。和航拍一样会动，按键时停在当前画面。</string>
