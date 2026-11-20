@@ -85,10 +85,10 @@ data class DayForecast(val day: Int, val dayText: String?, val high: Int?, val l
 object Weather {
     private const val TAG = "AerialWeather"
     private const val PREFS = "weather"
-    private const val REFRESH_MS = 60 * 60 * 1000L
+    private const val REFRESH_MS = 10 * 60 * 1000L
     private const val RETRY_MS = 3 * 60 * 1000L
     private const val RELOCATE_MS = 24 * 60 * 60 * 1000L
-    private const val STALE_MS = 30 * 60 * 1000L
+    private const val STALE_MS = 10 * 60 * 1000L
     private const val NONE = Int.MIN_VALUE
 
     var now by mutableStateOf<WeatherNow?>(null); private set
@@ -146,9 +146,9 @@ object Weather {
     var weatherSource by mutableStateOf("openmeteo"); private set
     private fun isKeyedSource() = weatherSource == "qweather"
 
-    fun refreshKeyedOnResume() {
-        if (!started || !isKeyedSource()) return
-        if (System.currentTimeMillis() - lastAttempt < 60_000L) return
+    fun refreshOnResume() {
+        if (!started) return
+        if (System.currentTimeMillis() - lastAttempt < REFRESH_MS) return
         refresh()
     }
 
