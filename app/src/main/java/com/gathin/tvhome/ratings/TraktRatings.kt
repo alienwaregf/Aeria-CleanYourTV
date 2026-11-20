@@ -32,14 +32,21 @@ object TraktRatings {
     fun clientId(): String =
         if (::launcherPrefs.isInitialized) launcherPrefs.getString(KEY_TRAKT_CLIENT_ID, "").orEmpty().trim() else ""
 
-    data class TraktResult(val rating: Double, val votes: Int)
+    data class TraktResult(
+        val rating: Double,
+        val votes: Int,
+        val rtPercent: Int = -1,
+        val rtState: String = "",
+        val rtAudiencePercent: Int = -1,
+        val rtAudienceState: String = "",
+    )
 
     fun fetchRatings(item: TmdbItem, imdbId: String): TraktResult? {
         val id = clientId()
         if (id.isEmpty() || imdbId.isBlank()) return null
         return runCatching {
             val kind = if (item.mediaType == "tv") "shows" else "movies"
-            val url = "https://api.trakt.tv/$kind/${URLEncoder.encode(imdbId, "UTF-8")}/ratings"
+            val url = "https://api.trakt.tv/$kind/${URLEncoder.encode(imdbId, "UTF-8")}/ratings?extended=all"
             val c = URL(url).openConnection() as HttpURLConnection
             c.connectTimeout = 5_000
             c.readTimeout = 5_000
@@ -50,9 +57,19 @@ object TraktRatings {
                 if (c.responseCode !in 200..299) return@runCatching null
                 val body = c.inputStream.use { it.readBytes().decodeToString() }
                 val root = JSONObject(body)
-                val rating = root.optDouble("rating", -1.0)
+                val traktObj = root.optJSONObject("trakt")
+                val rating = traktObj?.optDouble("rating", -1.0) ?: root.optDouble("rating", -1.0)
                 if (rating < 0.0) return@runCatching null
-                TraktResult(rating, root.optInt("votes", 0))
+                val votes = traktObj?.optInt("votes", 0) ?: root.optInt("votes", 0)
+                val rt = root.optJSONObject("rotten_tomatoes")
+                TraktResult(
+                    rating = rating,
+                    votes = votes,
+                    rtPercent = rt?.optInt("rating", -1) ?: -1,
+                    rtState = rt?.optString("state", "") ?: "",
+                    rtAudiencePercent = rt?.optInt("user_rating", -1) ?: -1,
+                    rtAudienceState = rt?.optString("user_state", "") ?: "",
+                )
             } finally {
                 c.disconnect()
             }

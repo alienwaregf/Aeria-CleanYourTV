@@ -57,7 +57,7 @@ object OmdbRatings {
         }.getOrNull()
     }
 
-    data class OmdbResult(val imdbRating: String, val rtPercent: Int)
+    data class OmdbResult(val imdbRating: String)
 
     sealed interface OmdbFetch {
         data class Found(val result: OmdbResult) : OmdbFetch
@@ -93,21 +93,7 @@ object OmdbRatings {
                     }
                 }
                 val imdbRating = root.optString("imdbRating", "").takeIf { it.isNotBlank() && it != "N/A" } ?: ""
-                var rtPercent = -1
-                val ratings = root.optJSONArray("Ratings")
-                if (ratings != null) {
-                    for (i in 0 until ratings.length()) {
-                        val obj = ratings.optJSONObject(i) ?: continue
-                        if (obj.optString("Source", "") == "Rotten Tomatoes") {
-                            val value = obj.optString("Value", "")
-                            if (value.endsWith("%")) {
-                                rtPercent = value.dropLast(1).toIntOrNull() ?: -1
-                            }
-                            break
-                        }
-                    }
-                }
-                OmdbFetch.Found(OmdbResult(imdbRating, rtPercent))
+                OmdbFetch.Found(OmdbResult(imdbRating))
             } finally {
                 c.disconnect()
             }
