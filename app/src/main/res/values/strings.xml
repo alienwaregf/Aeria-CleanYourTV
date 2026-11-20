@@ -90,7 +90,6 @@
     <string name="wp_trending_note">Today\'s trending movies and TV from TMDB, full screen, rotating every 8 seconds. Add your TMDB key on the phone page.</string>
     <string name="wp_screensaver">Screensaver</string>
     <string name="ss_aerial">Aerial</string>
-    <string name="ss_clock">Clock</string>
     <string name="wp_phone_title">Set up from a phone or computer</string>
     <string name="wp_phone_body">Scan the code, or open the address below in a computer\'s browser, to send photos and videos, change app icons and set the weather\'s city. It must be on the same network as the TV.</string>
     <string name="wp_phone_offline">Connect the TV to a network to set it up from a phone or computer.</string>
@@ -98,9 +97,6 @@
     <string name="ss_delay">Start after</string>
     <string name="ss_minutes">%d min</string>
     <string name="ss_never">Never</string>
-    <string name="ss_delay_system">Follows the TV</string>
-    <string name="ss_delay_system_off">Follows the TV · off</string>
-    <string name="ss_delay_system_minutes">Follows the TV · %d min</string>
     <string name="ss_back_hint">Tip: press Back on the top row of Home to start the screensaver.</string>
     <string name="ss_back">Back Button</string>
     <string name="ss_back_on">Starts It</string>
@@ -245,8 +241,8 @@
     <string name="ss_videos_hint">Add MP4 or MOV films from the phone page. Plays offline; the screen stays black when there is no film.</string>
     <string name="ss_trending">Trending</string>
     <string name="ss_trending_hint">TMDB trending titles, one every 8 seconds. The screen stays black until the first fetch succeeds.</string>
-    <string name="ss_system">System</string>
-    <string name="ss_system_hint">The TV\'s own screensaver, as it came with the TV (Xiaomi\'s pictures, for one). Aerial shows none of its own.</string>
+    <string name="ss_system">Standby</string>
+    <string name="ss_system_hint">Just the clock on a pure black background. White by day, dark red at night.</string>
     <string name="wp_videos_note">Your own videos, sent from the phone, silent and one after another. They move like the aerial films and stop on the frame showing.</string>
     <string name="wp_videos_rotate">My Videos, In Turn</string>
     <string name="wp_video_note">Your own video, sent from the phone, silent and on a loop. It moves like the aerial films and stops on the frame showing.</string>
