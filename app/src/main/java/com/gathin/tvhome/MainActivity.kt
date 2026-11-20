@@ -766,7 +766,7 @@ class MainActivity : ComponentActivity() {
         restartIdleTimer()
         GuardSetup.setHomeInFront(this, true)
         HomeGuardService.onAerialResumed()
-        Weather.refreshKeyedOnResume()
+        Weather.refreshOnResume()
         TmdbTrending.refreshIfStale()
         vm.refreshSystem()
         if (!resumedInProcess) {
