@@ -149,23 +149,27 @@ object Aerials {
         val zh = Locale.getDefault().language == "zh"
         val root = JSONObject(text)
         val arr = root.getJSONArray("videos")
-        require(arr.length() > 0) { "empty aerial catalogue" }
-        return (0 until arr.length()).map { i ->
-            val o = arr.getJSONObject(i)
-            require(o.getString("url").startsWith("https://sylvan.apple.com/")) { "film without an Apple URL" }
-            val caps = o.getJSONArray("captions")
-            Aerial(
-                id = o.getString("id"),
-                label = o.getString("label"),
-                category = o.getString("category"),
-                url = o.getString("url"),
-                uhd = o.optString("uhd").ifEmpty { o.getString("url") },
-                dolbyVision = o.optString("dv").ifEmpty { o.getString("url") },
-                captions = (0 until caps.length()).map { j ->
-                    val c = caps.getJSONArray(j)
-                    c.getInt(0) to (if (zh) c.getString(1) else c.getString(2)).replace(' ', ' ')
-                },
-            )
+        return (0 until arr.length()).mapNotNull { i ->
+            runCatching {
+                val o = arr.getJSONObject(i)
+                val url = o.getString("url")
+                if (!url.startsWith("https://sylvan.apple.com/")) null
+                else {
+                    val caps = o.getJSONArray("captions")
+                    Aerial(
+                        id = o.getString("id"),
+                        label = o.getString("label"),
+                        category = o.getString("category"),
+                        url = url,
+                        uhd = o.optString("uhd").ifEmpty { o.getString("url") },
+                        dolbyVision = o.optString("dv").ifEmpty { o.getString("url") },
+                        captions = (0 until caps.length()).map { j ->
+                            val c = caps.getJSONArray(j)
+                            c.getInt(0) to (if (zh) c.getString(1) else c.getString(2)).replace(' ', ' ')
+                        },
+                    )
+                }
+            }.getOrNull()
         }
     }
 }

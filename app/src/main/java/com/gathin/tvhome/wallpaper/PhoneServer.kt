@@ -88,7 +88,7 @@ class PhoneServer private constructor(private val context: Context, private val 
                     json(state().put("removed", removed))
                 }
                 path.startsWith("/tile/") -> tile(java.net.URLDecoder.decode(path.removePrefix("/tile/"), "UTF-8"), own = session.parameters["art"]?.firstOrNull() == "own")
-                path.startsWith("/library/") -> libraryPicture(java.net.URLDecoder.decode(path.removePrefix("/library/"), "UTF-8"))
+                path.startsWith("/library/") -> libraryPicture(java.net.URLDecoder.decode(path.removePrefix("/library/"), "UTF-8"), session.parameters["c"]?.firstOrNull())
                 session.method == Method.POST && path == "/api/icon" -> icon(session)
                 session.method == Method.POST && path == "/api/app/background" -> background(session)
                 session.method == Method.POST && path == "/api/app/name" -> {
@@ -134,10 +134,12 @@ class PhoneServer private constructor(private val context: Context, private val 
                         "own" -> IconLibrary.Pick.Own
                         else -> null
                     }
-                    val ok = installed(pkg) && pick != null && (pick != IconLibrary.Pick.Library || IconLibrary.has(pkg))
+                    val choice = f["choice"]?.takeIf { it.isNotEmpty() }
+                    val ok = installed(pkg) && pick != null && (pick != IconLibrary.Pick.Library ||
+                        IconLibrary.choices(pkg).any { choice == null || it.id == choice })
                     if (ok) {
                         CustomIcons.clear(pkg)
-                        IconLibrary.choose(pkg, pick.takeIf { it != IconLibrary.Pick.Library })
+                        IconLibrary.choose(pkg, pick, choice)
                         runBlocking(Dispatchers.Main) { CustomIcons.changed(); IconLibrary.changed() }
                     }
                     json(state().put("saved", ok))
@@ -236,6 +238,7 @@ class PhoneServer private constructor(private val context: Context, private val 
                     }
                     put(JSONObject().put("key", a.key).put("label", label).put("default", a.label).put("name", AppNames.of(a.key) ?: "")
                         .put("custom", CustomIcons.has(a.key)).put("library", IconLibrary.has(a.key)).put("icon", icon)
+                        .put("choices", libraryChoices(a.key, icon == "library"))
                         .put("stamp", CustomIcons.stamp(a.key) + IconLibrary.stamp(a.key) + icon.hashCode())
                         .put("backgroundUrl", AppBackgrounds.url(a.key)))
                 }
@@ -327,9 +330,14 @@ class PhoneServer private constructor(private val context: Context, private val 
 
     private fun tile(pkg: String, own: Boolean = false): Response {
         val app = (AppCatalog.pinnedSources + AppCatalog.loaded + AppCatalog.folders).firstOrNull { it.key == pkg } ?: return text(Response.Status.NOT_FOUND, "")
-        val custom = if (own) null else CustomIcons.load(pkg)
-        val bmp = custom ?: run {
-            val art = if (own && app.source == null && app.folder == null) AppCatalog.ownArt(context, app) ?: app.art else app.art
+        val isApp = app.source == null && app.folder == null
+        val library = isApp && !own && IconLibrary.has(pkg)
+        val picked = when {
+            own || !isApp -> null
+            else -> CustomIcons.load(pkg) ?: if (library && IconLibrary.uses(pkg)) IconLibrary.load(pkg) else null
+        }
+        val bmp = picked ?: run {
+            val art = if (isApp && (own || library)) AppCatalog.ownArt(context, app) ?: app.art else app.art
             TileArtFactory.flatten(art)
         }
         val out = ByteArrayOutputStream()
@@ -341,8 +349,16 @@ class PhoneServer private constructor(private val context: Context, private val 
         }
     }
 
-    private fun libraryPicture(pkg: String): Response {
-        val f = IconLibrary.file(pkg) ?: return text(Response.Status.NOT_FOUND, "")
+    private fun libraryChoices(pkg: String, inUse: Boolean) = JSONArray().apply {
+        val on = IconLibrary.chosen(pkg)?.id
+        IconLibrary.choices(pkg).forEach { c ->
+            put(JSONObject().put("id", c.id).put("by", IconLibrary.credits.optJSONObject(c.by) ?: JSONObject())
+                .put("on", inUse && c.id == on))
+        }
+    }
+
+    private fun libraryPicture(pkg: String, choice: String?): Response {
+        val f = IconLibrary.file(pkg, choice) ?: return text(Response.Status.NOT_FOUND, "")
         val type = if (f.name.endsWith(".png")) "image/png" else "image/jpeg"
         return newFixedLengthResponse(Response.Status.OK, type, f.inputStream(), f.length()).apply {
             addHeader("Cache-Control", "max-age=600")
