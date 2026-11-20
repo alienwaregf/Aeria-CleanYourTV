@@ -280,7 +280,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         hiddenApps = arrangement.hidden
     }
 
-    fun entry(key: String): AppEntry? = apps.firstOrNull { it.key == key } ?: folderApps.values.flatten().firstOrNull { it.key == key }
+    fun entry(key: String): AppEntry? = apps.firstOrNull { it.key == key } ?: folderApps.values.flatten().firstOrNull { it.key == key } ?: hiddenApps.firstOrNull { it.key == key }
 
     fun folders() = store.folders()
 

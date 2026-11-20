@@ -258,7 +258,7 @@ class MainActivity : ComponentActivity() {
                     onOpen = ::open,
                     onAppInfo = { open(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", it, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
                     onUninstall = { open(Intent(Intent.ACTION_DELETE, Uri.fromParts("package", it, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
-                    onStartScreensaver = { idleHandler.postDelayed({ startScreensaver(asked = true) }, 150) },
+                    onStartScreensaver = { idleHandler.postDelayed({ startScreensaver() }, 150) },
                 )
             }
         }
@@ -536,7 +536,7 @@ class MainActivity : ComponentActivity() {
 
 
     private val idleHandler = Handler(Looper.getMainLooper())
-    private val showScreensaver = Runnable { if (vm.resumed) startScreensaver(asked = false) }
+    private val showScreensaver = Runnable { if (vm.resumed) startScreensaver() }
 
     private val prepareScreensaver = Runnable {
         if (vm.resumed && !vm.screensaverVisible) lifecycleScope.launch { AerialStart.prepareAhead(this@MainActivity, SAVER_AHEAD_MS) }
@@ -547,14 +547,10 @@ class MainActivity : ComponentActivity() {
         vm.homeBounce = false
     }
 
-    private fun startScreensaver(asked: Boolean) {
+    private fun startScreensaver() {
         AerialSettings.relock()
-        if (Wallpapers.screensaver == ScreensaverMode.System) {
-            if (asked && !SystemScreensaver.startFirmware(this)) DiagLog.i("no system screensaver to start")
-            return
-        }
         val carry = saverCarriesWallpaper(this)
-        if (!carry && !dreamFails(this) && SystemScreensaver.isAerials(this)) {
+        if (!carry && Wallpapers.screensaver != ScreensaverMode.System && !dreamFails(this) && SystemScreensaver.isAerials(this)) {
             LiveFilm.onHome?.letDecoderGo()
             if (SystemScreensaver.startDream(this)) {
                 DiagLog.i("screensaver starts as the system's dream")
@@ -579,7 +575,7 @@ class MainActivity : ComponentActivity() {
         noteDreamFails(this)
         DiagLog.i("the system's dream did not show; Aerial's own screensaver instead")
         LiveFilm.onHome?.goOn()
-        startScreensaver(asked = false)
+        startScreensaver()
     }
     private var swallowKeyUp = -1
 
@@ -706,7 +702,7 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra(EXTRA_WOKE, false)) openBootSource("brought back on wake")
         if (intent.getBooleanExtra(EXTRA_REOPEN_BOOT, false)) openBootSource("covered by the stock launcher", again = true)
         if (intent.action == ACTION_PREVIEW_SCREENSAVER) {
-            idleHandler.post { startScreensaver(asked = true) }
+            idleHandler.post { startScreensaver() }
             return
         }
         if (intent.hasCategory(Intent.CATEGORY_HOME) || intent.action == Intent.ACTION_MAIN) {
