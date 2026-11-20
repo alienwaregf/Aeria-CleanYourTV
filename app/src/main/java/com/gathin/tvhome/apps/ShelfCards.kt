@@ -5,7 +5,9 @@ import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.text.TextUtils
 import android.util.TypedValue
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewOutlineProvider
@@ -121,7 +123,7 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
         val w = px(cardW())
         val h = px(cardH())
         for (index in maxOf(0, i - 1) until minOf(cards.size, i + iCeil + 1)) {
-            val imageView = cards[index] as ImageView
+            val imageView = (cards[index] as FrameLayout).getChildAt(0) as ImageView
             val uri = picture(shows[index]) ?: continue
             if (!asked.add(imageView)) continue
             imageView.tag = uri
@@ -142,7 +144,7 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
         val focused = findFocus()
         val oldIndex = if (focused == null || !cards.contains(focused)) -1 else at
         for (view in cards) {
-            val imageView = view as ImageView
+            val imageView = (view as FrameLayout).getChildAt(0) as ImageView
             imageView.setImageBitmap(null)
             imageView.tag = null
             strip.removeView(view)
@@ -156,10 +158,29 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
         val w = px(cardW())
         val h = px(cardH())
         val corner = px(15f).toFloat()
+        val titleSp = when (layout) {
+            0 -> 16f
+            1 -> 14f
+            2 -> 12f
+            else -> 11f
+        }
         for (i in list.indices) {
             val show = list[i]
             val imageView = ImageView(context).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
+            }
+            val titleView = TextView(context).apply {
+                text = show.title
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, titleSp)
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(Color.WHITE)
+                setSingleLine(true)
+                ellipsize = TextUtils.TruncateAt.END
+            }
+            val scrim = View(context).apply {
+                background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Color.TRANSPARENT, Color.argb(170, 0, 0, 0)))
+            }
+            val card = FrameLayout(context).apply {
                 background = GradientDrawable().apply {
                     cornerRadius = corner
                     setColor(Color.argb(40, 255, 255, 255))
@@ -172,6 +193,16 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
                 clipToOutline = true
                 isFocusable = true
                 contentDescription = show.title
+                addView(imageView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+                addView(scrim, LayoutParams(LayoutParams.MATCH_PARENT, px(72f)).apply {
+                    gravity = Gravity.BOTTOM
+                })
+                addView(titleView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                    gravity = Gravity.BOTTOM or Gravity.START
+                    leftMargin = px(14f)
+                    rightMargin = px(14f)
+                    bottomMargin = px(10f)
+                })
                 setOnFocusChangeListener { view, focused ->
                     Motion.progress(
                         Motion.TILE_FOCUS, view, view.scaleX,
@@ -195,8 +226,8 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
                     }
                 }
             }
-            strip.addView(imageView, LayoutParams(w, h))
-            cards.add(imageView)
+            strip.addView(card, LayoutParams(w, h))
+            cards.add(card)
         }
         want(0)
         glide.cancel()
@@ -228,7 +259,7 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
         val cardTop = px(rowY() - cardH() / 2f)
         for (i in cards.indices) {
             cards[i].translationX = i * stepPx + x0
-            cards[i].translationY = cardTop.toFloat()
+            cards[i].translationY = (cardTop + px(12f)).toFloat()
         }
         heading.translationX = left() + shift
         heading.translationY = (cardTop - heading.height - px(8f)).toFloat()

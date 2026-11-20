@@ -20,7 +20,6 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
     private var shownAt: Int = -1
     private var step: Int = 0
     private var away: Boolean = false
-    private var shownGlow: Boolean = false
     private var artAt: Int = 0
     private var artFor: String? = null
     private var cardsFor: String? = null
@@ -80,7 +79,7 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
     }
 
     fun scene(): Bitmap? {
-        if (away || shownGlow || top.visibility != View.VISIBLE) {
+        if (away || top.visibility != View.VISIBLE) {
             return null
         }
         return top.colourPicture()
@@ -92,7 +91,7 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
                 return true
             }
         }
-        return !(away || shownGlow ||
+        return !(away ||
             (under.visibility != View.VISIBLE &&
                 (top.visibility != View.VISIBLE || top.alpha < 0.999f)))
     }
@@ -154,12 +153,11 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
             cardsFor = null
         }
         val topVisible = top.visibility == View.VISIBLE
-        val glowMatches = shownGlow == !TopShelfContent.appMarkTvLike()
         if (away) {
             return
         }
         if (topVisible == (staged() && app != null) &&
-            ((!topVisible || glowMatches) && (cardsFor != null || list == null))
+            (cardsFor != null || list == null)
         ) {
             if ((cards.visibility == View.VISIBLE) == (list != null)) {
                 return
@@ -233,10 +231,9 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
         top = under
         under = oldTop
         top.bringToFront()
-        shownGlow = !TopShelfContent.appMarkTvLike()
         val newTop = top
         val oldUnder = under
-        newTop.set(app, shownGlow)
+        newTop.set(app)
         newTop.alpha = 0.0f
         newTop.visibility = View.VISIBLE
         sceneChanged?.invoke()
@@ -336,7 +333,7 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
             invalidate()
         }
 
-        fun set(app: ShelfApp, glow: Boolean) {
+        fun set(app: ShelfApp) {
             val art = TopShelfContent.stageArt(
                 context, app, context.resources.displayMetrics.widthPixels,
             )
@@ -397,7 +394,6 @@ data class ShelfApp(
     val label: String,
     val banner: Drawable?,
     val icon: Drawable?,
-    val pictureIcon: Drawable?,
 ) {
-    fun picture(): Drawable? = banner ?: pictureIcon
+    fun picture(): Drawable? = banner ?: icon
 }

@@ -39,7 +39,7 @@ object TopShelfContent {
             if (appCache.containsKey(pkg)) return appCache[pkg]
         }
         val inputs = appArtInputs(context, pkg)
-        val app = inputs?.let { ShelfApp(pkg, it.label, it.banner, it.icon, it.pictureIcon) }
+        val app = inputs?.let { ShelfApp(pkg, it.label, it.banner, it.icon) }
         synchronized(lock) { appCache = appCache + (pkg to app) }
         return app
     }
@@ -54,7 +54,7 @@ object TopShelfContent {
 
     fun stageArt(context: Context, app: ShelfApp, screenW: Int): StageArt {
         synchronized(lock) { stageArtCache[app.pkg]?.let { return it } }
-        val color = edgeColour(app.picture())
+        val color = if (app.banner != null) edgeColour(app.picture()) else brandTileColor(brandColor(app.icon))
         val foreground: android.graphics.drawable.Drawable? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             (app.icon as? android.graphics.drawable.AdaptiveIconDrawable)?.foreground
         } else null
@@ -165,11 +165,8 @@ object TopShelfContent {
     fun shelfEnabled(context: Context): Boolean {
         val prefs = context.getSharedPreferences("topshelf", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("app_content_enabled", true)) return false
-        if (prefs.getBoolean("up_full_screen", false) && !appMarkTvLike()) return false
         return true
     }
-
-    fun appMarkTvLike(): Boolean = true
 
     fun appArtEnabled(context: Context): Boolean =
         context.getSharedPreferences("topshelf", Context.MODE_PRIVATE)
@@ -406,7 +403,6 @@ object TopShelfContent {
         val foreground: android.graphics.drawable.Drawable?,
         val icon: android.graphics.drawable.Drawable?,
         val banner: android.graphics.drawable.Drawable?,
-        val pictureIcon: android.graphics.drawable.Drawable?,
     )
 
     fun appArtInputs(context: Context, pkg: String): AppArtInputs? {
@@ -423,14 +419,12 @@ object TopShelfContent {
                 ?: resolve?.activityInfo?.applicationInfo?.loadBanner(pm)
                 ?: ai.loadBanner(pm)
         }.getOrNull()
-        val pictureIcon = runCatching { resolve?.loadIcon(pm) }.getOrNull()
-            ?: runCatching { ai.loadIcon(pm) }.getOrNull()
         val label = runCatching { resolve?.loadLabel(pm)?.toString() }.getOrNull()
             ?: runCatching { ai.loadLabel(pm)?.toString() }.getOrNull().orEmpty()
         val foreground: android.graphics.drawable.Drawable? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             (icon as? android.graphics.drawable.AdaptiveIconDrawable)?.foreground
         } else null
-        return AppArtInputs(label, foreground, icon, banner, pictureIcon)
+        return AppArtInputs(label, foreground, icon, banner)
     }
 
     private fun markDrawable(pm: PackageManager, ai: android.content.pm.ApplicationInfo): android.graphics.drawable.Drawable? {
@@ -707,11 +701,93 @@ object TopShelfContent {
             val c = Canvas(small)
             drawable.setBounds(0, 0, 32, 18)
             drawable.draw(c)
-            val px = small.getPixel(1, 9)
+            val color = edgeColour(small)
             small.recycle()
-            if (android.graphics.Color.alpha(px) >= 200) px or -16777216
-            else android.graphics.Color.rgb(0x1E, 0x1E, 0x1B)
+            color
         }.getOrDefault(android.graphics.Color.rgb(0x1E, 0x1E, 0x1B))
+    }
+
+    internal fun edgeColour(bitmap: Bitmap): Int {
+        val px = bitmap.getPixel(1, 9)
+        return if (android.graphics.Color.alpha(px) >= 200) px or -16777216
+        else android.graphics.Color.rgb(0x1E, 0x1E, 0x1B)
+    }
+
+    internal fun brandTileColor(brand: Int): Int {
+        val small = Bitmap.createBitmap(32, 18, Bitmap.Config.ARGB_8888)
+        val c = Canvas(small)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        paint.shader = android.graphics.LinearGradient(
+            0f, 0f, 32f, 18f,
+            lighten(brand, 0.12f), darken(brand, 0.18f),
+            android.graphics.Shader.TileMode.CLAMP
+        )
+        c.drawRect(0f, 0f, 32f, 18f, paint)
+        val color = edgeColour(small)
+        small.recycle()
+        return color
+    }
+
+    internal fun lighten(i: Int, f: Float): Int {
+        return android.graphics.Color.rgb(
+            mix(android.graphics.Color.red(i), 255, f),
+            mix(android.graphics.Color.green(i), 255, f),
+            mix(android.graphics.Color.blue(i), 255, f)
+        )
+    }
+
+    internal fun darken(i: Int, f: Float): Int {
+        return android.graphics.Color.rgb(
+            mix(android.graphics.Color.red(i), 0, f),
+            mix(android.graphics.Color.green(i), 0, f),
+            mix(android.graphics.Color.blue(i), 0, f)
+        )
+    }
+
+    internal fun mix(i: Int, i2: Int, f: Float): Int {
+        return Math.round(i + ((i2 - i) * f))
+    }
+
+    internal fun brandColor(d: android.graphics.drawable.Drawable?): Int {
+        val fallback = -14013392
+        if (d == null) return fallback
+        return runCatching {
+            val drawable = d.constantState?.newDrawable()?.mutate() ?: d
+            val small = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888)
+            val c = Canvas(small)
+            drawable.setBounds(0, 0, 24, 24)
+            drawable.draw(c)
+            var count = 0L
+            var rSum = 0L
+            var gSum = 0L
+            var bSum = 0L
+            for (y in 0 until 24) {
+                for (x in 0 until 24) {
+                    val px = small.getPixel(x, y)
+                    if (android.graphics.Color.alpha(px) < 200) continue
+                    val r = android.graphics.Color.red(px)
+                    val g = android.graphics.Color.green(px)
+                    val b = android.graphics.Color.blue(px)
+                    val max = maxOf(r, maxOf(g, b))
+                    val min = minOf(r, minOf(g, b))
+                    if ((max <= 235 || min <= 220) && max >= 25) {
+                        rSum += r
+                        gSum += g
+                        bSum += b
+                        count++
+                    }
+                }
+            }
+            small.recycle()
+            if (count == 0L) return fallback
+            val hsv = FloatArray(3)
+            android.graphics.Color.colorToHSV(
+                android.graphics.Color.rgb((rSum / count).toInt(), (gSum / count).toInt(), (bSum / count).toInt()),
+                hsv
+            )
+            hsv[2] = minOf(hsv[2], 0.62f)
+            android.graphics.Color.HSVToColor(hsv)
+        }.getOrDefault(fallback)
     }
 
     internal fun shade(colour: Int, factor: Float): Int {
