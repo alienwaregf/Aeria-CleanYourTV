@@ -299,10 +299,9 @@
   <h2 class="big" data-i18n="screensaver"></h2>
   <div class="list" id="ss" role="radiogroup" data-i18n-aria-label="screensaver_short">
     <button class="item" role="radio" data-mode="aerial"><span class="txt"><span data-i18n="ss_aerial"></span><span class="sub" data-i18n="hint_aerial"></span></span><svg class="tick" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
-    <button class="item" role="radio" data-mode="clock"><span class="txt"><span data-i18n="ss_clock"></span><span class="sub" data-i18n="hint_clock"></span></span><svg class="tick" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
     <button class="item" role="radio" data-mode="videos"><span class="txt"><span data-i18n="ss_videos"></span><span class="sub" data-i18n="hint_videos"></span></span><svg class="tick" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
     <button class="item" role="radio" data-mode="trending"><span class="txt"><span data-i18n="ss_trending"></span><span class="sub" data-i18n="hint_trending"></span></span><svg class="tick" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>
-  </div>
+    <button class="item" role="radio" data-mode="system"><span class="txt"><span data-i18n="ss_system"></span><span class="sub" data-i18n="hint_system"></span></span><svg class="tick" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>  </div>
   <p class="foot" id="ssFoot"></p>
   <div class="list" id="ssTimeBox" style="margin-top:10px">
     <label class="item"><span class="txt"><span data-i18n="sw_saver_time"></span><span class="sub" data-i18n="sw_saver_time_sub"></span></span><input class="switch" type="checkbox" id="swSaverTime" data-setting="screensaverClock"></label>
@@ -438,13 +437,12 @@ const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 let state = null, stateJson = '';
 
-const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "ss_clock", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "hint_clock", "g_live", "g_live_sub", "g_auto", "toast_wallpaper", "aria_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_haze", "wx_dust", "wx_sand", "wx_wind", "wx_hail", "wx_sleet", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "aria_rename", "toast_renamed", "toast_pinned", "toast_unpinned", "toast_folder_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "toast_tv_updated", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "ss_videos", "hint_videos", "ss_trending", "hint_trending", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "bg_url_ph", "bg_url_hint", "toast_bg_set", "toast_bg_bad", "this_tv", "folder_count", "folder_ph", "inputs_h", "inputs_hint", "rename_hint_app", "was_named", "arrange_hint", "arrange_unready", "hidden_h", "hidden_none", "hidden_locked", "show_app", "hide_app", "to_folder", "new_folder", "out_of_folder", "ungroup", "ungroup_confirm", "folder_hint", "toast_hidden", "toast_shown", "toast_in_folder", "toast_out_folder", "toast_ungrouped", "tab_looks", "looks_title", "show_on_home", "source_device", "source_plain", "source_device_hint", "tv_model", "sw_always", "sw_always_sub", "sw_weather", "sw_saver_time", "sw_saver_time_sub", "icon_h", "icon_library", "icon_own", "icon_custom", "toast_icon_picked", "drop_hint", "drop_sub", "drop_none", "toast_diag_paste", "tab_slimming", "slimming_h", "slimming_refresh", "slimming_daily_on", "slimming_daily_off", "slimming_no_list", "slimming_list_line", "wx_source", "wx_source_openmeteo", "slim_cmd_h", "slim_cmd_hint", "slim_cmd_mac", "slim_cmd_win", "slim_cmd_ip", "slim_cmd_mac_sub", "wx_source_qweather", "wx_qw_key_ph", "wx_qw_key_save", "wx_qw_key_saved", "wx_qw_host_ph", "wx_qw_host_save", "wx_qw_host_saved", "wx_qw_credit", "wx_qw_host_link", "tmdb_h", "tmdb_key_ph", "tmdb_key_save", "tmdb_key_saved", "tmdb_credit", "omdb_key_ph", "omdb_key_save", "omdb_key_saved", "trakt_key_ph", "trakt_key_save", "trakt_key_saved"];
+const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "g_live", "g_live_sub", "g_auto", "toast_wallpaper", "aria_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_haze", "wx_dust", "wx_sand", "wx_wind", "wx_hail", "wx_sleet", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "aria_rename", "toast_renamed", "toast_pinned", "toast_unpinned", "toast_folder_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "toast_tv_updated", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "ss_videos", "hint_videos", "ss_trending", "ss_system", "hint_trending", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "bg_url_ph", "bg_url_hint", "toast_bg_set", "toast_bg_bad", "this_tv", "folder_count", "folder_ph", "inputs_h", "inputs_hint", "rename_hint_app", "was_named", "arrange_hint", "arrange_unready", "hidden_h", "hidden_none", "hidden_locked", "show_app", "hide_app", "to_folder", "new_folder", "out_of_folder", "ungroup", "ungroup_confirm", "folder_hint", "toast_hidden", "toast_shown", "toast_in_folder", "toast_out_folder", "toast_ungrouped", "tab_looks", "looks_title", "show_on_home", "source_device", "source_plain", "source_device_hint", "tv_model", "sw_always", "sw_always_sub", "sw_weather", "sw_saver_time", "sw_saver_time_sub", "icon_h", "icon_library", "icon_own", "icon_custom", "toast_icon_picked", "drop_hint", "drop_sub", "drop_none", "toast_diag_paste", "tab_slimming", "slimming_h", "slimming_refresh", "slimming_daily_on", "slimming_daily_off", "slimming_no_list", "slimming_list_line", "wx_source", "wx_source_openmeteo", "slim_cmd_h", "slim_cmd_hint", "slim_cmd_mac", "slim_cmd_win", "slim_cmd_ip", "slim_cmd_mac_sub", "wx_source_qweather", "wx_qw_key_ph", "wx_qw_key_save", "wx_qw_key_saved", "wx_qw_host_ph", "wx_qw_host_save", "wx_qw_host_saved", "wx_qw_credit", "wx_qw_host_link", "tmdb_h", "tmdb_key_ph", "tmdb_key_save", "tmdb_key_saved", "tmdb_credit", "omdb_key_ph", "omdb_key_save", "omdb_key_saved", "trakt_key_ph", "trakt_key_save", "trakt_key_saved"];
 const TEXTS = {
  "zh": [
   "屏幕保护程序",
   "屏保",
   "航拍",
-  "时钟",
   "焦点样式",
   "高对比度",
   "标准",
@@ -457,7 +455,6 @@ const TEXTS = {
   "复制",
   "去 GitHub 反馈",
   "播放 Apple TV 航拍影片，画面会标出所在的地点。",
-  "大号时钟，配合当前壁纸。",
   "动态",
   "航拍和你的视频。航拍在主屏幕上一直播放；你的视频默认停 10 秒后播放，按键停在当前画面。",
   "更多",
@@ -509,6 +506,7 @@ const TEXTS = {
   "视频",
   "离线轮播已添加的视频；没有可播放的视频时黑屏。",
   "资深影迷",
+  "待机显示",
   "资深影迷轮播，8 秒换一张；没拉到内容时黑屏。",
   "我的视频",
   "添加视频",
@@ -518,7 +516,7 @@ const TEXTS = {
   "视频：添加 {n} 段，失败 {failed} 段",
   "无法保存，请检查视频格式和电视剩余空间",
   "正在发送 {n} / {total}…",
-  "在电视的个性化里选了「系统内置」：用电视自带的屏保。在这里选一种就改回 Aerial 的屏保。",
+  "待机显示：纯黑背景，只显示时钟。白天白色，晚上暗红色。",
   "主屏幕",
   "更多",
   "当前壁纸",
@@ -611,13 +609,12 @@ const TEXTS = {
   "Key 已保存",
   "粘贴 Trakt Client ID",
   "保存 ID",
-  "ID 已保存",
+  "ID 已保存"
 ],
  "en": [
   "Screensaver",
   "Screensaver",
   "Aerial",
-  "Clock",
   "Focus Style",
   "High Contrast",
   "Standard",
@@ -630,7 +627,6 @@ const TEXTS = {
   "Copy",
   "Report on GitHub",
   "Plays Apple TV’s aerial films, with the place named on screen.",
-  "A big clock over the current wallpaper.",
   "Moving",
   "Aerial films and your own videos. The aerial films always play on Home; your videos start after 10 seconds still and stop on the frame showing at a key.",
   "More",
@@ -682,6 +678,7 @@ const TEXTS = {
   "Videos",
   "Loops your videos offline; the screen stays black when none can play.",
   "Trending",
+  "Standby",
   "TMDB trending titles, one every 8 seconds. The screen stays black until the first fetch succeeds.",
   "My videos",
   "Add videos",
@@ -691,7 +688,7 @@ const TEXTS = {
   "Videos: {n} added, {failed} failed",
   "Could not save; check the format and free space on the TV",
   "Sending {n} / {total}…",
-  "“System” is chosen on the TV: the TV's own screensaver. Choose one here to use Aerial's again.",
+  "Standby: a pure black background with only the clock. White by day, dark red at night.",
   "Home Screen",
   "More",
   "Current Wallpaper",
@@ -784,7 +781,7 @@ const TEXTS = {
   "Key saved",
   "Paste your Trakt Client ID",
   "Save ID",
-  "ID saved",
+  "ID saved"
 ]
 };
 const LANGS = Object.keys(TEXTS);
@@ -822,7 +819,7 @@ function applyI18n() {
 }
 
 
-const hints = { aerial: t('hint_aerial'), clock: t('hint_clock'), videos: t('hint_videos'), system: t('hint_system') };
+const hints = { aerial: t('hint_aerial'), videos: t('hint_videos'), system: t('hint_system') };
 const groups = [
   ['live', t('g_live'), t('g_live_sub')],
   ['auto', t('g_auto'), ''],
@@ -980,7 +977,7 @@ function renderScreensaver() {
   document.querySelectorAll('#ss [data-mode]').forEach(b => b.setAttribute('aria-checked', b.dataset.mode === state.screensaver ? 'true' : 'false'));
   $('#ssFoot').textContent = state.screensaver === 'system' ? hints.system : '';
   $('#ssFoot').hidden = !$('#ssFoot').textContent;
-  $('#ssTimeBox').hidden = !(state.screensaver === 'aerial' || state.screensaver === 'trending');
+  $('#ssTimeBox').hidden = !(state.screensaver === 'aerial' || state.screensaver === 'trending' || state.screensaver === 'videos');
   $('#swSaverTime').checked = !!state.screensaverClock;
   const list = $('#videoList'); list.replaceChildren();
   const videos = state.videos || [];
@@ -1389,23 +1386,29 @@ function tileSheet(e, inFolder, hidden) {
       il.appendChild(b);
     }
     if (!a.source && a.library) {
-      const choices = [
-        { pick: 'library', label: t('icon_library'), src: `${base}library/${encodeURIComponent(a.key)}?v=${a.stamp}` },
-        { pick: 'own', label: t('icon_own'), src: `${base}tile/${encodeURIComponent(a.key)}?art=own&v=${a.stamp}` },
+      const lib = `${base}library/${encodeURIComponent(a.key)}`;
+      const from = by => (by && (by[LANG] || by.name)) || '';
+      const library = (a.choices && a.choices.length ? a.choices : [{ id: '', on: a.icon === 'library' }]).map(c => ({
+        pick: 'library', choice: c.id, on: c.on, label: t('icon_library'), by: from(c.by),
+        src: c.id ? `${lib}?c=${encodeURIComponent(c.id)}&v=${a.stamp}` : `${lib}?v=${a.stamp}`,
+      }));
+      const choices = [...library,
+        { pick: 'own', on: a.icon === 'own', label: t('icon_own'), src: `${base}tile/${encodeURIComponent(a.key)}?art=own&v=${a.stamp}` },
       ];
-      if (a.custom) choices.push({ pick: 'custom', label: t('icon_custom'), src: `${base}tile/${encodeURIComponent(a.key)}?v=${a.stamp}` });
+      if (a.custom) choices.push({ pick: 'custom', on: true, label: t('icon_custom'), src: `${base}tile/${encodeURIComponent(a.key)}?v=${a.stamp}` });
       const cl = el('div', 'list'); cl.setAttribute('role', 'radiogroup'); cl.setAttribute('aria-label', t('icon_h'));
       il.before(cl); cl.style.marginBottom = '10px';
       for (const c of choices) {
-        const b = el('button', 'item'); b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(a.icon === c.pick));
+        const b = el('button', 'item'); b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(c.on));
         const img = el('img', 'ithumb'); img.alt = ''; img.src = c.src;
         b.append(img, el('span', 'txt', c.label));
+        if (c.by) b.append(el('span', 'val', c.by));
         b.insertAdjacentHTML('beforeend', ICON.tick);
         if (c.pick !== 'custom') b.onclick = async () => {
           closeSheet();
-          if (a.icon === c.pick) return;
+          if (c.on) return;
           try {
-            const next = await api('api/icon/pick', { app: a.key, pick: c.pick });
+            const next = await api('api/icon/pick', { app: a.key, pick: c.pick, choice: c.choice || '' });
             if (!next.saved) throw new Error('not saved');
             take(next); toast(t('toast_icon_picked'));
           } catch (err) { toast(t('toast_set_fail')); }
