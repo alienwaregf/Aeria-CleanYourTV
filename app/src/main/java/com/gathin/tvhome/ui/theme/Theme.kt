@@ -28,6 +28,7 @@ object Palette {
     val Green = Color(0xFF30D158)
     val Orange = Color(0xFFFF9F0A)
     val Red = Color(0xFFFF453A)
+    val NightRed = Color(0xFFB03A2E)
 
     val Focus = Color(0xFFF5F5F7)
     val OnFocus = Color(0xFF1D1D1F)
@@ -62,6 +63,9 @@ private fun inter(opticalSize: Float) = if (Build.VERSION.SDK_INT < 26) FontFami
 
 val InterText = inter(14f)
 val InterDisplay = inter(32f)
+
+fun clockTextColor(now: java.time.LocalDateTime): Color =
+    if (now.hour >= 18 || now.hour < 6) Palette.NightRed else Palette.Label
 
 object Type {
     val Clock = TextStyle(
