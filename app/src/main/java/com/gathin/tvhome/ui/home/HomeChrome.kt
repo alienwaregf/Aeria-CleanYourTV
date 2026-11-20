@@ -102,6 +102,7 @@ import com.gathin.tvhome.ui.theme.LocalReducedMotion
 import com.gathin.tvhome.ui.theme.Motion
 import com.gathin.tvhome.wallpaper.Wallpapers
 import com.gathin.tvhome.ui.theme.Palette
+import com.gathin.tvhome.ui.theme.clockTextColor
 import com.gathin.tvhome.ui.theme.Type
 import com.gathin.tvhome.ui.components.diagLayer
 import com.gathin.tvhome.weather.Weather
@@ -489,8 +490,10 @@ fun ShelfClock(
     toSaver: () -> Float = { 0f },
     saving: Boolean = false,
     away: Boolean = false,
+    nightTint: Boolean = false,
 ) {
     val drift = heldDrift(saving, now)
+    val textColor = if (nightTint) clockTextColor(now) else Palette.Label
     val shadow = Shadow(Color.Black.copy(alpha = 0.28f), Offset(0f, 2f), blurRadius = 18f)
     val second = SpanStyle(fontWeight = FontWeight.W500)
     val reduced = LocalReducedMotion.current
@@ -510,12 +513,12 @@ fun ShelfClock(
                 append(dateText(now))
                 if (lunar != null) withStyle(second) { append("  $lunar") }
             },
-            style = Type.ClockDate.copy(shadow = shadow),
+            style = Type.ClockDate.copy(color = textColor, shadow = shadow),
             modifier = aside.capBox(Type.ClockDate.fontSize),
         )
         BasicText(
             timeText(now),
-            style = Type.Clock.copy(shadow = shadow),
+            style = Type.Clock.copy(color = textColor, shadow = shadow),
             modifier = Modifier.padding(top = 16.dp)
                 .toSaverClock(toSaver, Type.Clock.fontSize, 0.dp, drift)
                 .capBox(Type.Clock.fontSize),
@@ -526,13 +529,13 @@ fun ShelfClock(
                 val range = if (w.high != null && w.low != null) stringResource(R.string.weather_high_low, w.high, w.low) else null
                 val detail = listOfNotNull(place, stringResource(kindNameRes(w.kind)), range).joinToString(" · ")
                 Row(aside.padding(top = 18.dp).capBox(Type.ClockDetail.fontSize), verticalAlignment = Alignment.CenterVertically) {
-                    GlyphIcon(glyphFor(w), Color.White, 18.dp, Modifier.padding(end = 7.dp))
+                    GlyphIcon(glyphFor(w), textColor, 18.dp, Modifier.padding(end = 7.dp))
                     BasicText(
                         buildAnnotatedString {
                             append(stringResource(R.string.weather_temperature, w.celsius))
                             withStyle(second) { append("  $detail") }
                         },
-                        style = Type.ClockDetail.copy(shadow = shadow),
+                        style = Type.ClockDetail.copy(color = textColor, shadow = shadow),
                     )
                 }
             } else {
@@ -542,7 +545,7 @@ fun ShelfClock(
                 val name = w.conditionText?.takeIf { it.isNotEmpty() } ?: stringResource(conditionName(w))
                 val detail = listOfNotNull(aqi, range).joinToString(" ")
                 Row(aside.padding(top = 18.dp).capBox(Type.ClockDetail.fontSize), verticalAlignment = Alignment.CenterVertically) {
-                    place?.let { BasicText(it, style = Type.ClockDetail.copy(fontWeight = FontWeight.W500, shadow = shadow), modifier = Modifier.padding(end = 7.dp)) }
+                    place?.let { BasicText(it, style = Type.ClockDetail.copy(color = textColor, fontWeight = FontWeight.W500, shadow = shadow), modifier = Modifier.padding(end = 7.dp)) }
                     BasicText(
                         buildAnnotatedString {
                             withStyle(SpanStyle(fontSize = 18.sp)) { append(emojiFor(w)) }
@@ -550,7 +553,7 @@ fun ShelfClock(
                             append(" ${w.celsius}°C")
                             if (detail.isNotEmpty()) withStyle(second) { append(" $detail") }
                         },
-                        style = Type.ClockDetail.copy(shadow = shadow),
+                        style = Type.ClockDetail.copy(color = textColor, shadow = shadow),
                     )
                 }
             }
@@ -566,7 +569,7 @@ fun ShelfClock(
                 }
                 BasicText(
                     line,
-                    style = Type.ClockDetail.copy(shadow = shadow),
+                    style = Type.ClockDetail.copy(color = textColor, shadow = shadow),
                     modifier = aside.padding(top = 10.dp).capBox(Type.ClockDetail.fontSize),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -577,7 +580,7 @@ fun ShelfClock(
                     GlyphIcon(Glyph.Info, Color(0xFFFFB340), 18.dp, Modifier.padding(end = 7.dp))
                     BasicText(
                         alert,
-                        style = Type.ClockDetail.copy(shadow = shadow),
+                        style = Type.ClockDetail.copy(color = textColor, shadow = shadow),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )

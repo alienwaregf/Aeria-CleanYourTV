@@ -131,11 +131,14 @@ fun Screensaver(visible: Boolean, apps: List<AppEntry>, now: LocalDateTime, skip
                         AerialStart.start(context)
                     },
                 )
-                ScreensaverMode.Clock, ScreensaverMode.System -> ClockSaver(apps, now)
+                ScreensaverMode.System -> ClockSaver(apps, now, plain = true, nightTint = true)
                 ScreensaverMode.Videos -> when {
                     videosEmpty -> Box(Modifier.fillMaxSize().background(Color.Black))
                     videosFailed -> ClockSaver(apps, now)
-                    else -> VideoSaver(skips.steps, leaving = !visible, onUnavailable = { videosFailed = true }, onEmpty = { videosEmpty = true })
+                    else -> {
+                        VideoSaver(skips.steps, leaving = !visible, onUnavailable = { videosFailed = true }, onEmpty = { videosEmpty = true })
+                        Labels(caption = null, now = now, shade = false)
+                    }
                 }
                 ScreensaverMode.Trending -> TrendingSaver(now, skips.steps)
             }
@@ -153,7 +156,6 @@ class ScreensaverSkips {
             KeyEvent.KEYCODE_DPAD_RIGHT -> 1
             else -> return false
         }
-        if (Wallpapers.screensaver == ScreensaverMode.Clock) return false
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) flow.tryEmit(step)
         return true
     }
@@ -491,12 +493,12 @@ private const val STALL_MS = 8_000L
 private val DECODER_ERRORS = PlaybackException.ERROR_CODE_DECODER_INIT_FAILED..PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED
 
 @Composable
-private fun ClockSaver(apps: List<AppEntry>, now: LocalDateTime) {
+private fun ClockSaver(apps: List<AppEntry>, now: LocalDateTime, plain: Boolean = false, nightTint: Boolean = false) {
     val minute = now.withSecond(0).withNano(0)
     val scene = remember(minute, apps.size, Wallpapers.backdrop) {
         val rnd = Random(minute.hashCode())
         Scene(
-            light = Wallpapers.backdrop ?: apps.takeIf { it.isNotEmpty() }?.get(rnd.nextInt(apps.size))?.art?.backdrop,
+            light = if (plain) null else Wallpapers.backdrop ?: apps.takeIf { it.isNotEmpty() }?.get(rnd.nextInt(apps.size))?.art?.backdrop,
             x = rnd.nextFloat(),
             y = rnd.nextFloat(),
         )
@@ -519,7 +521,7 @@ private fun ClockSaver(apps: List<AppEntry>, now: LocalDateTime) {
                         x = 64.dp + (w - 64.dp * 2 - 420.dp) * s.x,
                         y = 56.dp + (h - 56.dp * 2 - 170.dp) * s.y,
                     ),
-                ) { ShelfClock(now = now) }
+                ) { ShelfClock(now = now, saving = true, nightTint = nightTint) }
             }
         }
     }
@@ -583,6 +585,11 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
     val backAlpha = remember { Animatable(0f) }
     var displayedItem by remember { mutableStateOf(item) }
     var displayedIndex by remember { mutableStateOf(index) }
+    LaunchedEffect(item) {
+        if (displayedIndex == index && item.id == displayedItem.id && item.mediaType == displayedItem.mediaType) {
+            displayedItem = item
+        }
+    }
     val infoX = remember { Animatable(0f) }
     val infoAlpha = remember { Animatable(1f) }
     LaunchedEffect(index, item.backdropUrl) {
@@ -654,8 +661,8 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
         if (nextProviders.isNotEmpty()) {
             withContext(Dispatchers.IO) { nextProviders.forEach { ProviderLogos.load(it) } }
         }
-        Ratings.fetchFor(target)
-        next?.let { Ratings.fetchFor(it) }
+        Ratings.fetchFor(target, allowOmdb = false)
+        next?.let { Ratings.fetchFor(it, allowOmdb = false) }
     }
     var titleLogo by remember(displayedItem.logoUrl) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(displayedItem.logoUrl) {
@@ -775,15 +782,19 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
                     Spacer(Modifier.width(8.dp))
                     SaverRatingIcon(R.drawable.ic_rating_imdb)
                     Spacer(Modifier.width(4.dp))
-                    BasicText(imdb + "/10", style = Type.Callout)
+                    BasicText(imdb, style = Type.Callout)
                 }
                 if (displayedItem.rtPercent >= 0) {
                     Spacer(Modifier.width(8.dp))
                     BasicText("·", style = Type.Callout)
                     Spacer(Modifier.width(8.dp))
-                    SaverRatingIcon(if (displayedItem.rtPercent >= 60) R.drawable.ic_rt_fresh else R.drawable.ic_rt_rotten)
-                    Spacer(Modifier.width(4.dp))
-                    BasicText(displayedItem.rtPercent.toString() + "%", style = Type.Callout)
+                    BasicText("RT " + displayedItem.rtPercent.toString() + "%", style = Type.Callout)
+                }
+                if (displayedItem.rtAudiencePercent >= 0) {
+                    Spacer(Modifier.width(8.dp))
+                    BasicText("·", style = Type.Callout)
+                    Spacer(Modifier.width(8.dp))
+                    BasicText("观众 " + displayedItem.rtAudiencePercent.toString() + "%", style = Type.Callout)
                 }
                 if (displayedItem.traktRating >= 0.0) {
                     Spacer(Modifier.width(8.dp))

@@ -362,8 +362,8 @@ fun HeroRow(
         if (nextProviders.isNotEmpty()) {
             withContext(Dispatchers.IO) { nextProviders.forEach { ProviderLogos.load(it) } }
         }
-        Ratings.fetchFor(target)
-        next?.let { Ratings.fetchFor(it) }
+        Ratings.fetchFor(target, allowOmdb = false)
+        next?.let { Ratings.fetchFor(it, allowOmdb = false) }
     }
     val infoShift by animateDpAsState(
         targetValue = if (focused) bottomInset - 4.dp + HeroRestLift else 0.dp,
@@ -482,15 +482,19 @@ fun HeroRow(
                     Spacer(Modifier.width(8.dp))
                     RatingIcon(R.drawable.ic_rating_imdb)
                     Spacer(Modifier.width(4.dp))
-                    BasicText(imdb + "/10", style = Type.Callout)
+                    BasicText(imdb, style = Type.Callout)
                 }
                 if (displayedItem.rtPercent >= 0) {
                     Spacer(Modifier.width(8.dp))
                     BasicText("·", style = Type.Callout)
                     Spacer(Modifier.width(8.dp))
-                    RatingIcon(if (displayedItem.rtPercent >= 60) R.drawable.ic_rt_fresh else R.drawable.ic_rt_rotten)
-                    Spacer(Modifier.width(4.dp))
-                    BasicText(displayedItem.rtPercent.toString() + "%", style = Type.Callout)
+                    BasicText("RT " + displayedItem.rtPercent.toString() + "%", style = Type.Callout)
+                }
+                if (displayedItem.rtAudiencePercent >= 0) {
+                    Spacer(Modifier.width(8.dp))
+                    BasicText("·", style = Type.Callout)
+                    Spacer(Modifier.width(8.dp))
+                    BasicText("观众 " + displayedItem.rtAudiencePercent.toString() + "%", style = Type.Callout)
                 }
                 if (displayedItem.traktRating >= 0.0) {
                     Spacer(Modifier.width(8.dp))

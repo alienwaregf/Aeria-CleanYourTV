@@ -63,6 +63,7 @@ fun SourceWallpaper(
                     override fun onVideoAvailable(id: String) {
                         available = true
                         tries = 0
+                        weak = false
                     }
 
                     override fun onVideoUnavailable(id: String, reason: Int) {
