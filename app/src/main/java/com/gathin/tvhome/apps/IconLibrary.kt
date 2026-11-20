@@ -48,10 +48,21 @@ object IconLibrary {
 
     private fun here(c: Choice): File? = File(dir, c.fileName).takeIf { it.exists() }
 
+    fun catalog(): Map<String, List<Choice>> = index
+
+    const val PICTURES = BASE
+
+    fun borrowed(pkg: String): Pair<String, Choice>? {
+        if (!::prefs.isInitialized) return null
+        val (from, id) = prefs.getString("borrow:$pkg", null)?.split('/', limit = 2)?.takeIf { it.size == 2 } ?: return null
+        return index[from]?.firstOrNull { it.id == id }?.let { from to it }
+    }
+
     fun choices(pkg: String): List<Choice> =
         if (::dir.isInitialized) index[pkg].orEmpty().filter { here(it) != null } else emptyList()
 
     fun chosen(pkg: String): Choice? {
+        borrowed(pkg)?.second?.takeIf { here(it) != null }?.let { return it }
         val here = choices(pkg)
         val id = if (::prefs.isInitialized) prefs.getString("choice:$pkg", null) else null
         return here.firstOrNull { it.id == id } ?: here.firstOrNull()
@@ -61,6 +72,7 @@ object IconLibrary {
 
     fun file(pkg: String, id: String? = null): File? {
         val c = if (id == null) chosen(pkg) else choices(pkg).firstOrNull { it.id == id }
+            ?: borrowed(pkg)?.second?.takeIf { it.id == id }
         return c?.let(::here)
     }
 
@@ -81,7 +93,7 @@ object IconLibrary {
         else -> null
     }
 
-    fun choose(pkg: String, pick: Pick?, choice: String? = null) {
+    fun choose(pkg: String, pick: Pick?, choice: String? = null, from: String? = null) {
         if (!::prefs.isInitialized) return
         val library = prefs.getStringSet("use_library", emptySet())!! - pkg
         val own = prefs.getStringSet("use_own", emptySet())!! - pkg
@@ -89,6 +101,11 @@ object IconLibrary {
         prefs.edit {
             putStringSet("use_library", if (pick == Pick.Library) library + pkg else library)
             putStringSet("use_own", if (pick == Pick.Own) own + pkg else own)
+            if (pick == Pick.Library && from != null && from != pkg && choice != null) {
+                putString("borrow:$pkg", "$from/$choice")
+                return@edit
+            }
+            remove("borrow:$pkg")
             if (pick == Pick.Own) return@edit
             if (choice == null || choice == default) remove("choice:$pkg") else putString("choice:$pkg", choice)
         }
@@ -96,6 +113,15 @@ object IconLibrary {
 
     fun stamp(pkg: String): Long = (usable(pkg)?.let { it.lastModified() + it.name.hashCode() } ?: 0L) +
         when (pick(pkg)) { Pick.Own -> 1L; Pick.Library -> 2L; null -> 0L }
+
+    fun fetch(c: Choice): Boolean {
+        if (!::dir.isInitialized) return false
+        val file = File(dir, c.fileName)
+        if (file.exists()) return true
+        return runCatching { download(BASE + c.path, file) }
+            .onFailure { Log.w(TAG, "could not fetch ${c.path}", it) }
+            .isSuccess
+    }
 
     fun load(pkg: String): Bitmap? = usable(pkg)?.let { BitmapFactory.decodeFile(it.path) }
 
@@ -129,7 +155,7 @@ object IconLibrary {
             }
             val keep = HashSet<String>()
             for (pkg in installed) {
-                for (c in index[pkg].orEmpty()) {
+                for (c in index[pkg].orEmpty() + listOfNotNull(borrowed(pkg)?.second)) {
                     val file = File(dir, c.fileName)
                     keep += file.name
                     if (file.exists() || now - (failedAt[file.name] ?: 0L) < RETRY_MS) continue
