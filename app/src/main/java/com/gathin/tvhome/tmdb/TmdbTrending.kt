@@ -336,6 +336,8 @@ object TmdbTrending {
             val obj = backdrops.optJSONObject(i) ?: continue
             val path = obj.optString("file_path", "")
             if (path.isBlank()) continue
+            val lang = obj.optString("iso_639_1", "")
+            if (lang.isNotBlank() && !lang.equals("xx", ignoreCase = true)) continue
             val w = obj.optInt("width", 0)
             val h = obj.optInt("height", 0)
             if (w <= 0 || h <= 0) continue
