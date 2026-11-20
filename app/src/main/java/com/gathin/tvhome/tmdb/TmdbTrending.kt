@@ -59,10 +59,13 @@ data class TmdbItem(
     val imdbId: String = "",
     val imdbRating: String = "",
     val rtPercent: Int = -1,
-    val omdbFetched: Boolean = false,
+    val rtState: String = "",
+    val rtAudiencePercent: Int = -1,
+    val rtAudienceState: String = "",
+    val omdbFetchedAt: Long = 0,
     val traktRating: Double = -1.0,
     val traktVotes: Int = 0,
-    val traktFetched: Boolean = false,
+    val traktFetchedAt: Long = 0,
 )
 
 object TmdbTrending {
@@ -150,9 +153,22 @@ object TmdbTrending {
     fun refreshIfStale() {
         if (!started) return
         val now = System.currentTimeMillis()
-        if (now - tmdbPrefs.getLong(KEY_FETCHED_AT, 0) < TTL_MS) return
-        if (failed && now - lastAttempt < RETRY_MS) return
+        if (now - tmdbPrefs.getLong(KEY_FETCHED_AT, 0) < TTL_MS) {
+            refreshRatingsStale(allowOmdb = false)
+            return
+        }
+        if (failed && now - lastAttempt < RETRY_MS) {
+            refreshRatingsStale(allowOmdb = false)
+            return
+        }
         refresh()
+    }
+
+    private fun refreshRatingsStale(allowOmdb: Boolean) {
+        if (!trendingGateOpen()) return
+        val list = items
+        if (list.isEmpty()) return
+        scope.launch { Ratings.refreshAll(list, allowOmdb) }
     }
 
     fun refreshClockTick() {
@@ -186,10 +202,13 @@ object TmdbTrending {
                 imdbId = updated.imdbId,
                 imdbRating = updated.imdbRating,
                 rtPercent = updated.rtPercent,
-                omdbFetched = updated.omdbFetched,
+                rtState = updated.rtState,
+                rtAudiencePercent = updated.rtAudiencePercent,
+                rtAudienceState = updated.rtAudienceState,
+                omdbFetchedAt = updated.omdbFetchedAt,
                 traktRating = updated.traktRating,
                 traktVotes = updated.traktVotes,
-                traktFetched = updated.traktFetched,
+                traktFetchedAt = updated.traktFetchedAt,
             )
             if (base == merged) return@launch
             val next = current.toMutableList()
@@ -224,10 +243,13 @@ object TmdbTrending {
                         imdbId = o.imdbId,
                         imdbRating = o.imdbRating,
                         rtPercent = o.rtPercent,
-                        omdbFetched = if (fromTick) false else o.omdbFetched,
+                        rtState = o.rtState,
+                        rtAudiencePercent = o.rtAudiencePercent,
+                        rtAudienceState = o.rtAudienceState,
+                        omdbFetchedAt = o.omdbFetchedAt,
                         traktRating = o.traktRating,
                         traktVotes = o.traktVotes,
-                        traktFetched = if (fromTick) false else o.traktFetched,
+                        traktFetchedAt = o.traktFetchedAt,
                     )
                 }
                 items = merged
@@ -237,7 +259,7 @@ object TmdbTrending {
                     remove(KEY_LAST_ERROR)
                 }
                 prefetch(merged)
-                if (fromTick) scope.launch { Ratings.refreshAll(merged) }
+                refreshRatingsStale(allowOmdb = fromTick)
             }
         }
     }
@@ -481,10 +503,13 @@ object TmdbTrending {
                     put("imdb_id", item.imdbId)
                     put("imdb_rating", item.imdbRating)
                     put("rt_percent", item.rtPercent)
-                    put("omdb_fetched", item.omdbFetched)
+                    put("rt_state", item.rtState)
+                    put("rt_audience_percent", item.rtAudiencePercent)
+                    put("rt_audience_state", item.rtAudienceState)
+                    put("omdb_fetched_at", item.omdbFetchedAt)
                     put("trakt_rating", item.traktRating)
                     put("trakt_votes", item.traktVotes)
-                    put("trakt_fetched", item.traktFetched)
+                    put("trakt_fetched_at", item.traktFetchedAt)
                     put("year", item.year)
                 },
             )
@@ -516,10 +541,13 @@ object TmdbTrending {
                     imdbId = obj.optString("imdb_id", ""),
                     imdbRating = obj.optString("imdb_rating", ""),
                     rtPercent = obj.optInt("rt_percent", -1),
-                    omdbFetched = obj.optBoolean("omdb_fetched", false),
+                    rtState = obj.optString("rt_state", ""),
+                    rtAudiencePercent = obj.optInt("rt_audience_percent", -1),
+                    rtAudienceState = obj.optString("rt_audience_state", ""),
+                    omdbFetchedAt = obj.optLong("omdb_fetched_at", 0),
                     traktRating = obj.optDouble("trakt_rating", -1.0),
                     traktVotes = obj.optInt("trakt_votes", 0),
-                    traktFetched = obj.optBoolean("trakt_fetched", false),
+                    traktFetchedAt = obj.optLong("trakt_fetched_at", 0),
                     year = obj.optString("year", ""),
                 )
             }
