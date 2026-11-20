@@ -136,11 +136,20 @@ object SelfCompile {
 
     fun run(context: Context, auto: Boolean) {
         val app = context.applicationContext
-        prefs(app).edit { putLong(KEY_TRIED, BuildConfig.VERSION_CODE.toLong()) }
         offered = false
         Log.i(TAG, "self compile: reinstalling (${if (auto) "auto" else "asked"}), odex ${odexBytes(app)} bytes")
         DiagLog.i("self compile: reinstalling (${if (auto) "auto" else "asked"})")
         if (Build.VERSION.SDK_INT >= 28) Updates.reinstallSelf(app, auto)
+    }
+
+    fun onInstallResult(context: Context, success: Boolean) {
+        val app = context.applicationContext
+        if (success) {
+            prefs(app).edit { putLong(KEY_TRIED, BuildConfig.VERSION_CODE.toLong()) }
+            offered = false
+        } else {
+            offered = worthIt(app)
+        }
     }
 
     fun askSystemNow(context: Context) {
