@@ -93,7 +93,6 @@ import com.gathin.tvhome.wallpaper.AerialQuality
 import com.gathin.tvhome.wallpaper.AerialSet
 import com.gathin.tvhome.wallpaper.AerialStream
 import com.gathin.tvhome.wallpaper.ScreensaverMode
-import com.gathin.tvhome.system.SystemScreensaver
 import com.gathin.tvhome.wallpaper.Wallpaper
 import com.gathin.tvhome.wallpaper.WallpaperKind
 import com.gathin.tvhome.wallpaper.Wallpapers
@@ -286,23 +285,12 @@ fun WallpaperSheet(
                             AerialSettings.aerialQuality, AerialSettings::chooseAerialQuality,
                         )
                     }
-                    if (Wallpapers.screensaver == ScreensaverMode.Aerial || Wallpapers.screensaver == ScreensaverMode.Trending) Choices(
+                    if (Wallpapers.screensaver == ScreensaverMode.Aerial || Wallpapers.screensaver == ScreensaverMode.Trending || Wallpapers.screensaver == ScreensaverMode.Videos) Choices(
                         R.string.ss_show_time, stringResource(R.string.ss_show_time_hint), note,
                         listOf(true to R.string.st_on, false to R.string.st_off),
                         AerialSettings.screensaverClock, AerialSettings::chooseScreensaverClock,
                     )
-                    if (Wallpapers.screensaver == ScreensaverMode.System) SettingRow(R.string.ss_delay, null, note) {
-                        val delay = remember { SystemScreensaver.firmwareDelayMs(context) }
-                        BasicText(
-                            when {
-                                delay == null -> stringResource(R.string.ss_delay_system)
-                                delay == 0L -> stringResource(R.string.ss_delay_system_off)
-                                else -> stringResource(R.string.ss_delay_system_minutes, ((delay + 30_000) / 60_000).coerceAtLeast(1).toInt())
-                            },
-                            style = Type.Body.copy(color = Palette.SecondaryLabel),
-                            modifier = Modifier.padding(end = 8.dp),
-                        )
-                    } else Choices(
+                    Choices(
                         R.string.ss_delay, null, note,
                         AerialSettings.screensaverChoices.map {
                             it to if (it == AerialSettings.NEVER) stringResource(R.string.ss_never) else stringResource(R.string.ss_minutes, it)
@@ -527,7 +515,6 @@ private fun ScreensaverChoice(onStart: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         listOf(
             ScreensaverMode.Aerial to R.string.ss_aerial,
-            ScreensaverMode.Clock to R.string.ss_clock,
             ScreensaverMode.Videos to R.string.ss_videos,
             ScreensaverMode.Trending to R.string.ss_trending,
             ScreensaverMode.System to R.string.ss_system,
