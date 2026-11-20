@@ -21,7 +21,7 @@
 | **电视桌面** | ✅ | ✅ | ✅ |
 | **系统瘦身** | ✅ | ❌ | ✅ |
 | **瘦身怎么做** | ✅ 电视本身即可，电脑更方便 | ❌ | 工具跑 `pm` 命令；launcher 须自己编译 |
-| **天气** | ✅ 定位精准，接入彩云/和风，数据详细，恶劣天气提醒 | ❓ 定位经常错误 | 插件提供 |
+| **天气** | ✅ 定位精准，接入和风，数据详细，恶劣天气提醒 | ❓ 定位经常错误 | 插件提供 |
 | **屏保 / 壁纸** | ✅ 与Aerial一致 | ✅ 航拍 4K /<br>![Dolby Vision](https://img.shields.io/badge/-Dolby%20Vision-black?logo=dolby) | ✅ 主题 + 屏保插件 |
 | **信号源免切换预览** | ✅ 不切信号源全屏预览 | ✅ 需要设为壁纸 | ❌ |
 | **图标** | 只用App官方图标 | 联网拉远程图标 | — |
@@ -44,18 +44,23 @@
 
 设置 → 设备偏好设置 → 关于 → 连按「内部版本号」7 次，再在开发者选项里打开「USB 调试」（有无线调试的也打开）。电视的 IP 在「设置 → 网络 → 已连接的网络」里。第一次连接时电视会问是否允许调试，选「始终允许」。
 
-### 2. 装 APK
+### 2. 选一个 APK
 
-先下载 APK：[Aeria-CleanYourTV.apk]([https://github.com/alienwaregf/Aeria-CleanYourTV/releases/download/v1.89/Aeria-CleanYourTV.apk](https://github.com/alienwaregf/Aeria-CleanYourTV/releases/download/v99/Aeria-CleanYourTV.apk))
+两个包是同一个软件，只差桌面声明，按电视选一个：
 
-然后装到电视上：
+| 电视 | 下载 |
+|---|---|
+| 📺 支持换桌面（大多数电视，如索尼） | [![APK](https://img.shields.io/badge/APK-ARMv7%20%7C%20ARMv8%20%7C%20x64-green?logo=android)](https://github.com/alienwaregf/Aeria-CleanYourTV/releases/download/v99/Aeria-CleanYourTV.apk) |
+| 📺 不支持换桌面（装不上桌面类 App，如部分 TCL、海信） | [![APK](https://img.shields.io/badge/APK-ARMv7%20%7C%20ARMv8%20%7C%20x64-green?logo=android)](https://github.com/alienwaregf/Aeria-CleanYourTV/releases/download/v99/Aeria-CleanYourTV-NoHome.apk) |
+
+然后装到电视上（文件名换成你下的那个）：
 
 ```bash
 adb kill-server && adb start-server && adb connect <电视IP>:5555
 adb -s <电视IP>:5555 install -r Aeria-CleanYourTV.apk
 ```
 
-装完按主页键，进的就是 CleanYourTV 懒人版。
+装完按主页键，进的就是 CleanYourTV 懒人版。无 HOME 版靠无障碍服务接管主页键，开机自动进。
 
 ---
 
