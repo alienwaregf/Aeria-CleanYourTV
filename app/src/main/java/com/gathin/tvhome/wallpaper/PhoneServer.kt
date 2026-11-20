@@ -126,6 +126,7 @@ class PhoneServer private constructor(private val context: Context, private val 
                     if (known && name.isNotEmpty() && rename != null) runBlocking(Dispatchers.Main) { rename(id, name) }
                     json(state().put("saved", known && name.isNotEmpty() && rename != null))
                 }
+                path == "/api/library/all" -> json(libraryCatalog())
                 session.method == Method.POST && path == "/api/icon/pick" -> {
                     val f = form(session)
                     val pkg = f["app"].orEmpty()
@@ -135,11 +136,19 @@ class PhoneServer private constructor(private val context: Context, private val 
                         else -> null
                     }
                     val choice = f["choice"]?.takeIf { it.isNotEmpty() }
-                    val ok = installed(pkg) && pick != null && (pick != IconLibrary.Pick.Library ||
-                        IconLibrary.choices(pkg).any { choice == null || it.id == choice })
+                    val from = f["from"]?.takeIf { it.isNotEmpty() && it != pkg }
+                    val ok = installed(pkg) && pick != null && when {
+                        pick != IconLibrary.Pick.Library -> true
+                        from != null -> choice != null && IconLibrary.catalog()[from].orEmpty().any { it.id == choice }
+                        else -> IconLibrary.choices(pkg).any { choice == null || it.id == choice }
+                    }
+                    if (ok && from != null) {
+                        val picture = IconLibrary.catalog()[from].orEmpty().first { it.id == choice }
+                        if (!IconLibrary.fetch(picture)) return@runCatching json(state().put("saved", false))
+                    }
                     if (ok) {
                         CustomIcons.clear(pkg)
-                        IconLibrary.choose(pkg, pick, choice)
+                        IconLibrary.choose(pkg, pick, choice, from)
                         runBlocking(Dispatchers.Main) { CustomIcons.changed(); IconLibrary.changed() }
                     }
                     json(state().put("saved", ok))
@@ -351,11 +360,27 @@ class PhoneServer private constructor(private val context: Context, private val 
 
     private fun libraryChoices(pkg: String, inUse: Boolean) = JSONArray().apply {
         val on = IconLibrary.chosen(pkg)?.id
+        val borrowed = IconLibrary.borrowed(pkg)
         IconLibrary.choices(pkg).forEach { c ->
             put(JSONObject().put("id", c.id).put("by", IconLibrary.credits.optJSONObject(c.by) ?: JSONObject())
+                .put("on", inUse && borrowed == null && c.id == on))
+        }
+        borrowed?.let { (from, c) ->
+            if (IconLibrary.file(pkg, c.id) == null) return@let
+            put(JSONObject().put("id", c.id).put("from", from).put("by", IconLibrary.credits.optJSONObject(c.by) ?: JSONObject())
                 .put("on", inUse && c.id == on))
         }
     }
+
+    private fun libraryCatalog(): JSONObject = JSONObject()
+        .put("base", IconLibrary.PICTURES)
+        .put("apps", JSONArray().apply {
+            IconLibrary.catalog().toSortedMap().forEach { (pkg, choices) ->
+                put(JSONObject().put("app", pkg).put("choices", JSONArray().apply {
+                    choices.forEach { put(JSONObject().put("id", it.id).put("p", it.path)) }
+                }))
+            }
+        })
 
     private fun libraryPicture(pkg: String, choice: String?): Response {
         val f = IconLibrary.file(pkg, choice) ?: return text(Response.Status.NOT_FOUND, "")
