@@ -330,8 +330,8 @@ object TmdbTrending {
 
     private fun pickBackdrop(backdrops: JSONArray?): String? {
         if (backdrops == null) return null
-        var bestArea = -1L
-        val bestPaths = ArrayList<String>()
+        val fullPaths = ArrayList<String>()
+        val allPaths = ArrayList<String>()
         for (i in 0 until backdrops.length()) {
             val obj = backdrops.optJSONObject(i) ?: continue
             val path = obj.optString("file_path", "")
@@ -342,16 +342,13 @@ object TmdbTrending {
             val h = obj.optInt("height", 0)
             if (w <= 0 || h <= 0) continue
             val area = w.toLong() * h.toLong()
-            if (area > bestArea) {
-                bestArea = area
-                bestPaths.clear()
-                bestPaths.add(path)
-            } else if (area == bestArea) {
-                bestPaths.add(path)
-            }
+            if (area < 2073600L) continue
+            allPaths.add(path)
+            if (area == 8294400L) fullPaths.add(path)
         }
-        if (bestPaths.isEmpty()) return null
-        return IMAGE_BASE + bestPaths.random()
+        if (fullPaths.isNotEmpty()) return IMAGE_BASE + fullPaths.random()
+        if (allPaths.isEmpty()) return null
+        return IMAGE_BASE + allPaths.random()
     }
 
     private fun pickLogo(logos: JSONArray?): String? {
