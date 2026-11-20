@@ -22,6 +22,7 @@ import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.URLEncoder
+import java.time.LocalDate
 import java.util.Locale
 import javax.net.ssl.SSLException
 import kotlin.math.roundToInt
@@ -87,7 +88,7 @@ object Weather {
     private const val REFRESH_MS = 60 * 60 * 1000L
     private const val RETRY_MS = 3 * 60 * 1000L
     private const val RELOCATE_MS = 24 * 60 * 60 * 1000L
-    private const val STALE_MS = 3 * 60 * 60 * 1000L
+    private const val STALE_MS = 30 * 60 * 1000L
     private const val NONE = Int.MIN_VALUE
 
     var now by mutableStateOf<WeatherNow?>(null); private set
@@ -117,12 +118,13 @@ object Weather {
         if (System.currentTimeMillis() - prefs.getLong("fetched_at", 0) < STALE_MS) {
             val kind = runCatching { WeatherKind.valueOf(prefs.getString("kind", null) ?: "") }.getOrNull()
             if (kind != null) {
+                val forecastValid = prefs.getString("forecast_date", null) == LocalDate.now().toString()
                 now = WeatherNow(
                     prefs.getInt("celsius", 0), kind, prefs.getBoolean("day", true),
                     high = prefs.getInt("high", NONE).takeIf { it != NONE },
                     low = prefs.getInt("low", NONE).takeIf { it != NONE },
                     aqi = prefs.getString("aqi", null).takeIf { isKeyedSource() },
-                    forecast = if (isKeyedSource()) (1..3).mapNotNull { i ->
+                    forecast = if (isKeyedSource() && forecastValid) (1..3).mapNotNull { i ->
                         val dayText = prefs.getString("forecast_${i}_text", null)
                         val high = prefs.getInt("forecast_${i}_high", NONE).takeIf { it != NONE }
                         val low = prefs.getInt("forecast_${i}_low", NONE).takeIf { it != NONE }
@@ -261,13 +263,14 @@ object Weather {
         chosen = chosenCity().isNotEmpty() || prefs.getBoolean("chosen", false)
         prefs.edit {
             putLong("fetched_at", System.currentTimeMillis())
+            putString("forecast_date", LocalDate.now().toString())
             putInt("celsius", result.temperatureC.roundToInt())
             putString("kind", kind.name)
             putBoolean("day", result.day)
             putInt("high", result.highC ?: NONE)
             putInt("low", result.lowC ?: NONE)
             (1..3).forEach { i ->
-                val row = forecast.getOrNull(i - 1)
+                val row = forecast.firstOrNull { it.day == i }
                 if (row == null) {
                     remove("forecast_${i}_text")
                     remove("forecast_${i}_high")
