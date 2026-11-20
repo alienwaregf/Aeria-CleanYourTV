@@ -1108,10 +1108,10 @@ function renderWeatherExtra() {
   $('#wxQwKey').placeholder = w.qweatherKeySet ? (w.qweatherKeyMasked || '') : t('wx_qw_key_ph');
   $('#wxQwHost').placeholder = (w.qweatherHostSet && w.qweatherHost) ? w.qweatherHost : t('wx_qw_host_ph');
   const tm = state.tmdb || {};
-  $('#tmdbKey').placeholder = tm.keySet ? (tm.keyMasked || '') : t('tmdb_key_ph');
+  $('#tmdbKey').placeholder = tm.keySet ? ('TMDB ' + (tm.keyMasked || '')) : t('tmdb_key_ph');
   const rt = state.ratings || {};
-  $('#omdbKey').placeholder = rt.omdbKeySet ? (rt.omdbKeyMasked || '') : t('omdb_key_ph');
-  $('#traktClientId').placeholder = rt.traktClientIdSet ? (rt.traktClientIdMasked || '') : t('trakt_key_ph');
+  $('#omdbKey').placeholder = rt.omdbKeySet ? ('OMDb ' + (rt.omdbKeyMasked || '')) : t('omdb_key_ph');
+  $('#traktClientId').placeholder = rt.traktClientIdSet ? ('Trakt ' + (rt.traktClientIdMasked || '')) : t('trakt_key_ph');
 }
 $('#wxSource').onchange = async e => {
   try { take(await api('api/weather/source', { source: e.target.value })); } catch (err) { toast(t('toast_set_fail')); }
