@@ -13,7 +13,8 @@ import kotlinx.coroutines.withContext
 object Ratings {
     private const val RETRY_MS = 3 * 60 * 1000L
     private const val DAY_MS = 24 * 60 * 60 * 1000L
-    private const val TTL_MS = 30 * 60 * 1000L
+    private const val OMDB_TTL_MS = 30 * 60 * 1000L
+    private const val TRAKT_TTL_MS = 10 * 60 * 1000L
 
     private val inFlight = HashSet<String>()
     private val failedAt = HashMap<String, Long>()
@@ -40,8 +41,8 @@ object Ratings {
     suspend fun fetchFor(item: TmdbItem, allowOmdb: Boolean = false) {
         if (!Wallpapers.isTrending() && Wallpapers.screensaver != ScreensaverMode.Trending) return
         val now = System.currentTimeMillis()
-        val omdbDue = allowOmdb && now - item.omdbFetchedAt >= TTL_MS && OmdbRatings.keySet()
-        val traktDue = now - item.traktFetchedAt >= TTL_MS && TraktRatings.clientIdSet()
+        val omdbDue = allowOmdb && now - item.omdbFetchedAt >= OMDB_TTL_MS && OmdbRatings.keySet()
+        val traktDue = now - item.traktFetchedAt >= TRAKT_TTL_MS && TraktRatings.clientIdSet()
         if (!omdbDue && !traktDue) return
         val idKey = item.mediaType + ":" + item.id
         synchronized(inFlight) { if (!inFlight.add(idKey)) return }
@@ -64,8 +65,8 @@ object Ratings {
     private fun fetchNow(item: TmdbItem, allowOmdb: Boolean): TmdbItem {
         var cur = item
         val now = System.currentTimeMillis()
-        val omdbDue = allowOmdb && now - cur.omdbFetchedAt >= TTL_MS && OmdbRatings.keySet() && !recentlyFailed(cur, "omdb")
-        val traktDue = now - cur.traktFetchedAt >= TTL_MS && TraktRatings.clientIdSet() && !recentlyFailed(cur, "trakt")
+        val omdbDue = allowOmdb && now - cur.omdbFetchedAt >= OMDB_TTL_MS && OmdbRatings.keySet() && !recentlyFailed(cur, "omdb")
+        val traktDue = now - cur.traktFetchedAt >= TRAKT_TTL_MS && TraktRatings.clientIdSet() && !recentlyFailed(cur, "trakt")
         if (!omdbDue && !traktDue) return cur
         var imdbId = cur.imdbId
         if (imdbId.isBlank()) {
@@ -84,7 +85,7 @@ object Ratings {
             cur = cur.copy(imdbId = resolved)
         }
         if (omdbDue) cur = fetchOmdb(cur, imdbId)
-        if (now - cur.traktFetchedAt >= TTL_MS && TraktRatings.clientIdSet() && !recentlyFailed(cur, "trakt")) {
+        if (now - cur.traktFetchedAt >= TRAKT_TTL_MS && TraktRatings.clientIdSet() && !recentlyFailed(cur, "trakt")) {
             cur = fetchTrakt(cur, imdbId)
         }
         return cur
