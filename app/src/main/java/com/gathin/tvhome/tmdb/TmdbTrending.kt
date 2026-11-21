@@ -73,7 +73,7 @@ object TmdbTrending {
     private const val TAG = "TmdbTrending"
     private const val PREFS = "tmdb"
     private const val LAUNCHER_PREFS = "launcher_settings"
-    private const val KEY_TMDB_KEY = "tmdb_key"
+    const val KEY_TMDB_KEY = "tmdb_key"
     private const val KEY_FETCHED_AT = "fetched_at"
     private const val KEY_ITEMS_JSON = "items_json"
     private const val KEY_LAST_ERROR = "last_error"
@@ -103,6 +103,7 @@ object TmdbTrending {
     private var lastAttempt = 0L
     private var failed = false
     private var job: Job? = null
+    private var ratingsFlushJob: Job? = null
 
     fun init(context: Context) {
         if (started) return
@@ -215,7 +216,11 @@ object TmdbTrending {
             val next = current.toMutableList()
             next[index] = merged
             items = next
-            tmdbPrefs.edit { putString(KEY_ITEMS_JSON, itemsToJson(next)) }
+            ratingsFlushJob?.cancel()
+            ratingsFlushJob = scope.launch {
+                delay(1000)
+                tmdbPrefs.edit { putString(KEY_ITEMS_JSON, itemsToJson(items)) }
+            }
         }
     }
 
@@ -432,13 +437,15 @@ object TmdbTrending {
         }.getOrNull()
     }
 
-    private fun backfillDetails(list: List<TmdbItem>): List<TmdbItem> {
+    private suspend fun backfillDetails(list: List<TmdbItem>): List<TmdbItem> {
         if (!trendingGateOpen()) return list
         val key = launcherPrefs.getString(KEY_TMDB_KEY, "").orEmpty().trim()
         if (key.isEmpty()) return list
         var changed = false
-        val out = list.map {
-            var cur = it
+        val out = list.mapIndexed { index, item ->
+            currentCoroutineContext().ensureActive()
+            if (index > 0) delay(1000)
+            var cur = item
             if (cur.logoUrl.isBlank()) {
                 val (url, _) = fetchImageDetails(key, cur)
                 if (url.isNotBlank()) {
