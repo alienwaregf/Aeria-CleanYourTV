@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import com.gathin.tvhome.R
 import com.gathin.tvhome.SystemSlimmingActivity
 import com.gathin.tvhome.settings.AerialSettings
+import com.gathin.tvhome.settings.ClockHours
 import com.gathin.tvhome.settings.FocusStyle
 import com.gathin.tvhome.settings.UiSounds
 import com.gathin.tvhome.settings.Effects
@@ -100,6 +101,7 @@ import com.gathin.tvhome.tmdb.TmdbTrending
 import com.gathin.tvhome.weather.Weather
 import com.gathin.tvhome.weather.WeatherKind
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -154,6 +156,11 @@ fun WallpaperSheet(
         ) {
             val scroll = rememberScrollState()
             val scope = rememberCoroutineScope()
+            var scrollToBottomJob by remember { mutableStateOf<Job?>(null) }
+            fun scrollToBottom() {
+                scrollToBottomJob?.cancel()
+                scrollToBottomJob = scope.launch { scroll.animateScrollTo(scroll.maxValue) }
+            }
             Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(scroll).latestBringIntoView(scroll)) {
                 BasicText(stringResource(R.string.wp_title), style = Type.LargeTitle)
                 Spacer(Modifier.height(16.dp))
@@ -221,6 +228,11 @@ fun WallpaperSheet(
                         R.string.st_clock_size, stringResource(R.string.st_clock_size_hint), note,
                         listOf(false to R.string.st_clock_small, true to R.string.st_clock_large),
                         AerialSettings.largeClock, AerialSettings::chooseLargeClock,
+                    )
+                    Choices(
+                        R.string.st_clock_hours, stringResource(R.string.st_clock_hours_hint), note,
+                        listOf(ClockHours.System to R.string.st_clock_hours_system, ClockHours.Twelve to R.string.st_clock_hours_12, ClockHours.TwentyFour to R.string.st_clock_hours_24),
+                        AerialSettings.clockHours, AerialSettings::chooseClockHours,
                     )
                     Choices(
                         R.string.wp_weather, null, note,
@@ -313,13 +325,13 @@ fun WallpaperSheet(
                 Spacer(Modifier.height(10.dp))
                 Group(stringResource(R.string.st_pin_hint)) { note ->
                     SettingRow(R.string.st_pin, null, note, first = true) {
-                        PinChoice(onPin, onFocused = { scope.launch { scroll.animateScrollTo(scroll.maxValue) } })
+                        PinChoice(onPin, onFocused = { scrollToBottom() })
                     }
                 }
                 Spacer(Modifier.height(10.dp))
                 Group { note ->
                     SettingRow(R.string.system_slimming, stringResource(R.string.slimming_note), note, first = true) {
-                        Box(Modifier.onFocusChanged { if (it.hasFocus) scope.launch { scroll.animateScrollTo(scroll.maxValue) } }) {
+                        Box(Modifier.onFocusChanged { if (it.hasFocus) scrollToBottom() }) {
                             ActionChip(
                                 stringResource(R.string.slimming_open),
                                 Glyph.ChevronRight,

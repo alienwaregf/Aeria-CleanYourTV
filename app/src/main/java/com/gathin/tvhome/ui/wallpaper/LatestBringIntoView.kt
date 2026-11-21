@@ -44,9 +44,11 @@ private class LatestBringIntoViewNode(var scroll: ScrollState) : Modifier.Node()
                     val coordinates = requireLayoutCoordinates()
                     val childRect = boundsProvider()
                         ?: throw CancellationException("Bring-into-view target no longer has bounds")
-                    childRect.translate(
+                    val rect = childRect.translate(
                         coordinates.localBoundingBoxOf(childCoordinates, clipBounds = false).topLeft,
                     )
+                    val viewport = scroll.viewportSize
+                    if (viewport > 0 && rect.height > viewport) rect.copy(bottom = rect.top + viewport) else rect
                 }
             }
         } finally {
