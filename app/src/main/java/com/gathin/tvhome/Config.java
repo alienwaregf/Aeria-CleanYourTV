@@ -13,7 +13,4 @@ final class Config {
         return ctx.getSharedPreferences(SETTINGS_NAME, Context.MODE_PRIVATE);
     }
 
-    static String locale(Context ctx) {
-        return ctx.getString(R.string.locale).trim();
-    }
 }

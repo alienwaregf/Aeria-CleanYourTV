@@ -55,7 +55,7 @@ public final class CityLookup {
     private static String stemOf(String x) {
         if (x == null) return "";
         String s = x.trim();
-        String[] suffixes = {"特别行政区", "自治区", "省", "市", "区", "县", "旗"};
+        String[] suffixes = {"特别行政区", "壮族自治区", "回族自治区", "维吾尔自治区", "自治区", "省", "市", "区", "县", "旗"};
         for (String suf : suffixes) {
             if (s.endsWith(suf) && s.length() > suf.length()) return s.substring(0, s.length() - suf.length());
         }
@@ -156,12 +156,10 @@ public final class CityLookup {
 
     private static String[] ipCityName() {
         String ip = publicIpv4();
-        String[] g138 = ip != null ? geoFromIp138(ip) : null;
-        String[] gcn = ip != null ? geoFromIpcn(ip) : null;
-        String[] g = g138;
+        String[] g = ip != null ? geoFromIp138(ip) : null;
         String src = "ip138";
         if (g == null || g.length == 0 || !isChinaProv(g[0])) {
-            g = gcn;
+            g = ip != null ? geoFromIpcn(ip) : null;
             src = "ip.cn";
         }
         if (g == null || g.length == 0 || !isChinaProv(g[0])) return null;

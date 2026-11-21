@@ -237,6 +237,7 @@ public final class QWeatherClient {
         if ("100".equals(code) || "150".equals(code)) return "CLEAR" + suffix;
         if ("101".equals(code) || "102".equals(code) || "103".equals(code) || "152".equals(code) || "153".equals(code)) return "PARTLY_CLOUDY" + suffix;
         if ("104".equals(code)) return "CLOUDY";
+        if ("200".equals(code) || "201".equals(code) || "202".equals(code) || "203".equals(code) || "204".equals(code) || "205".equals(code) || "206".equals(code) || "207".equals(code) || "208".equals(code) || "209".equals(code) || "210".equals(code) || "211".equals(code) || "212".equals(code) || "213".equals(code)) return "WIND";
         if ("300".equals(code) || "309".equals(code) || "399".equals(code) || "350".equals(code)) return "LIGHT_RAIN";
         if ("301".equals(code) || "351".equals(code)) return "MODERATE_RAIN";
         if ("302".equals(code) || "303".equals(code) || "304".equals(code)) return "THUNDER_SHOWER";

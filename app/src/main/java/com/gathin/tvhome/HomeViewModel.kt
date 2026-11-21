@@ -461,6 +461,15 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         movingKey = key
     }
 
+    fun startMoveInFolder(key: String) {
+        movingKey = key
+    }
+
+    fun moveInFolder(key: String, target: String) {
+        store.moveInFolder(key, target)
+        arrange()
+    }
+
     fun moveBy(delta: Int) {
         val key = movingKey ?: return
         val from = apps.indexOfFirst { it.key == key }

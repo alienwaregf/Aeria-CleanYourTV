@@ -39,7 +39,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
 
     @Override
     protected void attachBaseContext(android.content.Context base) {
-        super.attachBaseContext(LauncherLocale.wrap(base));
+        super.attachBaseContext(base);
     }
 
     private static final String EXAMPLES_API =
@@ -50,10 +50,11 @@ public final class SystemSlimmingActivity extends ComponentActivity {
     private static final long MAX_LIST_BYTES = 256 * 1024;
 
     private static final String KEY_FOLDER = "slimming_folder";
-    private static final String KEY_LIST = "slimming_list";
-    private static final String KEY_DATE = "slimming_date";
-    private static final String KEY_LABEL = "slimming_label";
-    static final String KEY_SLIMMING_DAILY = "slimming_daily_check";
+    public static final String KEY_LIST = "slimming_list";
+    public static final String KEY_DATE = "slimming_date";
+    public static final String KEY_LABEL = "slimming_label";
+    public static final String KEY_NOTES = "slimming_notes";
+    public static final String KEY_SLIMMING_DAILY = "slimming_daily_check";
     private static final String KEY_SLIMMING_LAST_DAILY = "slimming_last_daily_check";
 
     static final int STATE_INSTALLED = 0;
@@ -185,7 +186,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
             if (useFolders == null) useFolders = snapshotFolders();
             final List<String> found = useFolders;
             runOnUiThread(() -> {
-                if (gen != loadGen) return;
+                if (gen != loadGen) { loading = false; return; }
                 folders = found;
                 if (folders == null) {
                     ui.setStatusText(getString(R.string.slimming_no_github));
@@ -279,7 +280,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
             final String useDate = date;
             final boolean useAutoHigh = autoHigh;
             runOnUiThread(() -> {
-                if (gen != loadGen) return;
+                if (gen != loadGen) { loading = false; return; }
                 loading = false;
                 if (useDebloat == null) {
                     ui.setStatusText(getString(R.string.slimming_failed, useFolder));
@@ -327,6 +328,12 @@ public final class SystemSlimmingActivity extends ComponentActivity {
     }
 
     private volatile boolean busy;
+
+    private void setBusy(boolean value) {
+        busy = value;
+        runOnUiThread(() -> ui.setBusy(value));
+    }
+
     private Toast disableToast;
 
     private void toastDisable(String line, int duration) {
@@ -344,6 +351,12 @@ public final class SystemSlimmingActivity extends ComponentActivity {
         return label.toString();
     }
 
+    private static int adbFailureRes(String msg) {
+        if (msg.contains("port 5555 closed")) return R.string.slimming_disable_no_adb;
+        if (msg.contains("wasn't accepted")) return R.string.slimming_disable_not_accepted;
+        return R.string.slimming_disable_failed;
+    }
+
     private void disableRecommended(boolean includeOptional) {
         if (busy) return;
         List<String> pkgs = new ArrayList<>();
@@ -355,7 +368,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
             ui.setStatusText(getString(R.string.slimming_disable_nothing));
             return;
         }
-        busy = true;
+        setBusy(true);
         final int total = pkgs.size();
         new Thread(() -> {
             try {
@@ -408,10 +421,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                     }
                 } catch (IOException e) {
                     String msg = e.getMessage() == null ? "" : e.getMessage();
-                    final int res;
-                    if (msg.contains("port 5555 closed")) res = R.string.slimming_disable_no_adb;
-                    else if (msg.contains("wasn't accepted")) res = R.string.slimming_disable_not_accepted;
-                    else res = R.string.slimming_disable_failed;
+                    final int res = adbFailureRes(msg);
                     runOnUiThread(() -> {
                         ui.setStatusText(getString(res, msg));
                     });
@@ -430,7 +440,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                     refreshStates();
                 });
             } finally {
-                busy = false;
+                setBusy(false);
             }
         }).start();
     }
@@ -446,7 +456,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
             ui.setStatusText(getString(R.string.slimming_restore_nothing));
             return;
         }
-        busy = true;
+        setBusy(true);
         final int total = pkgs.size();
         new Thread(() -> {
             try {
@@ -497,10 +507,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                     }
                 } catch (IOException e) {
                     String msg = e.getMessage() == null ? "" : e.getMessage();
-                    final int res;
-                    if (msg.contains("port 5555 closed")) res = R.string.slimming_disable_no_adb;
-                    else if (msg.contains("wasn't accepted")) res = R.string.slimming_disable_not_accepted;
-                    else res = R.string.slimming_disable_failed;
+                    final int res = adbFailureRes(msg);
                     runOnUiThread(() -> {
                         ui.setStatusText(getString(res, msg));
                     });
@@ -519,7 +526,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                     refreshStates();
                 });
             } finally {
-                busy = false;
+                setBusy(false);
             }
         }).start();
     }
@@ -539,7 +546,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
             return;
         }
         final boolean enable = !ai.enabled;
-        busy = true;
+        setBusy(true);
         new Thread(() -> {
             try {
                 try (Adb adb = Adb.connect(getApplicationContext(), 120_000, () ->
@@ -547,10 +554,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                     adb.shell((enable ? "pm enable " : "pm disable-user ") + pkg);
                 } catch (IOException e) {
                     String msg = e.getMessage() == null ? "" : e.getMessage();
-                    final int res;
-                    if (msg.contains("port 5555 closed")) res = R.string.slimming_disable_no_adb;
-                    else if (msg.contains("wasn't accepted")) res = R.string.slimming_disable_not_accepted;
-                    else res = R.string.slimming_disable_failed;
+                    final int res = adbFailureRes(msg);
                     runOnUiThread(() -> {
                         ui.setStatusText(getString(res, msg));
                         Toast.makeText(SystemSlimmingActivity.this, getString(res, msg), Toast.LENGTH_LONG).show();
@@ -570,7 +574,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                 }
                 runOnUiThread(() -> refreshStates());
             } finally {
-                busy = false;
+                setBusy(false);
             }
         }).start();
     }
@@ -824,12 +828,10 @@ public final class SystemSlimmingActivity extends ComponentActivity {
         static final int NONE = 0;
         final int level;
         final String folder;
-        final String closest;
 
-        Match(int level, String folder, String closest) {
+        Match(int level, String folder) {
             this.level = level;
             this.folder = folder;
-            this.closest = closest;
         }
     }
 
@@ -839,7 +841,6 @@ public final class SystemSlimmingActivity extends ComponentActivity {
 
     static Match matchDevice(String maker, String model, String device, String product,
                              List<String> folders) {
-        String makerNorm = normalise(maker == null ? "" : maker);
         List<String> makerTokens = tokens(maker);
         Set<String> candidates = new LinkedHashSet<>();
         for (String base : new String[]{model, device, product}) {
@@ -852,14 +853,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
             List<String> t = tokens(base);
             if (!t.isEmpty()) codenameTokens.add(t);
         }
-        Set<String> buildTokens = new LinkedHashSet<>();
-        for (String base : new String[]{model, device, product}) buildTokens.addAll(tokens(base));
-        buildTokens.removeAll(makerTokens);
-
         List<String> highs = new ArrayList<>();
-        String bestMedium = null;
-        int bestShared = 0;
-        int bestContain = 0;
         for (String folder : folders) {
             String f = normalise(folder);
             List<String> ft = tokens(folder);
@@ -881,24 +875,8 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                 if (!highs.contains(folder)) highs.add(folder);
                 continue;
             }
-            int shared = 0;
-            for (String t : buildTokens) if (ft.contains(t)) shared++;
-            int contain = 0;
-            for (String c : candidates) {
-                if (c.isEmpty()) continue;
-                if (c.contains(f) || f.contains(c)) {
-                    int overlap = Math.min(c.length(), f.length());
-                    if (overlap > makerNorm.length() && overlap > contain) contain = overlap;
-                }
-            }
-            if ((shared > 0 || contain > 0)
-                    && (shared > bestShared || (shared == bestShared && contain > bestContain))) {
-                bestShared = shared;
-                bestContain = contain;
-                bestMedium = folder;
-            }
         }
-        if (highs.size() == 1) return new Match(Match.HIGH, highs.get(0), null);
+        if (highs.size() == 1) return new Match(Match.HIGH, highs.get(0));
         if (highs.size() > 1) {
             String base = null;
             for (String h : highs) {
@@ -914,13 +892,13 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                     }
                 }
                 if (prefixOfAll) {
-                    if (base != null) return new Match(Match.NONE, null, bestMedium);
+                    if (base != null) return new Match(Match.NONE, null);
                     base = h;
                 }
             }
-            if (base != null) return new Match(Match.HIGH, base, null);
+            if (base != null) return new Match(Match.HIGH, base);
         }
-        return new Match(Match.NONE, null, bestMedium);
+        return new Match(Match.NONE, null);
     }
 
 
