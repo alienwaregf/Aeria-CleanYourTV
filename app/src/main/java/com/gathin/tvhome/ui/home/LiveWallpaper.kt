@@ -131,7 +131,6 @@ fun LiveWallpaper(
     val panelNow by rememberUpdatedState(panel)
     val otherFormatNow by rememberUpdatedState(otherFormatSaver)
     val lastInputNow by rememberUpdatedState(lastInputAt)
-    var fresh by remember { mutableStateOf(false) }
     var blackForFilm by remember { mutableStateOf(false) }
     var pictureStale by remember { mutableStateOf(false) }
 
@@ -157,7 +156,6 @@ fun LiveWallpaper(
         val quality = AerialFormats.forWallpaper(context)
         val overHttp = Build.VERSION.SDK_INT < Build.VERSION_CODES.N
         val spot = Wallpapers.liveSpot()
-        fresh = false
         val films = AerialSet.playlist(context, spot?.first)
         val resume = films.first().takeIf { it.id == spot?.first }
         var failures = 0
@@ -423,7 +421,6 @@ fun LiveWallpaper(
     LaunchedEffect(keep) {
         if (!keep && !play && player != null && cover.value == 0f) release()
         if (!keep && otherFormatNow) {
-            fresh = true
             blackForFilm = true
         }
         if (keep) goOnFromPicture()
