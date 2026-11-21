@@ -173,9 +173,6 @@ object TopShelfContent {
             .getBoolean("shelf_app_art", false)
 
     private const val ART_KEEP_MS = 60_000L
-    private val artCache = object : android.util.LruCache<String, Bitmap>(3) {
-        override fun sizeOf(key: String, value: Bitmap): Int = 1
-    }
     private val amazonArt = java.util.regex.Pattern.compile("""^(https://m\.media-amazon\.com/images/S/[^.]+)\._UR(\d+),(\d+)_\..*$""")
 
     fun appArtBackdrop(context: Context, pkg: String, cards: List<ShelfCard>, w: Int, h: Int): Bitmap? {
@@ -222,13 +219,11 @@ object TopShelfContent {
     }
 
     private fun still(context: Context, key: String, w: Int, h: Int): Bitmap? {
-        artCache.get(key)?.let { return it }
         val file = File(File(context.filesDir, "appart"), key.hashCode().toString() + ".jpg")
         if (file.exists()) {
             runCatching {
                 BitmapFactory.decodeFile(file.absolutePath)?.let { bmp ->
                     val out = Images.cover(bmp, w, h).also { if (it !== bmp) bmp.recycle() }
-                    artCache.put(key, out)
                     return out
                 }
             }
@@ -253,7 +248,6 @@ object TopShelfContent {
                 out.compress(Bitmap.CompressFormat.JPEG, 92, fos)
             }
         }.onFailure { file.delete() }
-        artCache.put(key, out)
         return out
     }
 
@@ -887,8 +881,6 @@ internal object TopShelfLogos {
     private val fillPat = java.util.regex.Pattern.compile("fill=\"#([0-9a-fA-F]{6})\"")
     private val dPat = java.util.regex.Pattern.compile("<path[^>]*\\sd=\"([^\"]+)\"")
 
-    private val asked = java.util.Collections.synchronizedSet(mutableSetOf<String>())
-
     private fun slugFor(pkg: String, label: String): String {
         slugs[pkg]?.let { return it }
         return label.lowercase(java.util.Locale.ROOT)
@@ -921,7 +913,6 @@ internal object TopShelfLogos {
     }
 
     fun prefetch(context: Context, pkg: String, label: String) {
-        if (!asked.add(pkg)) return
         val appContext = context.applicationContext
         logosExecutor.execute {
             runCatching {

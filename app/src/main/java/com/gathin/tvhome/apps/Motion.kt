@@ -173,7 +173,6 @@ object Motion {
     )
 
     private val PROGRESS: WeakHashMap<Any, Spring> = WeakHashMap()
-    private val MOVING: MutableList<(Boolean) -> Unit> = ArrayList()
 
     private val movingViews: WeakHashMap<View, Moving> = WeakHashMap()
 
@@ -363,13 +362,6 @@ object Motion {
         }
     }
 
-    private fun stillness(moving: Boolean) {
-        val snapshot = ArrayList(MOVING)
-        for (consumer in snapshot) {
-            consumer(moving)
-        }
-    }
-
     private class Arrival(
         private val done: (() -> Unit)?,
     ) {
@@ -434,9 +426,6 @@ object Motion {
             } else {
                 val wasRunning = running
                 running = wasRunning + 1
-                if (wasRunning == 0) {
-                    Motion.stillness(true)
-                }
             }
             arrivals[index] = arrival
             arrival.add()
@@ -464,9 +453,6 @@ object Motion {
             val arrival = arrivals[index] ?: return
             arrivals[index] = null
             running -= 1
-            if (running == 0) {
-                Motion.stillness(false)
-            }
             arrival.arrived()
         }
     }

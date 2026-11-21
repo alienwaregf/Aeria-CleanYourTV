@@ -22,8 +22,6 @@ import kotlin.math.ceil
 class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(context) {
 
     interface Actions {
-        fun above(): View?
-        fun dock(): View?
         fun open(show: ShelfCard, view: View): Boolean
     }
 

@@ -65,7 +65,12 @@ object AppBackgrounds {
                 return null
             }
             cache[pkg] = Cached(stamp, bmp, frosted)
-            while (cache.size > CACHE_MAX) cache.remove(cache.entries.first().key)
+            while (cache.size > CACHE_MAX) {
+                cache.remove(cache.entries.first().key)?.let { evicted ->
+                    evicted.bitmap.recycle()
+                    evicted.frosted.recycle()
+                }
+            }
             return bmp to frosted
         }
     }
@@ -79,7 +84,12 @@ object AppBackgrounds {
     }
 
     fun dropCached(pkg: String) {
-        synchronized(cache) { cache.remove(pkg) }
+        synchronized(cache) {
+            cache.remove(pkg)?.let { evicted ->
+                evicted.bitmap.recycle()
+                evicted.frosted.recycle()
+            }
+        }
     }
 
     fun setUrl(context: Context, pkg: String, url: String): Boolean {

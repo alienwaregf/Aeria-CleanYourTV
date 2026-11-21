@@ -35,8 +35,6 @@ fun rememberShelfHost(
     val covers = remember { mutableStateOf(false) }
     val shelf = remember(context) {
         Shelf(context, object : ShelfCards.Actions {
-            override fun above(): View? = null
-            override fun dock(): View? = null
             override fun open(show: ShelfCard, view: View): Boolean {
                 val detail = TopShelfContent.cardIntent(context, show, show.pkg)
                 if (detail != null && TopShelfContent.launchCard(context, detail, view)) return true
