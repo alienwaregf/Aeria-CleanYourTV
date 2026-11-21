@@ -32,6 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -283,13 +284,14 @@ object TmdbTrending {
             val body = c.inputStream.use { it.readBytes().decodeToString() }
             val filtered = parseTrending(JSONObject(body))
             if (filtered.isEmpty()) throw IOException("no usable trending items")
-            return filtered.map {
+            return filtered.mapIndexed { index, item ->
                 currentCoroutineContext().ensureActive()
-                val (logo, bestBackdrop) = fetchImageDetails(key, it)
-                val providers = fetchProviderUrls(key, it)
-                it.copy(
+                if (index > 0) delay(1000)
+                val (logo, bestBackdrop) = fetchImageDetails(key, item)
+                val providers = fetchProviderUrls(key, item)
+                item.copy(
                     logoUrl = logo,
-                    backdropUrl = bestBackdrop.ifBlank { it.backdropUrl },
+                    backdropUrl = bestBackdrop.ifBlank { item.backdropUrl },
                     providerUrls = providers ?: emptyList(),
                     providersFetched = providers != null,
                 )
