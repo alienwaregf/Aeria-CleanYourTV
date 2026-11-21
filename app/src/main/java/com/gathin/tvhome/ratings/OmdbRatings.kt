@@ -11,7 +11,7 @@ import java.net.URLEncoder
 
 object OmdbRatings {
     private const val PREFS = "launcher_settings"
-    private const val KEY_OMDB_KEY = "omdb_key"
+    const val KEY_OMDB_KEY = "omdb_key"
     private const val OMDB_URL = "https://www.omdbapi.com/"
 
     private lateinit var launcherPrefs: SharedPreferences

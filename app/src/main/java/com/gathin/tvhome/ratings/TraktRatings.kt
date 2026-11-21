@@ -11,7 +11,7 @@ import java.net.URLEncoder
 
 object TraktRatings {
     private const val PREFS = "launcher_settings"
-    private const val KEY_TRAKT_CLIENT_ID = "trakt_client_id"
+    const val KEY_TRAKT_CLIENT_ID = "trakt_client_id"
 
     private lateinit var launcherPrefs: SharedPreferences
 
@@ -41,9 +41,15 @@ object TraktRatings {
         val rtAudienceState: String = "",
     )
 
-    fun fetchRatings(item: TmdbItem, imdbId: String): TraktResult? {
+    sealed interface TraktFetch {
+        data class Found(val result: TraktResult) : TraktFetch
+        data object NoRating : TraktFetch
+        data object Failed : TraktFetch
+    }
+
+    fun fetchRatings(item: TmdbItem, imdbId: String): TraktFetch {
         val id = clientId()
-        if (id.isEmpty() || imdbId.isBlank()) return null
+        if (id.isEmpty() || imdbId.isBlank()) return TraktFetch.Failed
         return runCatching {
             val kind = if (item.mediaType == "tv") "shows" else "movies"
             val url = "https://api.trakt.tv/$kind/${URLEncoder.encode(imdbId, "UTF-8")}/ratings?extended=all"
@@ -54,25 +60,27 @@ object TraktRatings {
             c.setRequestProperty("trakt-api-version", "2")
             c.setRequestProperty("trakt-api-key", id)
             try {
-                if (c.responseCode !in 200..299) return@runCatching null
+                if (c.responseCode !in 200..299) return@runCatching TraktFetch.Failed
                 val body = c.inputStream.use { it.readBytes().decodeToString() }
                 val root = JSONObject(body)
                 val traktObj = root.optJSONObject("trakt")
                 val rating = traktObj?.optDouble("rating", -1.0) ?: root.optDouble("rating", -1.0)
-                if (rating < 0.0) return@runCatching null
+                if (rating < 0.0) return@runCatching TraktFetch.NoRating
                 val votes = traktObj?.optInt("votes", 0) ?: root.optInt("votes", 0)
                 val rt = root.optJSONObject("rotten_tomatoes")
-                TraktResult(
-                    rating = rating,
-                    votes = votes,
-                    rtPercent = rt?.optInt("rating", -1) ?: -1,
-                    rtState = rt?.optString("state", "") ?: "",
-                    rtAudiencePercent = rt?.optInt("user_rating", -1) ?: -1,
-                    rtAudienceState = rt?.optString("user_state", "") ?: "",
+                TraktFetch.Found(
+                    TraktResult(
+                        rating = rating,
+                        votes = votes,
+                        rtPercent = rt?.optInt("rating", -1) ?: -1,
+                        rtState = rt?.optString("state", "") ?: "",
+                        rtAudiencePercent = rt?.optInt("user_rating", -1) ?: -1,
+                        rtAudienceState = rt?.optString("user_state", "") ?: "",
+                    )
                 )
             } finally {
                 c.disconnect()
             }
-        }.getOrNull()
+        }.getOrElse { TraktFetch.Failed }
     }
 }

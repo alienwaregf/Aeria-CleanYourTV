@@ -1,6 +1,7 @@
 package com.gathin.tvhome.ratings
 
 import android.content.Context
+import com.gathin.tvhome.R
 import com.gathin.tvhome.tmdb.TmdbItem
 import com.gathin.tvhome.tmdb.TmdbTrending
 import com.gathin.tvhome.wallpaper.ScreensaverMode
@@ -38,6 +39,24 @@ object Ratings {
 
     fun setTraktClientId(id: String) = TraktRatings.setClientId(id)
 
+    fun rtCriticIcon(state: String, percent: Int): Int {
+        return when (state.lowercase()) {
+            "certified_fresh" -> R.drawable.ic_rt_certified_fresh
+            "fresh" -> R.drawable.ic_rt_fresh
+            "rotten" -> R.drawable.ic_rt_rotten
+            else -> if (percent >= 60) R.drawable.ic_rt_fresh else R.drawable.ic_rt_rotten
+        }
+    }
+
+    fun rtAudienceIcon(state: String, percent: Int): Int {
+        return when (state.lowercase()) {
+            "verified_hot" -> R.drawable.ic_rt_verified_hot
+            "upright" -> R.drawable.ic_rt_popcorn
+            "spilled" -> R.drawable.ic_rt_popcorn_spilled
+            else -> if (percent >= 60) R.drawable.ic_rt_popcorn else R.drawable.ic_rt_popcorn_spilled
+        }
+    }
+
     suspend fun fetchFor(item: TmdbItem, allowOmdb: Boolean = false) {
         if (!Wallpapers.isTrending() && Wallpapers.screensaver != ScreensaverMode.Trending) return
         val now = System.currentTimeMillis()
@@ -74,12 +93,13 @@ object Ratings {
             if (tmdbKey.isBlank()) return cur
             val resolved = OmdbRatings.fetchImdbId(cur, tmdbKey)
             if (resolved == null) {
-                if (omdbDue) markFailed(cur, "omdb") else markFailed(cur, "trakt")
+                if (omdbDue) markFailed(cur, "omdb")
+                if (traktDue) markFailed(cur, "trakt")
                 return cur
             }
             if (resolved.isBlank()) return cur.copy(
                 omdbFetchedAt = if (omdbDue) now else cur.omdbFetchedAt,
-                traktFetchedAt = now,
+                traktFetchedAt = if (traktDue) now else cur.traktFetchedAt,
             )
             imdbId = resolved
             cur = cur.copy(imdbId = resolved)
@@ -113,20 +133,26 @@ object Ratings {
     private fun fetchTrakt(item: TmdbItem, imdbId: String): TmdbItem {
         if (recentlyFailed(item, "trakt")) return item
         if (imdbId.isBlank()) return item.copy(traktFetchedAt = System.currentTimeMillis())
-        val result = TraktRatings.fetchRatings(item, imdbId) ?: run {
-            markFailed(item, "trakt")
-            return item
+        return when (val outcome = TraktRatings.fetchRatings(item, imdbId)) {
+            is TraktRatings.TraktFetch.Found -> {
+                val result = outcome.result
+                item.copy(
+                    imdbId = imdbId,
+                    traktRating = result.rating,
+                    traktVotes = result.votes,
+                    rtPercent = result.rtPercent,
+                    rtState = result.rtState,
+                    rtAudiencePercent = result.rtAudiencePercent,
+                    rtAudienceState = result.rtAudienceState,
+                    traktFetchedAt = System.currentTimeMillis(),
+                )
+            }
+            TraktRatings.TraktFetch.NoRating -> item.copy(imdbId = imdbId, traktFetchedAt = System.currentTimeMillis())
+            TraktRatings.TraktFetch.Failed -> {
+                markFailed(item, "trakt")
+                item
+            }
         }
-        return item.copy(
-            imdbId = imdbId,
-            traktRating = result.rating,
-            traktVotes = result.votes,
-            rtPercent = result.rtPercent,
-            rtState = result.rtState,
-            rtAudiencePercent = result.rtAudiencePercent,
-            rtAudienceState = result.rtAudienceState,
-            traktFetchedAt = System.currentTimeMillis(),
-        )
     }
 
     private fun recentlyFailed(item: TmdbItem, source: String): Boolean {
