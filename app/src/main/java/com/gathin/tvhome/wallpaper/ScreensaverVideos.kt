@@ -1,6 +1,8 @@
 package com.gathin.tvhome.wallpaper
 
 import android.content.Context
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.util.Log
 import org.json.JSONObject
@@ -56,9 +58,10 @@ object ScreensaverVideos {
         reservedSlots = (reservedSlots - 1).coerceAtLeast(0)
     }
 
-    fun receive(context: Context, input: InputStream, length: Long, name: String): ScreensaverVideo? {
-        if (length <= 0 || titleOf(name) == null) return null
-        if (!reserve(context, length)) return null
+    fun receive(context: Context, input: InputStream, length: Long, name: String): ReceiveResult {
+        if (titleOf(name) == null) return ReceiveResult.Rejected("bad_name")
+        if (length <= 0) return ReceiveResult.Rejected("empty")
+        if (!reserve(context, length)) return ReceiveResult.Rejected("no_room")
         val part = File(directory(context), "import-${UUID.randomUUID().toString().replace("-", "")}.part")
         var held = true
         return try {
@@ -67,7 +70,7 @@ object ScreensaverVideos {
                 var left = length
                 while (left > 0) {
                     val n = input.read(buffer, 0, minOf(buffer.size.toLong(), left).toInt())
-                    if (n < 0) return null
+                    if (n < 0) return ReceiveResult.Rejected("interrupted")
                     out.write(buffer, 0, n)
                     left -= n
                 }
@@ -77,28 +80,36 @@ object ScreensaverVideos {
             add(context, part, name)
         } catch (e: IOException) {
             Log.w("AerialVideos", "screensaver video upload broke off", e)
-            null
+            ReceiveResult.Rejected("interrupted")
         } finally {
             if (held) release(length)
             part.delete()
         }
     }
 
+    sealed interface ReceiveResult {
+        data class Saved(val video: ScreensaverVideo) : ReceiveResult
+        data class Rejected(val reason: String) : ReceiveResult
+    }
+
     @Synchronized
-    private fun add(context: Context, upload: File, name: String): ScreensaverVideo? {
+    private fun add(context: Context, upload: File, name: String): ReceiveResult {
         val root = directory(context)
         root.listFiles()?.filter { it.name.startsWith("import-") && it.lastModified() < System.currentTimeMillis() - 3_600_000 }
             ?.forEach { it.deleteRecursively() }
         val size = upload.length()
-        if (size <= 0 || size > room(context, pending = size)) return null
-        val title = titleOf(name) ?: return null
+        if (size <= 0 || size > room(context, pending = size)) return ReceiveResult.Rejected("no_room")
+        val title = titleOf(name) ?: return ReceiveResult.Rejected("bad_name")
         val metadata = MediaMetadataRetriever()
-        val valid = try {
+        val valid = (try {
             metadata.setDataSource(upload.absolutePath)
             metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_HAS_VIDEO) == "yes" &&
                 (metadata.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0) > 0
-        } catch (_: Exception) { false } finally { runCatching { metadata.release() } }
-        if (!valid) return null
+        } catch (_: Exception) { false } finally { runCatching { metadata.release() } }) || hasVideoTrack(upload)
+        if (!valid) {
+            Log.w("AerialVideos", "screensaver video has no video track: $name")
+            return ReceiveResult.Rejected("not_a_video")
+        }
 
         val id = UUID.randomUUID().toString().replace("-", "")
         val staging = File(root, "import-$id")
@@ -109,11 +120,25 @@ object ScreensaverVideos {
             if (!upload.renameTo(film)) upload.copyTo(film)
             File(staging, "info.json").writeText(JSONObject().put("name", title).toString())
             check(staging.renameTo(target))
-            ScreensaverVideo(id, title, File(target, "video.mp4"))
+            ReceiveResult.Saved(ScreensaverVideo(id, title, File(target, "video.mp4")))
         } catch (e: Exception) {
             Log.w("AerialVideos", "could not store a screensaver video", e)
-            null
+            ReceiveResult.Rejected("store_failed")
         } finally { staging.deleteRecursively() }
+    }
+
+    private fun hasVideoTrack(file: File): Boolean {
+        val extractor = MediaExtractor()
+        return try {
+            extractor.setDataSource(file.absolutePath)
+            (0 until extractor.trackCount).any {
+                extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true
+            }
+        } catch (_: Exception) {
+            false
+        } finally {
+            runCatching { extractor.release() }
+        }
     }
 
     @Synchronized

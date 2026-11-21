@@ -19,7 +19,9 @@ import com.gathin.tvhome.apps.SourceDevice
 import com.gathin.tvhome.apps.SourceLooks
 import com.gathin.tvhome.apps.TileArtFactory
 import com.gathin.tvhome.settings.AerialSettings
+import com.gathin.tvhome.ratings.OmdbRatings
 import com.gathin.tvhome.ratings.Ratings
+import com.gathin.tvhome.ratings.TraktRatings
 import com.gathin.tvhome.system.Diagnostics
 import com.gathin.tvhome.system.currentNetwork
 import com.gathin.tvhome.settings.FocusStyle
@@ -242,7 +244,7 @@ class PhoneServer private constructor(private val context: Context, private val 
                 apps.forEach { (a, label) ->
                     val icon = when {
                         CustomIcons.has(a.key) -> "custom"
-                        IconLibrary.has(a.key) && IconLibrary.uses(a.key) -> "library"
+                        IconLibrary.has(a.key) && AppCatalog.usesLibrary(a.key) -> "library"
                         else -> "own"
                     }
                     put(JSONObject().put("key", a.key).put("label", label).put("default", a.label).put("name", AppNames.of(a.key) ?: "")
@@ -273,26 +275,26 @@ class PhoneServer private constructor(private val context: Context, private val 
                 Weather.now?.let { put("celsius", it.celsius); put("kind", it.kind.name.lowercase()); it.aqi?.let { a -> put("aqi", a) } }
             })
             .put("tmdb", JSONObject().apply {
-                val tmdbKey = context.getSharedPreferences("launcher_settings", Context.MODE_PRIVATE).getString("tmdb_key", "").orEmpty()
+                val tmdbKey = context.getSharedPreferences("launcher_settings", Context.MODE_PRIVATE).getString(TmdbTrending.KEY_TMDB_KEY, "").orEmpty()
                 put("keyMasked", if (tmdbKey.isEmpty()) "" else if (tmdbKey.length <= 4) "••••" else "••••" + tmdbKey.takeLast(4))
                 put("keySet", tmdbKey.isNotBlank())
             })
             .put("ratings", JSONObject().apply {
                 val prefs = context.getSharedPreferences("launcher_settings", Context.MODE_PRIVATE)
-                val omdbKey = prefs.getString("omdb_key", "").orEmpty()
+                val omdbKey = prefs.getString(OmdbRatings.KEY_OMDB_KEY, "").orEmpty()
                 put("omdbKeyMasked", if (omdbKey.isEmpty()) "" else if (omdbKey.length <= 4) "••••" else "••••" + omdbKey.takeLast(4))
                 put("omdbKeySet", omdbKey.isNotBlank())
-                val traktId = prefs.getString("trakt_client_id", "").orEmpty()
+                val traktId = prefs.getString(TraktRatings.KEY_TRAKT_CLIENT_ID, "").orEmpty()
                 put("traktClientIdMasked", if (traktId.isEmpty()) "" else if (traktId.length <= 4) "••••" else "••••" + traktId.takeLast(4))
                 put("traktClientIdSet", traktId.isNotBlank())
             })
             .put("slimming", JSONObject().apply {
                 val slim = context.getSharedPreferences("launcher_settings", Context.MODE_PRIVATE)
-                put("label", slim.getString("slimming_label", "") ?: "")
-                put("date", slim.getString("slimming_date", "") ?: "")
-                put("notes", slim.getString("slimming_notes", "") ?: "")
-                put("daily", slim.getBoolean("slimming_daily_check", true))
-                put("list", slim.getString("slimming_list", "") ?: "")
+                put("label", slim.getString(SystemSlimmingActivity.KEY_LABEL, "") ?: "")
+                put("date", slim.getString(SystemSlimmingActivity.KEY_DATE, "") ?: "")
+                put("notes", slim.getString(SystemSlimmingActivity.KEY_NOTES, "") ?: "")
+                put("daily", slim.getBoolean(SystemSlimmingActivity.KEY_SLIMMING_DAILY, true))
+                put("list", slim.getString(SystemSlimmingActivity.KEY_LIST, "") ?: "")
             })
     }
 
@@ -343,7 +345,7 @@ class PhoneServer private constructor(private val context: Context, private val 
         val library = isApp && !own && IconLibrary.has(pkg)
         val picked = when {
             own || !isApp -> null
-            else -> CustomIcons.load(pkg) ?: if (library && IconLibrary.uses(pkg)) IconLibrary.load(pkg) else null
+            else -> CustomIcons.load(pkg) ?: if (library && AppCatalog.usesLibrary(pkg)) IconLibrary.load(pkg) else null
         }
         val bmp = picked ?: run {
             val art = if (isApp && (own || library)) AppCatalog.ownArt(context, app) ?: app.art else app.art
@@ -376,7 +378,7 @@ class PhoneServer private constructor(private val context: Context, private val 
         .put("base", IconLibrary.PICTURES)
         .put("apps", JSONArray().apply {
             IconLibrary.catalog().toSortedMap().forEach { (pkg, choices) ->
-                put(JSONObject().put("app", pkg).put("choices", JSONArray().apply {
+                put(JSONObject().put("app", pkg).put("name", IconLibrary.names.optJSONObject(pkg)).put("choices", JSONArray().apply {
                     choices.forEach { put(JSONObject().put("id", it.id).put("p", it.path)) }
                 }))
             }
@@ -426,9 +428,15 @@ class PhoneServer private constructor(private val context: Context, private val 
     private fun video(session: IHTTPSession): Response {
         val length = session.headers["content-length"]?.toLongOrNull() ?: 0L
         val name = session.parameters["name"]?.firstOrNull().orEmpty()
-        val saved = ScreensaverVideos.receive(context, session.inputStream, length, name) != null
-        if (saved) onMain { Wallpapers.videosChanged() }
-        return json(state().put("saved", saved)).apply { if (!saved) closeConnection(true) }
+        return when (val result = ScreensaverVideos.receive(context, session.inputStream, length, name)) {
+            is ScreensaverVideos.ReceiveResult.Saved -> {
+                onMain { Wallpapers.videosChanged() }
+                json(state().put("saved", true))
+            }
+            is ScreensaverVideos.ReceiveResult.Rejected -> {
+                json(state().put("saved", false).put("videoError", result.reason)).apply { closeConnection(true) }
+            }
+        }
     }
 
     private fun tooLarge(session: IHTTPSession): Boolean =

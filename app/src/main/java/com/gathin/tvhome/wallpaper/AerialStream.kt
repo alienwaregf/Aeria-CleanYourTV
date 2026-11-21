@@ -150,7 +150,7 @@ object AerialStream {
             val cache = cache(context)
             val key = key(film, quality)
             val known = ContentMetadata.getContentLength(cache.getContentMetadata(key))
-            if (known > TAIL_BYTES && cache.isCached(key, 0, LEAD_BYTES) && cache.isCached(key, known - TAIL_BYTES, TAIL_BYTES)) return@runInterruptible
+            if (known > 0 && cache.isCached(key, 0, LEAD_BYTES) && cache.isCached(key, known - TAIL_BYTES, TAIL_BYTES)) return@runInterruptible
             val started = SystemClock.elapsedRealtime()
             runCatching {
                 val uri = android.net.Uri.parse(url(film, quality, overHttp))

@@ -3,6 +3,7 @@ package com.gathin.tvhome.wallpaper
 import android.graphics.Bitmap
 import android.graphics.ImageFormat
 import android.media.MediaCodec
+import android.media.MediaCodecList
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.net.Uri
@@ -126,7 +127,7 @@ internal object FilmKeyFrame {
                     val found = map
                     if (found != null) {
                         val mime = video.format?.sampleMimeType
-                        if (mime != MimeTypes.VIDEO_H264 && mime != MimeTypes.VIDEO_H265) error("video is $mime")
+                        if (mime != MimeTypes.VIDEO_H264 && mime != MimeTypes.VIDEO_H265 && mime != MimeTypes.VIDEO_AV1) error("video is $mime")
                         kept = Index(uri, key, extractor, video, found)
                         break
                     }
@@ -176,14 +177,24 @@ internal object FilmKeyFrame {
 
     private class Decoded(val bitmap: Bitmap, val codec: String, val decodeMs: Long, val convertMs: Long)
 
+    private val installedCodecs: Set<String> by lazy {
+        runCatching { MediaCodecList(MediaCodecList.ALL_CODECS).codecInfos.map { it.name }.toSet() }.getOrDefault(emptySet())
+    }
+
+    private val decoders = mapOf(
+        MimeTypes.VIDEO_H264 to listOf("c2.android.avc.decoder", "OMX.google.h264.decoder"),
+        MimeTypes.VIDEO_H265 to listOf("c2.android.hevc.decoder", "OMX.google.hevc.decoder"),
+        MimeTypes.VIDEO_AV1 to listOf("c2.android.av1.decoder", "c2.android.av1-dav1d.decoder"),
+    )
+
     private fun decodeSample(sample: Sample, w: Int, h: Int): Decoded {
         val started = SystemClock.elapsedRealtime()
         val mime = sample.format.sampleMimeType!!
-        val names = if (mime == MimeTypes.VIDEO_H264) listOf("c2.android.avc.decoder", "OMX.google.h264.decoder")
-        else listOf("c2.android.hevc.decoder", "OMX.google.hevc.decoder")
+        val names = decoders[mime] ?: error("no software decoder for $mime")
         var codec: MediaCodec? = null
         var name = ""
         for (n in names) {
+            if (n !in installedCodecs) continue
             codec = runCatching { MediaCodec.createByCodecName(n) }.getOrNull()
             if (codec != null) { name = n; break }
         }

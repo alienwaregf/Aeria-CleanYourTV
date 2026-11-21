@@ -130,8 +130,10 @@ object Wallpapers {
         }
         chosenScreensaver = ScreensaverMode.of(prefs.getString("screensaver", null))
         rebuildList()
-        loadBaked()
-        rebuildBackdrop()
+        scope.launch {
+            loadBaked()
+            rebuildBackdrop()
+        }
         scope.launch(Dispatchers.IO) { clearStaleUploads() }
         scope.launch(Dispatchers.IO) { keepForLockedBoot() }
     }
@@ -145,6 +147,7 @@ object Wallpapers {
     }
 
     fun select(id: String) {
+        if (items.isNotEmpty() && items.none { it.id == id }) return
         selectedId = id
         prefs.edit { putString("selected", id) }
         rebuildBackdrop()
@@ -293,18 +296,30 @@ object Wallpapers {
         return "${wp.id}|$stamp|${screenW}x$screenH|${BuildConfig.VERSION_CODE}$film"
     }
 
-    private fun loadBaked() {
+    private suspend fun loadBaked() {
         if (selectedId == AUTO) return
-        runCatching {
-            val key = File(bakedDir, "key").takeIf { it.exists() }?.readText() ?: return
-            val home = BitmapFactory.decodeFile(File(bakedDir, "home.jpg").path) ?: return
-            val frost = BitmapFactory.decodeFile(File(bakedDir, "frost.png").path) ?: return
-            if (home.width != screenW || home.height != screenH) return
-            if (frost.width != 320 || frost.height != 180) return
-            backdrop = home.asImageBitmap()
-            frosted = frost.asImageBitmap()
-            bakedKey = key
-        }.onFailure { Log.w(TAG, "could not read the baked backdrop", it) }
+        val id = selectedId
+        val loaded = withContext(Dispatchers.IO) {
+            runCatching {
+                val key = File(bakedDir, "key").takeIf { it.exists() }?.readText() ?: return@runCatching null
+                val home = BitmapFactory.decodeFile(File(bakedDir, "home.jpg").path) ?: return@runCatching null
+                val frost = BitmapFactory.decodeFile(File(bakedDir, "frost.png").path) ?: return@runCatching null
+                if (home.width != screenW || home.height != screenH || frost.width != 320 || frost.height != 180) {
+                    home.recycle()
+                    frost.recycle()
+                    return@runCatching null
+                }
+                Triple(key, home, frost)
+            }.onFailure { Log.w(TAG, "could not read the baked backdrop", it) }.getOrNull()
+        } ?: return
+        if (selectedId != id) {
+            loaded.second.recycle()
+            loaded.third.recycle()
+            return
+        }
+        backdrop = loaded.second.asImageBitmap()
+        frosted = loaded.third.asImageBitmap()
+        bakedKey = loaded.first
     }
 
     private suspend fun saveBaked(key: String, home: Bitmap, frost: Bitmap) {
@@ -379,31 +394,13 @@ object Wallpapers {
             return false
         }
         val id = selectedId
-        val key = if (isVideo(id)) "video" else "live"
-        val target = if (isVideo(id)) videoFrame else liveFrame
-        val part = File(target.path + ".part")
-        val (bmp, frost) = withContext(Dispatchers.Default) {
-            runCatching { part.outputStream().use { frame.compress(Bitmap.CompressFormat.JPEG, 90, it) } }
-                .onFailure { Log.w(TAG, "could not keep the film's frame", it) }
-            Images.frost(frame).let { frost -> frame to frost }
-        }
+        val prepared = prepareLiveFrame(frame)
         if (!wanted() || selectedId != id) {
-            part.delete()
-            frost.recycle()
-            frame.recycle()
+            prepared.frame.recycle()
+            prepared.frost.recycle()
             return false
         }
-        backdropJob?.cancel()
-        if (part.exists() && !part.renameTo(target)) part.delete()
-        if (isVideo(id)) videoLeftHere = null else leftHere = null
-        prefs.edit { putString("${key}_film", film).putLong("${key}_at", atMs).remove("${key}_left_film").remove("${key}_left_at") }
-        if (isVideo(id)) withContext(Dispatchers.IO) { videoFilms(VIDEOS).firstOrNull { it.id == film }?.let { keepPoster(it, frame) } }
-        synchronized(thumbs) { thumbs.remove(id); if (isVideo(id)) { thumbs.remove(VIDEOS); thumbs.remove(VIDEO_PREFIX + film) } }
-        backdrop = bmp.asImageBitmap()
-        frosted = frost.asImageBitmap()
-        pictureVersion++
-        resolve(id)?.let { saveBaked(bakedKey(it), bmp, frost) }
-        return true
+        return applyLiveFrame(prepared, film, atMs)
     }
 
     fun liveSpot(): Pair<String, Long>? = leftLiveSpot() ?: livePictureSpot()
@@ -492,7 +489,9 @@ object Wallpapers {
         filmFrost = withContext(Dispatchers.Default) {
             val src = start.asAndroidBitmap()
             val quarter = Bitmap.createScaledBitmap(src, src.width / 4, src.height / 4, true)
-            Images.frost(Bitmap.createScaledBitmap(quarter, 16, 9, true))
+            val tiny = Bitmap.createScaledBitmap(quarter, 16, 9, true)
+            quarter.recycle()
+            Images.frost(tiny).also { tiny.recycle() }
         }.asImageBitmap()
     }
 
