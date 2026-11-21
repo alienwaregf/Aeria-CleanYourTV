@@ -22,6 +22,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import com.gathin.tvhome.system.Sounds
@@ -53,6 +59,7 @@ fun Pressable(
     focusRequester: FocusRequester? = null,
     focusedScale: Float = 1.06f,
     onKey: ((KeyEvent) -> Boolean)? = null,
+    label: String? = null,
     content: @Composable BoxScope.(PressState) -> Unit,
 ) {
     val state = remember { PressState() }
@@ -119,6 +126,12 @@ fun Pressable(
                     }
                     else -> false
                 }
+            }
+            .semantics(mergeDescendants = true) {
+                role = Role.Button
+                label?.let { contentDescription = it }
+                if (!enabled) disabled()
+                onClick { Sounds.select(); click(); true }
             }
             .focusable(enabled)
             .graphicsLayer { scaleX = scale; scaleY = scale },

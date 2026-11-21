@@ -45,7 +45,7 @@ object UhdCanvas {
         val ui = context.resources.displayMetrics.let { maxOf(it.widthPixels, it.heightPixels) }
         val mode = maxOf(display.mode.physicalWidth, display.mode.physicalHeight)
         if (forced == null && !chipHas4kUi()) return no("auto: no 4K UI plane (mode $mode for a $ui UI)")
-        val panel = maxOf(mode, tclPanel())
+        val panel = maxOf(mode, tclPanel(), vendorDisplaySize())
         if (forced == null) return no("auto: off until a 4K UI plane is seen to show it ($panel for a $ui UI)")
         if (ui <= 0 || panel < ui * 2) return no("mode $mode for a $ui UI")
         why = "${if (forced == true) "forced" else "auto"}: $panel for a $ui UI"
@@ -67,6 +67,8 @@ object UhdCanvas {
     private fun chipHas4kUi(): Boolean = systemProperty("ro.feature.graphics_4kui") == "true"
 
     private fun tclPanel(): Int = systemProperty("ro.odm.tcl.panel_resolution")?.substringBefore('x')?.toIntOrNull() ?: 0
+
+    private fun vendorDisplaySize(): Int = systemProperty("vendor.display-size")?.substringBefore('x')?.trim()?.toIntOrNull() ?: 0
 
     private fun systemProperty(key: String): String? = runCatching {
         Class.forName("android.os.SystemProperties").getMethod("get", String::class.java).invoke(null, key) as String
