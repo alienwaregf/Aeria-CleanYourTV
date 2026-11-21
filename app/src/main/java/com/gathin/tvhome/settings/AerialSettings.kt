@@ -37,6 +37,14 @@ enum class Effects(val key: String) {
     }
 }
 
+enum class ClockHours(val key: String) {
+    System("system"), Twelve("12"), TwentyFour("24");
+
+    companion object {
+        fun of(key: String?) = entries.firstOrNull { it.key == key } ?: System
+    }
+}
+
 object AerialSettings {
     private const val PREFS = "settings"
     private var started = false
@@ -74,6 +82,8 @@ object AerialSettings {
     var clockRight by mutableStateOf(false); private set
 
     var largeClock by mutableStateOf(false); private set
+
+    var clockHours by mutableStateOf(ClockHours.System); private set
 
     var wallpaperAlwaysMoves by mutableStateOf(false); private set
 
@@ -131,6 +141,7 @@ object AerialSettings {
         chosenColumns = prefs.getInt("home_columns", DEFAULT_HOME_COLUMNS).takeIf { it in HOME_COLUMNS } ?: DEFAULT_HOME_COLUMNS
         clockRight = prefs.getBoolean("clock_right", false)
         largeClock = prefs.getBoolean("large_clock", false)
+        clockHours = ClockHours.of(prefs.getString("clock_hours", null))
         homePlate = prefs.getBoolean("home_plate", true)
         chosenAllNames = prefs.getBoolean("show_all_names", false)
         wallpaperAlwaysMoves = prefs.getBoolean("wallpaper_always_moves", false)
@@ -227,6 +238,11 @@ object AerialSettings {
     fun chooseLargeClock(on: Boolean) {
         largeClock = on
         app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("large_clock", on) }
+    }
+
+    fun chooseClockHours(hours: ClockHours) {
+        clockHours = hours
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putString("clock_hours", hours.key) }
     }
 
     fun chooseShowAllNames(on: Boolean) {
