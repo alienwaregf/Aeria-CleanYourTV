@@ -35,7 +35,6 @@ object Updates {
         }.onFailure {
             Log.w(TAG, "self compile: no session", it)
             DiagLog.i("self compile: no session (${it.javaClass.simpleName}: ${it.message})")
-            SelfCompile.onInstallResult(app, success = false)
         }
     }
 
@@ -94,7 +93,6 @@ object Updates {
         val id = intent.getIntExtra(PackageInstaller.EXTRA_SESSION_ID, -1)
         if (status == PackageInstaller.STATUS_SUCCESS) {
             DiagLog.i("self compile: installed, odex ${SelfCompile.odexBytes(app)?.div(1024)} KB")
-            SelfCompile.onInstallResult(app, success = true)
             return
         }
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION && !auto) {
@@ -106,6 +104,5 @@ object Updates {
         val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
         Log.w(TAG, "self compile: not installed ($status, $message)")
         DiagLog.i("self compile: not installed ($status, $message)")
-        SelfCompile.onInstallResult(app, success = false)
     }
 }
