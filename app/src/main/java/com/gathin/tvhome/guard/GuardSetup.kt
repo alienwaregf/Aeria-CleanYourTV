@@ -165,9 +165,9 @@ object GuardSetup {
     fun noteRevival(context: Context) {
         if (context.getSystemService<PowerManager>()?.isInteractive == false) return
         if (revivalNoted || SystemClock.elapsedRealtime() < BOOT_START_MS) return
-        revivalNoted = true
         val updatedAt = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime }.getOrDefault(0L)
         if (System.currentTimeMillis() - updatedAt in 0..BOOT_START_MS) return
+        revivalNoted = true
         val now = System.currentTimeMillis()
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val recent = recentRevivals(context, now) + now
