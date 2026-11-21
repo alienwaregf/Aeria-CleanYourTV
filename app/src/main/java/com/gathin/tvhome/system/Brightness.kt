@@ -16,10 +16,14 @@ object Brightness {
             Settings.Global.getString(context.contentResolver, XIAOMI_BACKLIGHT) != null
 
     private fun isTcl(context: Context) =
-        runCatching { context.packageManager.getPackageInfo("com.tcl.settings", 0) }.isSuccess
+        runCatching { context.packageManager.getPackageInfo("com.tcl.settings", 0) }.isSuccess ||
+            TclPq.backlight(context) != null
 
     private fun isXiaomi(context: Context) =
         runCatching { context.packageManager.getPackageInfo("com.xiaomi.mitv.settings", 0) }.isSuccess
+
+    private fun isLetv(context: Context) =
+        runCatching { context.packageManager.getPackageInfo("com.stv.globalsetting", 0) }.isSuccess
 
     private fun isSony(context: Context) =
         runCatching { context.packageManager.getPackageInfo("com.sony.dtv.configsettings", 0) }.isSuccess ||
@@ -46,6 +50,7 @@ object Brightness {
     fun level(context: Context): Float? = level(context, probeSkyworth = true)
 
     private fun level(context: Context, probeSkyworth: Boolean): Float? {
+        if (SystemProbe.hidesBrightness(context)) return null
         HisenseLaserPanel.level(context)?.let { return it }
         SystemProbe.xgimiBrightnessLevel()?.let { return it }
         if (ChanghongPicture.available(context)) {
@@ -61,7 +66,7 @@ object Brightness {
             }
             MitvPanel.usable(context) -> (mitvLevel ?: MitvPanel.level(context) ?: storedLevel(context) ?: 50) / 100f
             isXiaomi(context) -> null
-            isTcl(context) || isSony(context) || isVidaa(context) || SystemProbe.skyworthPicturePanel(context) ||
+            isTcl(context) || isSony(context) || isVidaa(context) || isLetv(context) || SystemProbe.skyworthPicturePanel(context) ||
                 DeviceProfile.current(context).ignoresScreenBrightness ||
                 Build.VERSION.SDK_INT >= 23 && !Settings.System.canWrite(context) -> null
             else -> {
@@ -84,6 +89,7 @@ object Brightness {
     }
 
     fun adjust(context: Context, direction: Int): Float? {
+        if (SystemProbe.hidesBrightness(context)) return null
         HisenseLaserPanel.level(context)?.let { current ->
             val next = HisenseLaserPanel.step(current, direction)
             HisenseLaserPanel.setLevel(context, next)
@@ -103,14 +109,11 @@ object Brightness {
             runCatching {
                 val from = mitvLevel ?: MitvPanel.level(context) ?: storedLevel(context) ?: percent
                 MitvPanel.setBacklight(context, from, next)
-            }
-            val readBack = MitvPanel.level(context)
-            if (readBack != null && kotlin.math.abs(readBack - next) <= 2) {
-                mitvLevel = readBack
+                mitvLevel = next
                 context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                    .edit().putInt(KEY_MITV_LEVEL, readBack).apply()
+                    .edit().putInt(KEY_MITV_LEVEL, next).apply()
             }
-            return readBack?.let { it / 100f }
+            return next / 100f
         }
         runCatching {
             if (changhong) {

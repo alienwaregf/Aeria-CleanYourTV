@@ -11,10 +11,10 @@ object WhaleyBoot {
 
     private val PLAYER = ComponentName("com.whaley.tv.tvplayer.ui", "com.whaley.tv.tvplayer.ui.RootActivity")
 
-    fun isWhaley(context: Context): Boolean =
+    private fun isWhaley(context: Context): Boolean =
         runCatching { context.packageManager.getActivityInfo(PLAYER, 0) }.isSuccess
 
-    fun newBoot(bootId: String?, handled: String?): Boolean = !bootId.isNullOrBlank() && bootId != handled
+    private fun newBoot(bootId: String?, handled: String?): Boolean = !bootId.isNullOrBlank() && bootId != handled
 
     fun turnOffPowerLight(context: Context) {
         if (!isWhaley(context)) return

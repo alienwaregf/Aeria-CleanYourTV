@@ -41,8 +41,19 @@ object DiagLog {
     fun init(context: Context) {
         if (file != null || !enabled(context)) return
         val dir = context.getExternalFilesDir(null) ?: context.filesDir
-        file = File(dir, "aerial-diag.log")
-        i("log file ${file?.absolutePath}")
+        val f = File(dir, "aerial-diag.log")
+        val earlier = synchronized(lines) { lines.toList() }
+        if (earlier.isNotEmpty()) {
+            writer.execute {
+                runCatching {
+                    val fresh = !f.exists()
+                    f.appendText(earlier.joinToString("\n", prefix = "-- earlier in this process:\n", postfix = "\n"))
+                    if (fresh) f.setReadable(true, false)
+                }
+            }
+        }
+        file = f
+        i("log file ${f.absolutePath}")
     }
 
     fun i(message: String) {

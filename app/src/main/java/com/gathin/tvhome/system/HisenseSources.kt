@@ -65,6 +65,7 @@ internal object HisenseSources {
     }
 
     fun open(context: Context, intent: Intent): Boolean {
+        if (VidaaSiloSources.open(context, intent)) return true
         if (intent.action != SWITCH_ACTION || intent.`package` != TRANSITION_PACKAGE ||
             intent.getIntExtra(SOURCE_EXTRA, 0) <= 0) return false
         context.sendBroadcast(Intent(intent))

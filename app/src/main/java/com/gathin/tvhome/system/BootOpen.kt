@@ -83,6 +83,13 @@ object BootOpen {
             off > opened
     }
 
+    fun screenOffSince(context: Context, elapsed: Long): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val off = prefs.getLong(SCREEN_OFF_ELAPSED, -1L)
+        return off >= 0 && thisBoot(off, prefs.getLong(SCREEN_OFF_BOOT, 0L), prefs.getString(SCREEN_OFF_BOOT_ID, null)) &&
+            off > elapsed
+    }
+
     fun openedWithin(context: Context, ms: Long): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val opened = prefs.getLong(OPENED_ELAPSED, -1L)

@@ -36,7 +36,7 @@ object Diagnostics {
         "com.dangbeimarket",
     )
 
-    private val LOG_TAGS = listOf("AerialGuard", "AerialUpdates", "AerialStream", "AerialWallpaper", "AerialKonkaSources", "AndroidRuntime")
+    private val LOG_TAGS = listOf("AerialGuard", "AerialUpdates", "AerialStream", "AerialWallpaper", "AerialKonkaSources", "AerialHisenseSources", "AerialMitvPanel", "AerialXgimiSources", "AndroidRuntime")
 
     private fun compiled(context: Context): String {
         val profile = runCatching {
@@ -63,6 +63,7 @@ object Diagnostics {
             .forEach { key -> prop(key)?.takeIf { it.isNotEmpty() }?.let { appendLine("  $key = $it") } }
         appendLine("Screen      ${screen(context)}")
         appendLine("Memory      ${memory(context)}")
+        appendLine("Output      ${OutputDevice.describe(context)}")
         appendLine("Network     ${SystemProbe.network(context).kind}")
         appendLine("```")
 
@@ -104,6 +105,7 @@ object Diagnostics {
         }
         appendLine("            wallpaper=${com.gathin.tvhome.wallpaper.Wallpapers.selectedId.substringBefore('/')} always_moves=${AerialSettings.wallpaperAlwaysMoves} quality=${AerialSettings.aerialQuality.key} weather=${AerialSettings.showWeather} saver_clock=${AerialSettings.screensaverClock}")
         runCatching { com.gathin.tvhome.ui.home.filmGlassReport(context) }.getOrNull()?.let { appendLine("            film glass $it") }
+        runCatching { com.gathin.tvhome.weather.Weather.diagnostics() }.getOrNull()?.let { appendLine("Weather     $it") }
         appendLine("```")
 
 
@@ -187,7 +189,9 @@ object Diagnostics {
         val display = context.getSystemService<WindowManager>()?.defaultDisplay ?: return "-"
         val m = DisplayMetrics().also { display.getRealMetrics(it) }
         val modes = if (Build.VERSION.SDK_INT >= 23) display.supportedModes.joinToString { "${it.physicalWidth}x${it.physicalHeight}@${"%.0f".format(it.refreshRate)}" } else "-"
-        return "${m.widthPixels}x${m.heightPixels} ${m.densityDpi}dpi ${"%.0f".format(display.refreshRate)}Hz; modes $modes"
+        val win = context.resources.displayMetrics
+        return "${m.widthPixels}x${m.heightPixels} ${m.densityDpi}dpi ${"%.0f".format(display.refreshRate)}Hz; modes $modes\n" +
+            "            window ${win.widthPixels}x${win.heightPixels}, pictures ${Wallpapers.screenW}x${Wallpapers.screenH}"
     }
 
     private fun memory(context: Context): String {

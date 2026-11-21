@@ -35,7 +35,7 @@ fun ConnectivityManager.currentNetwork(): Network? {
 
 data class NetworkStatus(val kind: NetKind = NetKind.Offline, val name: String? = null, val level: Float = 1f, val vpn: Boolean = false)
 
-data class VolumeStatus(val level: Int = 0, val max: Int = 100, val muted: Boolean = false) {
+data class VolumeStatus(val level: Int = 0, val max: Int = 100, val muted: Boolean = false, val external: Boolean = false) {
     val fraction: Float get() = if (max == 0) 0f else level / max.toFloat()
 }
 
@@ -107,17 +107,38 @@ object SystemProbe {
             level = am.getStreamVolume(AudioManager.STREAM_MUSIC),
             max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC),
             muted = if (Build.VERSION.SDK_INT >= 23) am.isStreamMute(AudioManager.STREAM_MUSIC) else legacyMuted,
+            external = externalVolume,
         )
     }
 
+    private var stuckSteps = 0
+
+    @Volatile private var externalVolume = false
+
+    internal fun stuckStep(before: Int, after: Int, max: Int, muted: Boolean, direction: Int): Boolean =
+        before == after && !muted && (if (direction > 0) before < max else before > 0)
+
     private var legacyMuted = false
 
-    private fun volumeFlags(context: Context, fromKey: Boolean) =
-        if (fromKey && isInstalled(context, "com.tcl.settings")) AudioManager.FLAG_SHOW_UI else 0
+    private fun volumeFlags(context: Context, fromKey: Boolean, showUi: Boolean = false) =
+        if (showUi || (fromKey && isInstalled(context, "com.tcl.settings"))) AudioManager.FLAG_SHOW_UI else 0
 
-    fun adjustVolume(context: Context, direction: Int, fromKey: Boolean = false) {
+    fun adjustVolume(context: Context, direction: Int, fromKey: Boolean = false, showUi: Boolean = false) {
         val am = context.getSystemService<AudioManager>() ?: return
-        val flags = volumeFlags(context, fromKey)
+        val flags = volumeFlags(context, fromKey, showUi)
+        val before = runCatching { am.getStreamVolume(AudioManager.STREAM_MUSIC) }.getOrNull()
+        stepVolume(am, direction, flags)
+        if (before != null) runCatching {
+            val after = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+            val muted = Build.VERSION.SDK_INT >= 23 && am.isStreamMute(AudioManager.STREAM_MUSIC)
+            stuckSteps = if (stuckStep(before, after, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC), muted, direction)) stuckSteps + 1 else 0
+            val external = stuckSteps >= 2 || (externalVolume && before == after)
+            if (external != externalVolume) DiagLog.i("volume: steps ${if (external) "go to a sound system; the level stays at $after" else "move the level again"}")
+            externalVolume = external
+        }
+    }
+
+    private fun stepVolume(am: AudioManager, direction: Int, flags: Int) {
         try {
             am.adjustStreamVolume(
                 AudioManager.STREAM_MUSIC,
@@ -206,6 +227,18 @@ object SystemProbe {
             WHALEY_SETTINGS,
         )
 
+    private val FENGOS_SETTINGS = ComponentName("cn.formovie.fengos.settings", "cn.formovie.fengos.settings.ui.activity.MainActivity")
+
+    private const val FENGMI_LAUNCHER = "com.tvfengmi.launcher"
+
+    private var fengOs: Boolean? = null
+
+    fun hidesBrightness(context: Context): Boolean =
+        fengOs ?: (fengOsSettingsIntent(context) != null || isInstalled(context, FENGMI_LAUNCHER)).also { fengOs = it }
+
+    private fun fengOsSettingsIntent(context: Context): Intent? =
+        resolvable(context, Intent(Intent.ACTION_MAIN).setComponent(FENGOS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+
     fun guardSettingsIntent(context: Context): Intent? = resolvable(context, Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
 
     fun homeSettingsIntent(context: Context): Intent? =
@@ -215,7 +248,13 @@ object SystemProbe {
         resolvable(context, Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
 
     private fun resolvable(context: Context, intent: Intent): Intent? =
-        intent.takeIf { context.packageManager.resolveActivity(it, 0) != null }?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        intent.takeIf { startable(context, it) }?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    private fun startable(context: Context, intent: Intent): Boolean {
+        val info = context.packageManager.resolveActivity(intent, 0)?.activityInfo ?: return false
+        return info.exported && info.enabled && info.applicationInfo.enabled &&
+            (info.permission == null || ContextCompat.checkSelfPermission(context, info.permission) == PackageManager.PERMISSION_GRANTED)
+    }
 
     fun networkSettingsIntents(context: Context, ethernet: Boolean = false): List<Intent> =
         listOfNotNull(ChanghongSettings.intent(context, ChanghongSettings.NETWORK), xgimiSettingsIntent(context, XGIMI_NETWORK_PAGE)) +
@@ -482,8 +521,7 @@ object SystemProbe {
     }.isSuccess
 
     private fun firstResolvable(context: Context, vararg intents: Intent): Intent {
-        val pm = context.packageManager
-        return (intents.firstOrNull { pm.resolveActivity(it, 0) != null } ?: intents.last())
+        return (intents.firstOrNull { startable(context, it) } ?: intents.last())
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             .let { settingsLaunchIntent(context, it) }
     }
@@ -493,6 +531,7 @@ object SystemProbe {
         val seen = HashSet<String>()
         return intents
             .filter { intent ->
+                if (!startable(context, intent)) return@filter false
                 val info = pm.resolveActivity(intent, 0)?.activityInfo ?: return@filter false
                 seen.add("${info.packageName}/${info.name}")
             }
@@ -510,6 +549,7 @@ object SystemProbe {
         .let { listed -> (listed + xiaomiSources(context, listed)).sortedWith(compareBy({ it.kind.ordinal }, { it.label })) }
         .ifEmpty { XgimiMstarSources.load(context) }
         .ifEmpty { HisenseSources.load(context) }
+        .ifEmpty { VidaaSiloSources.load(context) }
         .ifEmpty { KonkaSources.load(context) }
         .ifEmpty { tclSources(context) }
         .ifEmpty { whaleySources(context) }
