@@ -19,6 +19,8 @@ class LayoutStore(context: Context) {
     private var order: List<String> =
         prefs.getString("order", null)?.split(',')?.filter { it.isNotBlank() } ?: emptyList()
     private var hidden: Set<String> = prefs.getStringSet("hidden", null)?.toSet() ?: emptySet()
+    private var foldersRaw: String? = null
+    private var foldersDirty = false
     private var folders: Map<String, Folder> = readFolders(prefs.getString("folders", null))
     private var initialized = prefs.getBoolean("initialized", false)
 
@@ -64,6 +66,7 @@ class LayoutStore(context: Context) {
     private fun folderHolding(key: String): Folder? = folders.values.firstOrNull { key in it.apps }
 
     fun putInFolder(key: String, id: String?, newName: String): String {
+        foldersDirty = true
         val list = order.toMutableList()
         val at = list.indexOf(key).takeIf { it >= 0 }
             ?: folderHolding(key)?.let { list.indexOf(it.key) + 1 }?.takeIf { it > 0 }
@@ -91,6 +94,7 @@ class LayoutStore(context: Context) {
         list.add(if (at >= 0) at + 1 else list.size, key)
         dropEmpty(list)
         order = list
+        foldersDirty = true
         save()
     }
 
@@ -103,12 +107,14 @@ class LayoutStore(context: Context) {
         list.removeAt(from)
         list.add(list.indexOf(target).let { if (from < to) it + 1 else it }, key)
         folders = folders + (folder.id to folder.copy(apps = list))
+        foldersDirty = true
         save()
     }
 
     fun renameFolder(id: String, name: String) {
         val folder = folders[id] ?: return
         folders = folders + (id to folder.copy(name = name))
+        foldersDirty = true
         save()
     }
 
@@ -120,6 +126,7 @@ class LayoutStore(context: Context) {
         list.addAll(if (at >= 0) at else list.size, folder.apps.filter { it !in list })
         folders = folders - id
         order = list
+        foldersDirty = true
         save()
     }
 
@@ -156,27 +163,32 @@ class LayoutStore(context: Context) {
     private fun save() = prefs.edit {
         putString("order", order.joinToString(","))
         putStringSet("hidden", hidden)
-        putString("folders", JSONArray().apply {
-            folders.values.forEach { f ->
-                put(JSONObject().put("id", f.id).put("name", f.name).put("apps", JSONArray(f.apps)))
-            }
-        }.toString())
+        putString("folders", foldersRaw?.takeIf { !foldersDirty } ?: foldersJson())
         putBoolean("initialized", true)
     }
 
-    private fun readFolders(json: String?): Map<String, Folder> = runCatching {
-        val array = JSONArray(json ?: return@runCatching emptyMap())
-        buildMap {
-            for (i in 0 until array.length()) {
-                runCatching {
-                    val o = array.getJSONObject(i)
-                    val apps = o.getJSONArray("apps").let { a -> (0 until a.length()).map(a::getString) }
-                    val id = o.getString("id")
-                    put(id, Folder(id, o.getString("name"), apps))
+    private fun foldersJson(): String = JSONArray().apply {
+        folders.values.forEach { f ->
+            put(JSONObject().put("id", f.id).put("name", f.name).put("apps", JSONArray(f.apps)))
+        }
+    }.toString()
+
+    private fun readFolders(json: String?): Map<String, Folder> {
+        if (json == null) return emptyMap()
+        return runCatching {
+            val array = JSONArray(json)
+            buildMap {
+                for (i in 0 until array.length()) {
+                    runCatching {
+                        val o = array.getJSONObject(i)
+                        val apps = o.getJSONArray("apps").let { a -> (0 until a.length()).map(a::getString) }
+                        val id = o.getString("id")
+                        put(id, Folder(id, o.getString("name"), apps))
+                    }
                 }
             }
-        }
-    }.getOrDefault(emptyMap())
+        }.getOrElse { foldersRaw = json; emptyMap() }
+    }
 }
 
 private object Defaults {

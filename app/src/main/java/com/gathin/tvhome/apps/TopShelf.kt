@@ -78,6 +78,10 @@ object TopShelfContent {
         synchronized(lock) { stageArtCache = emptyMap() }
     }
 
+    fun cachedMark(pkg: String): Bitmap? {
+        synchronized(lock) { return stageArtCache[pkg]?.mark }
+    }
+
     fun reloadAll(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         if (!hasListingsPermission(context)) {
@@ -156,7 +160,6 @@ object TopShelfContent {
 
     fun cardsFor(pkg: String): List<ShelfCard> {
         val list = synchronized(lock) { showsByPkg[pkg] } ?: return emptyList()
-        android.util.Log.i("AerialDiag", "topshelf $pkg: ${list.size} cards ${list.firstOrNull()?.source}")
         return list
     }
 
@@ -173,6 +176,9 @@ object TopShelfContent {
             .getBoolean("shelf_app_art", false)
 
     private const val ART_KEEP_MS = 60_000L
+    private val artCache = object : android.util.LruCache<String, Bitmap>(3) {
+        override fun sizeOf(key: String, value: Bitmap): Int = 1
+    }
     private val amazonArt = java.util.regex.Pattern.compile("""^(https://m\.media-amazon\.com/images/S/[^.]+)\._UR(\d+),(\d+)_\..*$""")
 
     fun appArtBackdrop(context: Context, pkg: String, cards: List<ShelfCard>, w: Int, h: Int): Bitmap? {
@@ -219,11 +225,13 @@ object TopShelfContent {
     }
 
     private fun still(context: Context, key: String, w: Int, h: Int): Bitmap? {
+        artCache.get(key)?.let { return it }
         val file = File(File(context.filesDir, "appart"), key.hashCode().toString() + ".jpg")
         if (file.exists()) {
             runCatching {
                 BitmapFactory.decodeFile(file.absolutePath)?.let { bmp ->
                     val out = Images.cover(bmp, w, h).also { if (it !== bmp) bmp.recycle() }
+                    artCache.put(key, out)
                     return out
                 }
             }
@@ -248,6 +256,7 @@ object TopShelfContent {
                 out.compress(Bitmap.CompressFormat.JPEG, 92, fos)
             }
         }.onFailure { file.delete() }
+        artCache.put(key, out)
         return out
     }
 

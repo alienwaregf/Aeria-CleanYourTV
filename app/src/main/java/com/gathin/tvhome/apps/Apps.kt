@@ -108,6 +108,10 @@ object AppCatalog {
         ComponentName("com.xiaomi.mitv.mediaexplorer", "com.xiaomi.mitv.mediaexplorer.NewScraperMainEntryActivity"),
         ComponentName("com.xiaomi.smarthome.tv", "com.xiaomi.smarthome.tv.ui.MainActivity"),
         ComponentName("com.sony.dtv.searchapp", "com.ktcp.aiagent.xwability.activity.VoipHomeActivity"),
+        ComponentName("com.gitv.dvb.live", "com.gitv.dvb.live.activity.PlayActivity"),
+        ComponentName("com.xiaomi.mitv.appstore", "com.xiaomi.mitv.appstore.MainActivity"),
+        ComponentName("com.baofengtv.tvplayer", "com.baofengtv.tvplayer.MainActivity"),
+        ComponentName("com.bftv.fui.biu", "com.bftv.fui.biu.views.activity.FRowActivity"),
     )
 
     private val UNLISTED_NAMES = mapOf(
@@ -143,6 +147,11 @@ object AppCatalog {
 
     private class Cached(val stamp: Long, val width: Int, val label: String, val art: TileArt)
     private val cache = HashMap<String, Cached>()
+
+    private val drawnByAerial = java.util.concurrent.ConcurrentHashMap<String, SystemTile>()
+
+    fun usesLibrary(pkg: String): Boolean =
+        IconLibrary.uses(pkg) && (!drawnByAerial.containsKey(pkg) || IconLibrary.pick(pkg) == IconLibrary.Pick.Library)
 
     @Volatile var loaded: List<AppEntry> = emptyList(); private set
 
@@ -309,6 +318,7 @@ object AppCatalog {
     }
 
     fun ownArt(context: Context, entry: AppEntry): TileArt? = runCatching {
+        drawnByAerial[entry.packageName]?.let { return@runCatching TileArtFactory.forSystem(it) }
         val pm = context.packageManager
         val info = pm.getActivityInfo(entry.component, 0)
         fromApp(pm, info, banner(pm, info, entry.leanback), TileRecipes.of(entry.packageName))
@@ -322,6 +332,8 @@ object AppCatalog {
         val stamp = runCatching { pm.getPackageInfo(pkg, 0).lastUpdateTime }.getOrDefault(0L) + CustomIcons.stamp(pkg) +
             IconLibrary.stamp(pkg) + if (stockHome) 1 else 0
         val system = (info.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+        val ownTile = if (stockHome) SystemTile.Home else if (system) SYSTEM_TILES[pkg] ?: byCategory[pkg] else null
+        if (ownTile != null) drawnByAerial[pkg] = ownTile else drawnByAerial.remove(pkg)
         val inMemory = synchronized(cache) { cache[pkg] }?.takeIf { it.stamp == stamp && it.width == TileArtFactory.W }
         if (inMemory == null && later) {
             TileDiskCache.readHeader(pkg, TileDiskCache.key(stamp))?.let { (label, tint) ->

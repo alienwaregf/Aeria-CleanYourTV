@@ -35,6 +35,7 @@ object IconLibrary {
 
     @Volatile private var index: Map<String, List<Choice>> = emptyMap()
     @Volatile var credits: JSONObject = JSONObject(); private set
+    @Volatile var names: JSONObject = JSONObject(); private set
     private val refreshing = Mutex()
     @Volatile private var lastAttempt = 0L
     private val failedAt = HashMap<String, Long>()
@@ -43,7 +44,8 @@ object IconLibrary {
         if (::dir.isInitialized) return
         dir = File(context.filesDir, "library").apply { mkdirs() }
         prefs = context.applicationContext.getSharedPreferences("icon_library", Context.MODE_PRIVATE)
-        read(File(dir, "index.json").takeIf { it.exists() }?.readText())?.let { (i, c) -> index = i; credits = c }
+        val text = File(dir, "index.json").takeIf { it.exists() }?.readText()
+        read(text)?.let { (i, c) -> index = i; credits = c; names = names(text) }
     }
 
     private fun here(c: Choice): File? = File(dir, c.fileName).takeIf { it.exists() }
@@ -148,6 +150,7 @@ object IconLibrary {
                             changed = fresh.mapValues { e -> e.value.map { it.path } } != index.mapValues { e -> e.value.map { it.path } }
                             index = fresh
                             credits = c
+                            names = names(text)
                             prefs.edit { putLong("checked_at", now); putInt("checked_by", BuildConfig.VERSION_CODE) }
                             Log.i(TAG, "icon index: ${fresh.size} apps, ${fresh.values.sumOf { it.size }} pictures")
                         }
@@ -170,6 +173,9 @@ object IconLibrary {
             refreshing.unlock()
         }
     }
+
+    internal fun names(text: String?): JSONObject =
+        runCatching { JSONObject(text ?: return JSONObject()).optJSONObject("names") }.getOrNull() ?: JSONObject()
 
     private fun read(text: String?): Pair<Map<String, List<Choice>>, JSONObject>? = runCatching {
         val root = JSONObject(text ?: return null)

@@ -100,7 +100,7 @@ object TileDiskCache {
         if (!::dir.isInitialized) return
         scope.launch {
             dir.listFiles()?.forEach { f ->
-                if (f.name.endsWith(".tile") && f.name.removeSuffix(".tile") !in packages) f.delete()
+                if (f.name.removeSuffix(".tile").removeSuffix(".tmp") !in packages) f.delete()
             }
         }
     }

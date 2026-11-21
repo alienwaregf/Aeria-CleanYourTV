@@ -6,6 +6,7 @@ import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.view.View
 import android.view.ViewGroup
@@ -260,10 +261,10 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
         artFor = pkg
         val list = if (pkg == null) null else cardsOf(app)
         if (list.isNullOrEmpty()) {
-            artShow(null, null)
+            artShow(null)
             return
         }
-        artShow(null, null)
+        artShow(null)
         val pkgNonnull: String = pkg ?: return
         val widthPx = context.resources.displayMetrics.widthPixels
         val heightPx = context.resources.displayMetrics.heightPixels
@@ -274,13 +275,15 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
                     return@post
                 }
                 if (pkgNonnull == artFor) {
-                    artShow(bitmap, null)
+                    artShow(bitmap)
+                } else {
+                    bitmap.recycle()
                 }
             }
         }
     }
 
-    private fun artShow(bitmap: Bitmap?, caption: Array<String>?) {
+    private fun artShow(bitmap: Bitmap?) {
         val current = art[artAt]
         if (current.visibility == View.VISIBLE) {
             Motion.progress(Motion.SHELF_SWAP, current, current.alpha, 0.0f,
@@ -299,6 +302,10 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
         }
         artAt = 1 - artAt
         val next = art[artAt]
+        val old = (next.drawable as? BitmapDrawable)?.bitmap
+        if (old != null && old !== bitmap && !old.isRecycled) {
+            old.recycle()
+        }
         next.setImageBitmap(bitmap)
         next.alpha = 0.0f
         next.visibility = View.VISIBLE
@@ -321,6 +328,7 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
         private var colourFor: Int = 0
         private var colourPicture: Bitmap? = null
         private var mark: Bitmap? = null
+        private var markPkg: String? = null
 
         var shift: Float = 0.0f
 
@@ -339,7 +347,16 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
             )
             color = art.color
             fill.shader = null
+            val oldMark = mark
+            val oldPkg = markPkg
             mark = art.mark
+            markPkg = app.pkg
+            if (oldMark != null && oldMark !== art.mark && !oldMark.isRecycled) {
+                val stillCached = oldPkg != null && TopShelfContent.cachedMark(oldPkg) === oldMark
+                if (!stillCached) {
+                    oldMark.recycle()
+                }
+            }
             invalidate()
         }
 

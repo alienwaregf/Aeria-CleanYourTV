@@ -36,6 +36,8 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
 
         private val posterExecutor = Executors.newSingleThreadExecutor()
 
+        private const val POSTER_RETRY_MS = 10 * 60 * 1000L
+
         private fun layout(context: Context): Int {
             val name = context.getSharedPreferences("topshelf", Context.MODE_PRIVATE)
                 .getString(LAYOUT_PREF, "Large")
@@ -45,6 +47,7 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
     }
 
     private val asked = HashSet<ImageView>()
+    private val posterFailedAt = HashMap<String, Long>()
     private var at = 0
     private val cards = ArrayList<View>()
     private val glide: Follow
@@ -123,14 +126,17 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
         for (index in maxOf(0, i - 1) until minOf(cards.size, i + iCeil + 1)) {
             val imageView = (cards[index] as FrameLayout).getChildAt(0) as ImageView
             val uri = picture(shows[index]) ?: continue
+            if (System.currentTimeMillis() - (posterFailedAt[uri] ?: 0L) < POSTER_RETRY_MS) continue
             if (!asked.add(imageView)) continue
             imageView.tag = uri
             posterExecutor.execute {
                 val bitmap = TopShelfContent.loadPoster(context, uri, w, h)
                 imageView.post {
                     if (bitmap == null) {
+                        posterFailedAt[uri] = System.currentTimeMillis()
                         asked.remove(imageView)
                     } else if (imageView.tag == uri) {
+                        posterFailedAt -= uri
                         imageView.setImageBitmap(bitmap)
                     }
                 }
