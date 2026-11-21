@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.database.ContentObserver
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -19,6 +20,7 @@ import androidx.core.content.getSystemService
 import android.util.Log
 import com.gathin.tvhome.MainActivity
 import com.gathin.tvhome.dream.AerialDream
+import com.gathin.tvhome.system.BootOpen
 import com.gathin.tvhome.system.DiagLog
 import com.gathin.tvhome.system.SystemScreensaver
 
@@ -42,11 +44,18 @@ object GuardSetup {
     private const val ENABLED_LISTENERS = "enabled_notification_listeners"
 
     private const val ADB_BOOT_WINDOW_MS = 3 * 60_000L
+    private const val ADB_WAKE_SLACK_MS = 60_000L
     private val adbDanceLock = Any()
     @Volatile private var adbDancing = false
     @Volatile private var adbDanced = false
 
     @Volatile var adbProbePort = 5555
+
+    private const val KEY_SHUTDOWN_AT = "shutdown_announced_at"
+    private const val KEY_SHUTDOWN_BOOT_ID = "shutdown_announced_boot_id"
+    private const val SHUTDOWN_HOLD_MS = 2 * 60_000L
+
+    @Volatile private var shutdownRecheck = false
 
     private const val KEY_OWN_SCREENSAVER = "own_screensaver"
     private const val KEY_HOME_IN_FRONT = "home_in_front"
@@ -54,7 +63,13 @@ object GuardSetup {
     private const val KEY_HOME_IN_FRONT_BOOT = "home_in_front_boot"
     private const val KEY_STOCK_HOME_AT = "stock_home_at"
     private const val KEY_STOCK_HOME_BOOT = "stock_home_boot"
+    private const val KEY_HOME_IN_FRONT_BOOT_ID = "home_in_front_boot_id"
+    private const val KEY_STOCK_HOME_BOOT_ID = "stock_home_boot_id"
     private const val KEY_INSTALLER_OPENED = "installer_opened_at"
+    private const val KEY_STOCK_VISIT_AT = "stock_visit_at"
+    private const val KEY_STOCK_VISIT_UNTIL = "stock_visit_until"
+    private const val KEY_STOCK_VISIT_BOOT = "stock_visit_boot"
+    private const val KEY_STOCK_VISIT_BOOT_ID = "stock_visit_boot_id"
     private const val KEY_SCREENSAVER_SWITCHED_OFF = "screensaver_switched_off"
     private const val KEY_SCREENSAVER_ENABLED = "screensaver_enabled"
     private const val KEY_OFF_IN_STANDBY = "guard_off_in_standby"
@@ -73,7 +88,7 @@ object GuardSetup {
     private var screenOnWatch: BroadcastReceiver? = null
 
     @Synchronized
-    private fun watchScreenOn(context: Context) {
+    private fun watchScreenOn(context: Context, litNowCounts: Boolean = true) {
         if (screenOnWatch != null) return
         val app = context.applicationContext
         val receiver = object : BroadcastReceiver() {
@@ -82,12 +97,13 @@ object GuardSetup {
                 runCatching { app.unregisterReceiver(this) }
                 screenOnWatch = null
                 Log.i(TAG, "screen on; putting Home Guard back after standby")
+                clearShutdown(app)
                 ensureEnabled(app)
             }
         }
         screenOnWatch = receiver
         app.registerReceiver(receiver, IntentFilter(Intent.ACTION_SCREEN_ON))
-        if (context.getSystemService<PowerManager>()?.isInteractive == true) receiver.onReceive(app, Intent(Intent.ACTION_SCREEN_ON))
+        if (litNowCounts && context.getSystemService<PowerManager>()?.isInteractive == true) receiver.onReceive(app, Intent(Intent.ACTION_SCREEN_ON))
     }
 
     fun stepOutForStandby(service: android.accessibilityservice.AccessibilityService) {
@@ -104,38 +120,100 @@ object GuardSetup {
         }.onFailure { Log.w(TAG, "could not take Home Guard out", it) }
     }
 
+    fun stepOutForShutdown(service: android.accessibilityservice.AccessibilityService) {
+        Log.i(TAG, "shutdown announced; taking Home Guard out")
+        if (isUserUnlocked(service)) service.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putLong(KEY_SHUTDOWN_AT, SystemClock.elapsedRealtime())
+            .putString(KEY_SHUTDOWN_BOOT_ID, BootOpen.BOOT_ID).commit()
+        watchScreenOn(service, litNowCounts = false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) runCatching { service.disableSelf() }
+    }
+
+    private fun shuttingDown(context: Context): Boolean {
+        if (!isUserUnlocked(context)) return false
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val at = prefs.getLong(KEY_SHUTDOWN_AT, 0L)
+        if (at == 0L) return false
+        val sameBoot = prefs.getString(KEY_SHUTDOWN_BOOT_ID, null) == BootOpen.BOOT_ID
+        return sameBoot && SystemClock.elapsedRealtime() - at in 0 until SHUTDOWN_HOLD_MS
+    }
+
+    private fun clearShutdown(context: Context) {
+        if (!isUserUnlocked(context)) return
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .remove(KEY_SHUTDOWN_AT).remove(KEY_SHUTDOWN_BOOT_ID).apply()
+    }
+
     fun setHomeInFront(context: Context, inFront: Boolean) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_HOME_IN_FRONT, inFront)
             .putLong(KEY_HOME_IN_FRONT_AT, SystemClock.elapsedRealtime())
-            .putLong(KEY_HOME_IN_FRONT_BOOT, System.currentTimeMillis() - SystemClock.elapsedRealtime()).apply()
+            .putLong(KEY_HOME_IN_FRONT_BOOT, System.currentTimeMillis() - SystemClock.elapsedRealtime())
+            .putString(KEY_HOME_IN_FRONT_BOOT_ID, BootOpen.BOOT_ID).apply()
+
+    private fun thisBoot(prefs: android.content.SharedPreferences, at: Long, stampKey: String, idKey: String): Boolean {
+        if (at !in 0..SystemClock.elapsedRealtime()) return false
+        val id = prefs.getString(idKey, null)
+        val now = BootOpen.BOOT_ID
+        if (id != null && now != null) return id == now
+        val bootNow = System.currentTimeMillis() - SystemClock.elapsedRealtime()
+        return kotlin.math.abs(prefs.getLong(stampKey, 0L) - bootNow) <= 2 * 60 * 1000L
+    }
 
     fun homeInFrontThisBoot(context: Context): Boolean? {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val at = prefs.getLong(KEY_HOME_IN_FRONT_AT, -1L)
-        val boot = prefs.getLong(KEY_HOME_IN_FRONT_BOOT, 0L)
-        val bootNow = System.currentTimeMillis() - SystemClock.elapsedRealtime()
-        if (at !in 0..SystemClock.elapsedRealtime() || kotlin.math.abs(boot - bootNow) > 2 * 60 * 1000L) return null
+        if (!thisBoot(prefs, at, KEY_HOME_IN_FRONT_BOOT, KEY_HOME_IN_FRONT_BOOT_ID)) return null
         return prefs.getBoolean(KEY_HOME_IN_FRONT, false)
+    }
+
+    fun homeLeftAt(context: Context): Long? {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val at = prefs.getLong(KEY_HOME_IN_FRONT_AT, -1L)
+        if (!thisBoot(prefs, at, KEY_HOME_IN_FRONT_BOOT, KEY_HOME_IN_FRONT_BOOT_ID) || prefs.getBoolean(KEY_HOME_IN_FRONT, false)) return null
+        return at
     }
 
     fun noteStockHomeInFront(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putLong(KEY_STOCK_HOME_AT, SystemClock.elapsedRealtime())
-            .putLong(KEY_STOCK_HOME_BOOT, System.currentTimeMillis() - SystemClock.elapsedRealtime()).apply()
+            .putLong(KEY_STOCK_HOME_BOOT, System.currentTimeMillis() - SystemClock.elapsedRealtime())
+            .putString(KEY_STOCK_HOME_BOOT_ID, BootOpen.BOOT_ID).apply()
+
+    fun noteStockVisit(context: Context, untilElapsed: Long?) {
+        if (!isUserUnlocked(context)) return
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (untilElapsed == null) {
+            if (!prefs.contains(KEY_STOCK_VISIT_UNTIL)) return
+            prefs.edit().remove(KEY_STOCK_VISIT_AT).remove(KEY_STOCK_VISIT_UNTIL).remove(KEY_STOCK_VISIT_BOOT)
+                .remove(KEY_STOCK_VISIT_BOOT_ID).apply()
+            return
+        }
+        prefs.edit()
+            .putLong(KEY_STOCK_VISIT_AT, SystemClock.elapsedRealtime())
+            .putLong(KEY_STOCK_VISIT_UNTIL, untilElapsed)
+            .putLong(KEY_STOCK_VISIT_BOOT, System.currentTimeMillis() - SystemClock.elapsedRealtime())
+            .putString(KEY_STOCK_VISIT_BOOT_ID, BootOpen.BOOT_ID).commit()
+    }
+
+    fun stockVisitLeftMs(context: Context): Long {
+        if (!isUserUnlocked(context)) return 0L
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val at = prefs.getLong(KEY_STOCK_VISIT_AT, -1L)
+        if (!thisBoot(prefs, at, KEY_STOCK_VISIT_BOOT, KEY_STOCK_VISIT_BOOT_ID)) return 0L
+        return (prefs.getLong(KEY_STOCK_VISIT_UNTIL, 0L) - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+    }
 
     fun stockHomeSinceHomeLeft(context: Context): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val at = prefs.getLong(KEY_STOCK_HOME_AT, -1L)
-        val bootNow = System.currentTimeMillis() - SystemClock.elapsedRealtime()
-        if (at !in 0..SystemClock.elapsedRealtime() || kotlin.math.abs(prefs.getLong(KEY_STOCK_HOME_BOOT, 0L) - bootNow) > 2 * 60 * 1000L) return false
+        if (!thisBoot(prefs, at, KEY_STOCK_HOME_BOOT, KEY_STOCK_HOME_BOOT_ID)) return false
         return at >= prefs.getLong(KEY_HOME_IN_FRONT_AT, -1L)
     }
 
     fun stockHomeSeenWithin(context: Context, ms: Long): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val at = prefs.getLong(KEY_STOCK_HOME_AT, -1L)
-        val bootNow = System.currentTimeMillis() - SystemClock.elapsedRealtime()
-        if (at !in 0..SystemClock.elapsedRealtime() || kotlin.math.abs(prefs.getLong(KEY_STOCK_HOME_BOOT, 0L) - bootNow) > 2 * 60 * 1000L) return false
+        if (!thisBoot(prefs, at, KEY_STOCK_HOME_BOOT, KEY_STOCK_HOME_BOOT_ID)) return false
         return SystemClock.elapsedRealtime() - at < ms
     }
 
@@ -192,6 +270,17 @@ object GuardSetup {
     fun setKeepAdb(context: Context, keep: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_KEEP_ADB, keep).apply()
         if (keep) ensureAdb(context)
+    }
+
+    fun adbSwitchedOffInUse(context: Context, screenOnForMs: Long): Boolean {
+        if (adbDancing || !isUserUnlocked(context) || !keepAdb(context)) return false
+        if (Settings.Global.getInt(context.contentResolver, Settings.Global.ADB_ENABLED, 1) != 0) return false
+        if (SystemClock.elapsedRealtime() < ADB_BOOT_WINDOW_MS || screenOnForMs < ADB_WAKE_SLACK_MS) return false
+        if ((context.getSystemService(Context.POWER_SERVICE) as? PowerManager)?.isInteractive != true) return false
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_KEEP_ADB, false).apply()
+        Log.i(TAG, "ADB debugging switched off with the TV in use; keep_adb is off now")
+        DiagLog.i("guard: ADB switched off with the TV in use; keep_adb switched off, not turning it back on")
+        return true
     }
 
     fun isUserUnlocked(context: Context): Boolean =
@@ -446,14 +535,63 @@ object GuardSetup {
         }.onFailure { Log.w(TAG, "could not allow the notification listener", it) }
     }
 
+    private const val LIST_WATCH_WINDOW_MS = 5 * 60_000L
+    private const val LIST_WATCH_DELAY_MS = 1_500L
+    private const val LIST_WATCH_MAX_TRIES = 3
+
+    private var listWatchTries = 0
+
+    @Volatile private var listWatch: ContentObserver? = null
+
+    fun watchEnabledList(context: Context) {
+        if (listWatch != null) return
+        val app = context.applicationContext
+        val handler = Handler(Looper.getMainLooper())
+        val me = ComponentName(app, HomeGuardService::class.java).flattenToString()
+        val watch = object : ContentObserver(handler) {
+            override fun onChange(selfChange: Boolean) {
+                handler.postDelayed({
+                    if (listWatchTries >= LIST_WATCH_MAX_TRIES) return@postDelayed
+                    if (SystemClock.elapsedRealtime() > LIST_WATCH_WINDOW_MS) return@postDelayed
+                    val listed = Settings.Secure
+                        .getString(app.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+                        .orEmpty().split(':')
+                        .filter { it.isNotBlank() }
+                        .any { ComponentName.unflattenFromString(it)?.flattenToString() == me }
+                    if (listed) return@postDelayed
+                    if (ensureEnabled(app)) {
+                        listWatchTries++
+                        Log.i(TAG, "the firmware dropped Home Guard from the enabled list; putting it back ($listWatchTries)")
+                    }
+                }, LIST_WATCH_DELAY_MS)
+            }
+        }
+        runCatching {
+            app.contentResolver.registerContentObserver(
+                Settings.Secure.getUriFor(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES), false, watch,
+            )
+            listWatch = watch
+        }.onFailure { Log.w(TAG, "could not watch the enabled list", it) }
+    }
+
     fun ensureEnabled(context: Context): Boolean {
         ensureAdb(context)
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_SECURE_SETTINGS) != PackageManager.PERMISSION_GRANTED) return false
+        watchEnabledList(context)
         restoreReceivers(context)
         keepScreensaver(context)
         RevivalSync.ensure(context)
         ensureListenerBeforeNougat(context)
         if (standingOut(context)) { watchScreenOn(context); return false }
+        if (shuttingDown(context)) {
+            watchScreenOn(context, litNowCounts = false)
+            if (!shutdownRecheck) {
+                shutdownRecheck = true
+                val app = context.applicationContext
+                Handler(Looper.getMainLooper()).postDelayed({ shutdownRecheck = false; ensureEnabled(app) }, SHUTDOWN_HOLD_MS + 1_000L)
+            }
+            return false
+        }
         val me = ComponentName(context, HomeGuardService::class.java).flattenToString()
         val resolver = context.contentResolver
         val current = Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()

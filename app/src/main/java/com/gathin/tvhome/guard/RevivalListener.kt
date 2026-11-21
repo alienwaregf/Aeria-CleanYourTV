@@ -115,6 +115,7 @@ class RevivalListener : NotificationListenerService() {
     override fun dump(fd: FileDescriptor?, writer: PrintWriter, args: Array<out String>?) {
         writer.println("Aerial revival: active=$recovering attempts=$attempt outcome=$outcome")
         writer.println("userUnlocked=${GuardSetup.isUserUnlocked(this)} guardRunning=${HomeGuardService.isRunning}")
+        if (GuardSetup.isUserUnlocked(this)) runCatching { writer.println(HomeGuardService.diagnosticState()) }
         DiagLog.dump(writer)
     }
 

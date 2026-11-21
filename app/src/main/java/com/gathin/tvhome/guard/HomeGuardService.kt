@@ -211,7 +211,7 @@ class HomeGuardService : AccessibilityService() {
             events.getNextEvent(event)
             picker.add(event.eventType, event.packageName, event.className, event.timeStamp)
         }
-        picker.result()
+        picker.result(System.currentTimeMillis(), ACTIVITY_SETTLE_MS)
     }.getOrNull()
 
     private fun coveredAerial(window: Pair<String, String>): Pair<String, String>? {
@@ -280,6 +280,13 @@ class HomeGuardService : AccessibilityService() {
         DiagLog.i("guard: $how; running what was put off while locked")
         if (skipReason == null) takeOverOnceSettled(how, woke = true)
         else Log.i(TAG, "$how; not taking over Home ($skipReason)")
+    }
+
+    private val dangbeiShutdown = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            DiagLog.i("guard: Dangbei shutdown broadcast; out of the list before the firmware stops Aerial")
+            GuardSetup.stepOutForShutdown(this@HomeGuardService)
+        }
     }
 
     private val screenOn = object : BroadcastReceiver() {
@@ -417,14 +424,22 @@ class HomeGuardService : AccessibilityService() {
         }
     }
 
+    private var connectedAt = 0L
+
     private val adbObserver by lazy {
         object : ContentObserver(handler) {
-            override fun onChange(selfChange: Boolean) = GuardSetup.ensureAdb(this@HomeGuardService)
+            override fun onChange(selfChange: Boolean) {
+                val now = SystemClock.elapsedRealtime()
+                val awakeFor = if (screenOff) 0L else minOf(now - screenOnAt, now - connectedAt)
+                if (GuardSetup.adbSwitchedOffInUse(this@HomeGuardService, awakeFor)) return
+                GuardSetup.ensureAdb(this@HomeGuardService)
+            }
         }
     }
 
     override fun onCreate() {
         super.onCreate()
+        GuardSetup.watchEnabledList(this)
         if (SystemClock.elapsedRealtime() >= BOOT_WINDOW_MS || !GuardSetup.isUserUnlocked(this)) return
         if (getSystemService<PowerManager>()?.isInteractive != true) return
         val bootSource = hasBootSource()
@@ -472,7 +487,9 @@ class HomeGuardService : AccessibilityService() {
 
     override fun onServiceConnected() {
         instance = this
+        connectedAt = SystemClock.elapsedRealtime()
         unlockPending = !GuardSetup.isUserUnlocked(this)
+        if (GuardSetup.isUserUnlocked(this)) restoreStockVisit(this)
         if (GuardSetup.isUserUnlocked(this)) {
             BootOpen.noteStartedInStandby(this)
         }
@@ -517,6 +534,7 @@ class HomeGuardService : AccessibilityService() {
         watchCecInput()
         volumeSeen = volumeNow()
         registerReceiver(screenOn, IntentFilter(Intent.ACTION_SCREEN_ON).apply { addAction(Intent.ACTION_SCREEN_OFF) })
+        ContextCompat.registerReceiver(this, dangbeiShutdown, IntentFilter(DANGBEI_STR_SHUTDOWN), ContextCompat.RECEIVER_EXPORTED)
         @Suppress("DEPRECATION")
         ContextCompat.registerReceiver(this, homeKey, IntentFilter(Intent.ACTION_CLOSE_SYSTEM_DIALOGS), ContextCompat.RECEIVER_NOT_EXPORTED)
         contentResolver.registerContentObserver(Settings.Global.getUriFor(Settings.Global.ADB_ENABLED), false, adbObserver)
@@ -612,6 +630,13 @@ class HomeGuardService : AccessibilityService() {
             Log.i(TAG, "$reason, but Aerial keeps being stopped and the front is unknown; leaving it")
             return
         }
+        val homeLeftAt = GuardSetup.homeLeftAt(this)
+        if (last == null && !empty && homeLeftAt != null && !GuardSetup.stockHomeSinceHomeLeft(this) &&
+            !BootOpen.screenOffSince(this, homeLeftAt) && !screenOff
+        ) {
+            DiagLog.i("guard: $reason; Aerial died away from its Home and the front is unknown; leaving it")
+            return
+        }
         if (last == null && SystemClock.uptimeMillis() - broughtBackAt < 30_000) return
         if (last == null && inBootWindow() && GuardSetup.startsOnSignalSource(this)) {
             DiagLog.i("guard: $reason; the TV starts on a signal source; leaving it")
@@ -652,6 +677,7 @@ class HomeGuardService : AccessibilityService() {
         handler.removeCallbacks(refreshHomesAfterPackageChange)
         runCatching { unregisterReceiver(packageChanges) }
         runCatching { unregisterReceiver(screenOn) }
+        runCatching { unregisterReceiver(dangbeiShutdown) }
         runCatching { unregisterReceiver(homeKey) }
         if (uiBoostWatched) {
             uiBoostWatched = false
@@ -1251,6 +1277,9 @@ class HomeGuardService : AccessibilityService() {
         private const val FOREGROUND_POLL_MS = 1_000L
         private const val FOREGROUND_LOOKBACK_MS = 10_000L
         private const val UNKNOWN_FRONT_LOOKBACK_MS = 6 * 60 * 60 * 1000L
+        private const val ACTIVITY_SETTLE_MS = 1000L
+        private const val STOCK_VISIT_MS = 60 * 60 * 1000L
+        private const val DANGBEI_STR_SHUTDOWN = "com.dangbei.action.STR_SHUTDOWN"
         private const val DOUBLE_HOME_MS = 400L
         private const val APP_SWITCH_HOLD_MS = 5_500L
         private const val PACKAGE_SETTLE_MS = 1000L
@@ -1464,16 +1493,33 @@ class HomeGuardService : AccessibilityService() {
         private var allowStockFrom = 0L
 
         private fun endStockVisit(why: String) {
+            visitContext?.let { GuardSetup.noteStockVisit(it, null) }
             if (allowStockUntil == 0L) return
             if (SystemClock.uptimeMillis() < allowStockUntil) DiagLog.i("guard: stock launcher visit over ($why)")
             allowStockUntil = 0L
         }
 
-        fun allowStockLauncher() {
+        @Volatile
+        private var visitContext: Context? = null
+
+        fun allowStockLauncher(context: Context? = null) {
             val now = SystemClock.uptimeMillis()
-            allowStockUntil = now + 60 * 60 * 1000L
+            allowStockUntil = now + STOCK_VISIT_MS
             allowStockFrom = now
+            (context?.applicationContext ?: instance?.applicationContext)?.let {
+                visitContext = it
+                GuardSetup.noteStockVisit(it, SystemClock.elapsedRealtime() + STOCK_VISIT_MS)
+            }
             DiagLog.i("guard: the stock launcher opened on purpose; leaving it in front")
+        }
+
+        private fun restoreStockVisit(context: Context) {
+            visitContext = context.applicationContext
+            if (aerialResumed) return GuardSetup.noteStockVisit(context, null)
+            val left = GuardSetup.stockVisitLeftMs(context)
+            if (left <= 0L || SystemClock.uptimeMillis() < allowStockUntil) return
+            allowStockUntil = SystemClock.uptimeMillis() + left
+            DiagLog.i("guard: the stock launcher visit opened before Aerial was stopped still holds; leaving it in front")
         }
 
         private fun visitStillOpening(): Boolean =
