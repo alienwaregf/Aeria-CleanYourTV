@@ -7,7 +7,6 @@ import android.view.SurfaceHolder
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -90,9 +89,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.withContext
@@ -547,7 +544,6 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
     val items = TmdbTrending.items
     val density = LocalDensity.current
     val infoSlidePx = with(density) { 28.dp.toPx() }
-    val screenW = Wallpapers.screenW.toFloat()
     var saverDir by remember { mutableStateOf(1) }
     LaunchedEffect(Unit) {
         TmdbTrending.init(context)
@@ -577,93 +573,15 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
     }
     val index = TmdbTrending.currentIndex.coerceIn(items.indices)
     val item = items[index]
-    var frontBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    var backBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    val frontX = remember { Animatable(0f) }
-    val frontAlpha = remember { Animatable(1f) }
-    val backX = remember { Animatable(0f) }
-    val backAlpha = remember { Animatable(0f) }
-    var displayedItem by remember { mutableStateOf(item) }
-    var displayedIndex by remember { mutableStateOf(index) }
+    val slide = rememberTrendingSlideState(item, index, infoSlidePx)
+
     LaunchedEffect(item) {
-        if (displayedIndex == index && item.id == displayedItem.id && item.mediaType == displayedItem.mediaType) {
-            displayedItem = item
-        }
+        slide.sync(item, index)
     }
-    val infoX = remember { Animatable(0f) }
-    val infoAlpha = remember { Animatable(1f) }
     LaunchedEffect(index, item.backdropUrl) {
-        val target = items.getOrNull(index) ?: return@LaunchedEffect
-        val isIndexChange = index != displayedIndex
-        val d = if (isIndexChange) saverDir else 0
-        val bmp = withContext(Dispatchers.IO) {
-            HeroPosters.load(target.backdropUrl, Wallpapers.screenW, Wallpapers.screenH)
-        }
-        if (bmp == null) {
-            if (d != 0 && frontBitmap != null) {
-                infoX.snapTo(infoSlidePx * d)
-                infoAlpha.snapTo(0f)
-                displayedItem = target
-                displayedIndex = index
-                coroutineScope {
-                    launch { infoX.animateTo(0f, tween(520, easing = Motion.Ease)) }
-                    launch { infoAlpha.animateTo(1f, tween(520, easing = Motion.Ease)) }
-                }
-            } else {
-                infoX.snapTo(0f)
-                infoAlpha.snapTo(1f)
-                displayedItem = target
-                displayedIndex = index
-            }
-        } else if (d == 0 || frontBitmap == null) {
-            frontX.snapTo(0f)
-            frontAlpha.snapTo(1f)
-            backX.snapTo(0f)
-            backAlpha.snapTo(0f)
-            infoX.snapTo(0f)
-            infoAlpha.snapTo(1f)
-            frontBitmap = bmp.asImageBitmap()
-            backBitmap = null
-            displayedItem = target
-            displayedIndex = index
-        } else {
-            backX.snapTo(screenW * 0.12f * d)
-            backAlpha.snapTo(0f)
-            frontX.snapTo(0f)
-            frontAlpha.snapTo(1f)
-            infoX.snapTo(infoSlidePx * d)
-            infoAlpha.snapTo(0f)
-            backBitmap = bmp.asImageBitmap()
-            displayedItem = target
-            displayedIndex = index
-            coroutineScope {
-                launch { backX.animateTo(0f, tween(650, easing = Motion.Ease)) }
-                launch { backAlpha.animateTo(1f, tween(650, easing = Motion.Ease)) }
-                launch { frontX.animateTo(-screenW * 0.06f * d, tween(650, easing = Motion.Ease)) }
-                launch { frontAlpha.animateTo(0f, tween(650, easing = Motion.Ease)) }
-                launch { infoX.animateTo(0f, tween(520, easing = Motion.Ease)) }
-                launch { infoAlpha.animateTo(1f, tween(520, easing = Motion.Ease)) }
-            }
-            frontBitmap = backBitmap
-            backBitmap = null
-            frontX.snapTo(0f)
-            frontAlpha.snapTo(1f)
-            backX.snapTo(0f)
-            backAlpha.snapTo(0f)
-        }
-        val next = items.getOrNull((index + 1) % items.size)
-        if (next != null && next.backdropUrl != target.backdropUrl) {
-            withContext(Dispatchers.IO) {
-                HeroPosters.load(next.backdropUrl, Wallpapers.screenW, Wallpapers.screenH)
-            }
-        }
-        val nextProviders = next?.providerUrls.orEmpty()
-        if (nextProviders.isNotEmpty()) {
-            withContext(Dispatchers.IO) { nextProviders.forEach { ProviderLogos.load(it) } }
-        }
-        Ratings.fetchFor(target, allowOmdb = false)
-        next?.let { Ratings.fetchFor(it, allowOmdb = false) }
+        slide.advance(items, index, saverDir)
     }
+    val displayedItem = slide.displayedItem
     var titleLogo by remember(displayedItem.logoUrl) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(displayedItem.logoUrl) {
         if (displayedItem.logoUrl.isBlank()) return@LaunchedEffect
@@ -680,36 +598,15 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
         providerLogos = bmps
     }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        backBitmap?.let { bmp ->
-            Image(
-                bitmap = bmp,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().graphicsLayer {
-                    translationX = backX.value
-                    alpha = backAlpha.value
-                },
-            )
-        }
-        frontBitmap?.let { bmp ->
-            Image(
-                bitmap = bmp,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().graphicsLayer {
-                    translationX = frontX.value
-                    alpha = frontAlpha.value
-                },
-            )
-        }
+        TrendingSlideImages(slide)
         val drift = saverDrift(now)
         Column(
             Modifier.align(Alignment.BottomStart)
                 .padding(start = 45.dp, end = 160.dp, bottom = 44.dp)
                 .graphicsLayer {
-                    translationX = drift.x.toPx() + infoX.value
+                    translationX = drift.x.toPx() + slide.infoX.value
                     translationY = -drift.y.toPx()
-                    alpha = infoAlpha.value
+                    alpha = slide.infoAlpha.value
                 },
         ) {
             val logo = titleLogo

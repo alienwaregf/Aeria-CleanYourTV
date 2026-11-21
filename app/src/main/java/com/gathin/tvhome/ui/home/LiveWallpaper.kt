@@ -56,6 +56,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
+internal const val START_AFTER_MS = 10_000L
+
 internal const val KEEP_STOPPED_MS = 2 * 60 * 1000L
 
 @Composable
@@ -520,7 +522,7 @@ internal fun fileFramesJam(context: android.content.Context): Boolean {
 
 internal fun filmGlassReport(context: android.content.Context): String {
     FilmFrames.load(context)
-    return "copy=${pixelCopy ?: "untried"} copy_slow=$copySlow tcl_extractor=${FilmFrames.tclExtractor(context)} " +
+    return "copy=${pixelCopy ?: "untried"} copy_slow=$copySlow copy_crashed=${FilmFrames.copyCrashed} tcl_extractor=${FilmFrames.tclExtractor(context)} " +
         "file_stuck=${FileFramesStuck.now(context)} glassless=${Wallpapers.filmGlassless}"
 }
 
@@ -604,12 +606,24 @@ private suspend fun captureOnce(view: SurfaceView, w: Int = view.width, h: Int =
     val surface = view.holder.surface
     val bitmap = createBitmap(w, h)
     val started = android.os.SystemClock.elapsedRealtime()
-    val result = withContext(Dispatchers.IO) {
-        suspendCancellableCoroutine { done ->
-            runCatching {
-                PixelCopy.request(surface, bitmap, { done.resume(it) }, copyCallbacks)
-            }.onFailure { done.resume(-1) }
+    val result: Int? = withContext(Dispatchers.IO) {
+        FilmFrames.load(view.context)
+        if (FilmFrames.copyCrashed) return@withContext null
+        FilmFrames.copyStarting()
+        try {
+            suspendCancellableCoroutine { done ->
+                runCatching {
+                    PixelCopy.request(surface, bitmap, { done.resume(it) }, copyCallbacks)
+                }.onFailure { done.resume(-1) }
+            }
+        } finally {
+            FilmFrames.copyEnded()
         }
+    }
+    if (result == null) {
+        pixelCopy = false
+        bitmap.recycle()
+        return null
     }
     val took = android.os.SystemClock.elapsedRealtime() - started
     val unread = if (result == PixelCopy.SUCCESS) unreadable(bitmap) else null
@@ -645,6 +659,8 @@ private class FrameReader(private val context: android.content.Context) {
     @Volatile private var worker = Worker()
 
     @Volatile private var urlRefused = false
+
+    @Volatile private var openFailures = 0
 
     private suspend fun <T : Any> onWorker(what: String, block: (Worker) -> T?): T? {
         if (fileFramesShut(context)) return null
@@ -735,10 +751,11 @@ private class FrameReader(private val context: android.content.Context) {
         val url = AerialStream.url(film, AerialQuality.Hd, Build.VERSION.SDK_INT < Build.VERSION_CODES.N)
         val started = android.os.SystemClock.elapsedRealtime()
         val mmr = open(url, ranged = urlRefused) ?: run {
-            if (urlRefused || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return null
+            if (urlRefused || Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return null.also { openFailed() }
             urlRefused = true
-            open(url, ranged = true) ?: return null
+            open(url, ranged = true) ?: return null.also { openFailed() }
         }
+        openFailures = 0
         DiagLog.i("wallpaper film file opened${if (urlRefused) " through the app" else ""} in ${android.os.SystemClock.elapsedRealtime() - started} ms")
         if (w.abandoned) {
             runCatching { mmr.release() }
@@ -747,6 +764,12 @@ private class FrameReader(private val context: android.content.Context) {
         w.retriever = mmr
         w.openFor = id
         return mmr
+    }
+
+    private fun openFailed() {
+        if (++openFailures < 2 || FilmFrames.retrieverRefused) return
+        FilmFrames.refuseRetriever()
+        DiagLog.i("wallpaper film file: the retriever opened it neither way, twice running; frames decoded in the app from now on")
     }
 
     private fun open(url: String, ranged: Boolean): MediaMetadataRetriever? {
@@ -812,8 +835,8 @@ internal object SaverFrames {
         }
 
     fun clear() {
-        startField = null
-        latestField = null
+        start = null
+        latest = null
     }
 
     suspend fun make(context: android.content.Context, film: String, atMs: Long): Picture? {
@@ -841,11 +864,39 @@ private object FilmFrames {
         if (app != null) return
         val c = context.applicationContext
         app = c
-        if (prefs(c).getString(SLOW_KEY, null) == Build.FINGERPRINT) {
+        val prefs = prefs(c)
+        if (prefs.getString(SLOW_KEY, null) == Build.FINGERPRINT) {
             copySlow = true
             pixelCopy = false
         }
+        if (prefs.getString(COPYING_KEY, null) == Build.FINGERPRINT) {
+            prefs.edit().remove(COPYING_KEY).putString(CRASHED_KEY, Build.FINGERPRINT).commit()
+            DiagLog.i("wallpaper frame copy: the last process ended inside a copy; not copied again on this firmware")
+        }
+        if (prefs.getString(CRASHED_KEY, null) == Build.FINGERPRINT) {
+            copyCrashed = true
+            pixelCopy = false
+        }
         update()
+    }
+
+    @Volatile var copyCrashed = false
+        private set
+
+    @Volatile var retrieverRefused = false
+        private set
+
+    fun refuseRetriever() {
+        retrieverRefused = true
+        android.os.Handler(android.os.Looper.getMainLooper()).post { update() }
+    }
+
+    fun copyStarting() {
+        app?.let { prefs(it).edit().putString(COPYING_KEY, Build.FINGERPRINT).commit() }
+    }
+
+    fun copyEnded() {
+        app?.let { prefs(it).edit().remove(COPYING_KEY).apply() }
     }
 
     fun copyWasSlow() {
@@ -879,11 +930,13 @@ private object FilmFrames {
 
     private fun prefs(context: android.content.Context) = context.getSharedPreferences("wallpaper_frames", android.content.Context.MODE_PRIVATE)
     private const val SLOW_KEY = "copy_slow_read"
+    private const val COPYING_KEY = "copy_under_way"
+    private const val CRASHED_KEY = "copy_crashed"
     private const val TCL_KEY = "tcl_extractor"
 }
 
 private fun fileFramesShut(context: android.content.Context): Boolean =
-    (copySlow && FilmFrames.tclExtractor(context)) || FileFramesStuck.now(context)
+    (copySlow && FilmFrames.tclExtractor(context)) || FileFramesStuck.now(context) || FilmFrames.retrieverRefused
 
 private fun containsAscii(file: java.io.File, text: String): Boolean {
     val needle = text.toByteArray(Charsets.US_ASCII)

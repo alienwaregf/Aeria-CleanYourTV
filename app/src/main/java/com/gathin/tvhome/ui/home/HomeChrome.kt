@@ -87,6 +87,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.gathin.tvhome.R
 import com.gathin.tvhome.settings.AerialSettings
+import com.gathin.tvhome.settings.ClockHours
 import com.gathin.tvhome.wallpaper.Images
 import com.gathin.tvhome.system.NetKind
 import com.gathin.tvhome.system.NetworkStatus
@@ -165,9 +166,15 @@ fun rememberNow(): State<LocalDateTime> {
 @Composable
 fun timeText(now: LocalDateTime): String {
     val context = LocalContext.current
-    val twelve = runCatching { android.provider.Settings.System.getString(context.contentResolver, android.provider.Settings.System.TIME_12_24) }.getOrNull() == "12"
+    val twelve = twelveHour(context, AerialSettings.clockHours)
     val pattern = if (twelve) "h:mm" else "H:mm"
     return now.format(DateTimeFormatter.ofPattern(pattern))
+}
+
+internal fun twelveHour(context: Context, hours: ClockHours): Boolean = when (hours) {
+    ClockHours.Twelve -> true
+    ClockHours.TwentyFour -> false
+    ClockHours.System -> runCatching { android.provider.Settings.System.getString(context.contentResolver, android.provider.Settings.System.TIME_12_24) }.getOrNull() == "12"
 }
 
 @Composable
@@ -242,9 +249,6 @@ private fun Pictures(
         held = frosted to wallpaper
     }
     val ambient: @Composable (ImageBitmap?) -> Unit = { bmp ->
-        LaunchedEffect(bmp) {
-            android.util.Log.i("AerialDiag", "diag backdrop ${bmp?.width}x${bmp?.height} frosted=${frosted == null}")
-        }
         val own = remember(bmp, frosted == null) {
             bmp?.takeIf { frosted == null && it.width <= 256 }?.let(::plateTinted)
         }
@@ -320,11 +324,9 @@ private fun Plate(glass: ImageBitmap?, film: ImageBitmap?, filmPlate: Boolean, d
     suspend fun baked(glass: ImageBitmap?): ImageBitmap? {
         if (glass == null || plate == null || screen == Size.Zero || filmPlate) return null
         val size = screen
-        val start = android.os.SystemClock.uptimeMillis()
         val result = withContext(Dispatchers.Default) {
             bakePlate(plateTinted(glass), size, plate, with(density) { PlateCorner.toPx() }, with(density) { 1.2.dp.toPx() })
         }
-        android.util.Log.i("AerialDiag", "diag plate bake ${android.os.SystemClock.uptimeMillis() - start}ms ${glass.width}x${glass.height}")
         return result
     }
     val top by produceState<ImageBitmap?>(null, shown, plate, screen) {

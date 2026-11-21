@@ -256,7 +256,6 @@ fun HomeScreen(
     val focusBgFrostedShown = focusBgHit?.second
     LaunchedEffect(focusedKey, isDockApp, AppBackgrounds.version, Wallpapers.selectedId) {
         val key = focusedKey
-        android.util.Log.i("AerialDiag", "diag focus dock=$isDockApp key=$key moves=${Wallpapers.moves()}")
         if (!isDockApp) return@LaunchedEffect
         if (key == null || Wallpapers.moves() || Wallpapers.isTrending() || !AppBackgrounds.has(key)) {
             focusBg = null
@@ -272,7 +271,6 @@ fun HomeScreen(
         if (focusedKey != key || !isDockApp || Wallpapers.moves() || Wallpapers.isTrending()) return@LaunchedEffect
         focusBg = bmp.asImageBitmap()
         focusBgFrosted = frost.asImageBitmap()
-        android.util.Log.i("AerialDiag", "diag focusBg loaded ${bmp.width}x${bmp.height}")
     }
     val shelfHost = rememberShelfHost(
         onExitUp = { pillRequester.requestFocus() },
@@ -1033,6 +1031,9 @@ fun HomeScreen(
             columns = columns,
             onLaunch = onLaunch,
             onLongPress = { app, bounds -> vm.overlay = Overlay.AppMenu(app.key, bounds ?: Rect.Zero, inFolder = openFolder) },
+            movingKey = moving,
+            onMove = { key, target -> vm.moveInFolder(key, target) },
+            onEndMove = { vm.endMove() },
             onDismiss = { vm.overlay = Overlay.None },
         )
 
@@ -1043,7 +1044,14 @@ fun HomeScreen(
             anchor = menu?.anchor,
             inFolder = menu?.inFolder != null,
             folders = vm.folders(),
-            onMove = { vm.startMove(it) },
+            onMove = { key ->
+                val folderId = menu?.inFolder
+                if (folderId == null) vm.startMove(key)
+                else {
+                    vm.startMoveInFolder(key)
+                    vm.overlay = Overlay.Folder(folderId)
+                }
+            },
             onHide = { key ->
                 closeMenu()
                 vm.hide(key)

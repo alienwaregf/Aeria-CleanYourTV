@@ -48,6 +48,9 @@ fun FolderView(
     columns: Int,
     onLaunch: (AppEntry, Rect?) -> Unit,
     onLongPress: (AppEntry, Rect?) -> Unit,
+    movingKey: String? = null,
+    onMove: (String, String) -> Unit = { _, _ -> },
+    onEndMove: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     val shownName = rememberLatest(name) ?: return
@@ -93,10 +96,15 @@ fun FolderView(
                                 height = tileH,
                                 focusRequester = requester(app.key),
                                 enabled = enabled,
-                                moving = false,
+                                moving = movingKey == app.key,
                                 onFocused = { focusedKey = app.key },
-                                onClick = { bounds -> onLaunch(app, bounds) },
-                                onLongPress = { bounds -> menuKey = app.key; onLongPress(app, bounds) },
+                                onClick = { bounds ->
+                                    val mover = movingKey
+                                    if (mover == null) onLaunch(app, bounds)
+                                    else if (mover == app.key) onEndMove()
+                                    else onMove(mover, app.key)
+                                },
+                                onLongPress = { bounds -> if (movingKey == null) { menuKey = app.key; onLongPress(app, bounds) } },
                             )
                         }
                     }

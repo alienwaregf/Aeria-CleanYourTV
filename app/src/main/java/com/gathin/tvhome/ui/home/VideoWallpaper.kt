@@ -28,6 +28,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
+import com.gathin.tvhome.settings.AerialSettings
 import com.gathin.tvhome.ui.components.FilmSlot
 import com.gathin.tvhome.system.DiagLog
 import com.gathin.tvhome.ui.theme.Motion
@@ -108,7 +109,9 @@ fun VideoWallpaper(
     var surface by remember { mutableStateOf<SurfaceView?>(null) }
     var showing by remember { mutableStateOf(false) }
     var shape by remember { mutableStateOf(Wallpapers.videoSpot()?.first?.let { filmShapes[it] }) }
-    val play = moving || hold
+    var idle by remember { mutableStateOf(false) }
+    LaunchedEffect(lastInputAt, moving) { idle = false; if (!moving) return@LaunchedEffect; delay(START_AFTER_MS); idle = true }
+    val play = moving && (idle || AerialSettings.wallpaperAlwaysMoves) || hold
     val keepNow by rememberUpdatedState(keep)
     val behindAppNow by rememberUpdatedState(behindApp)
     val standInNow by rememberUpdatedState(standIn)

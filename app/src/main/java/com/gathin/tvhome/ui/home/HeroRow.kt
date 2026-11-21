@@ -8,7 +8,6 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Shader
 import android.util.LruCache
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -22,7 +21,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -63,12 +61,9 @@ import com.gathin.tvhome.ui.theme.Motion
 import com.gathin.tvhome.ui.theme.Palette
 import com.gathin.tvhome.ui.theme.Type
 import com.gathin.tvhome.wallpaper.Images
-import com.gathin.tvhome.wallpaper.Wallpapers
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 internal object HeroPosters {
@@ -257,24 +252,12 @@ fun HeroRow(
     val reduced = LocalReducedMotion.current
     val density = LocalDensity.current
     val infoSlidePx = with(density) { 28.dp.toPx() }
-    val screenW = Wallpapers.screenW.toFloat()
-
-    var frontBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    var backBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    val frontX = remember { Animatable(0f) }
-    val frontAlpha = remember { Animatable(1f) }
-    val backX = remember { Animatable(0f) }
-    val backAlpha = remember { Animatable(0f) }
-    var displayedItem by remember { mutableStateOf(item) }
-    var displayedIndex by remember { mutableStateOf(safeIndex) }
+    val slide = rememberTrendingSlideState(item, safeIndex, infoSlidePx)
 
     LaunchedEffect(item) {
-        if (displayedIndex == safeIndex && item.id == displayedItem.id && item.mediaType == displayedItem.mediaType) {
-            displayedItem = item
-        }
+        slide.sync(item, safeIndex)
     }
-    val infoX = remember { Animatable(0f) }
-    val infoAlpha = remember { Animatable(1f) }
+    val displayedItem = slide.displayedItem
 
     var titleLogo by remember(displayedItem.logoUrl) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(displayedItem.logoUrl) {
@@ -294,76 +277,7 @@ fun HeroRow(
     }
 
     LaunchedEffect(index, item.backdropUrl) {
-        val target = items.getOrNull(index.coerceIn(items.indices)) ?: return@LaunchedEffect
-        val isIndexChange = index != displayedIndex
-        val d = if (isIndexChange) dir else 0
-        val bmp = withContext(Dispatchers.IO) {
-            HeroPosters.load(target.backdropUrl, Wallpapers.screenW, Wallpapers.screenH)
-        }
-        if (bmp == null) {
-            if (d != 0 && frontBitmap != null) {
-                infoX.snapTo(infoSlidePx * d)
-                infoAlpha.snapTo(0f)
-                displayedItem = target
-                displayedIndex = index
-                coroutineScope {
-                    launch { infoX.animateTo(0f, tween(520, easing = Motion.Ease)) }
-                    launch { infoAlpha.animateTo(1f, tween(520, easing = Motion.Ease)) }
-                }
-            } else {
-                infoX.snapTo(0f)
-                infoAlpha.snapTo(1f)
-                displayedItem = target
-                displayedIndex = index
-            }
-        } else if (d == 0 || frontBitmap == null) {
-            frontX.snapTo(0f)
-            frontAlpha.snapTo(1f)
-            backX.snapTo(0f)
-            backAlpha.snapTo(0f)
-            infoX.snapTo(0f)
-            infoAlpha.snapTo(1f)
-            frontBitmap = bmp.asImageBitmap()
-            backBitmap = null
-            displayedItem = target
-            displayedIndex = index
-        } else {
-            backX.snapTo(screenW * 0.12f * d)
-            backAlpha.snapTo(0f)
-            frontX.snapTo(0f)
-            frontAlpha.snapTo(1f)
-            infoX.snapTo(infoSlidePx * d)
-            infoAlpha.snapTo(0f)
-            backBitmap = bmp.asImageBitmap()
-            displayedItem = target
-            displayedIndex = index
-            coroutineScope {
-                launch { backX.animateTo(0f, tween(650, easing = Motion.Ease)) }
-                launch { backAlpha.animateTo(1f, tween(650, easing = Motion.Ease)) }
-                launch { frontX.animateTo(-screenW * 0.06f * d, tween(650, easing = Motion.Ease)) }
-                launch { frontAlpha.animateTo(0f, tween(650, easing = Motion.Ease)) }
-                launch { infoX.animateTo(0f, tween(520, easing = Motion.Ease)) }
-                launch { infoAlpha.animateTo(1f, tween(520, easing = Motion.Ease)) }
-            }
-            frontBitmap = backBitmap
-            backBitmap = null
-            frontX.snapTo(0f)
-            frontAlpha.snapTo(1f)
-            backX.snapTo(0f)
-            backAlpha.snapTo(0f)
-        }
-        val next = items.getOrNull((index + 1) % items.size)
-        if (next != null && next.backdropUrl != target.backdropUrl) {
-            withContext(Dispatchers.IO) {
-                HeroPosters.load(next.backdropUrl, Wallpapers.screenW, Wallpapers.screenH)
-            }
-        }
-        val nextProviders = next?.providerUrls.orEmpty()
-        if (nextProviders.isNotEmpty()) {
-            withContext(Dispatchers.IO) { nextProviders.forEach { ProviderLogos.load(it) } }
-        }
-        Ratings.fetchFor(target, allowOmdb = false)
-        next?.let { Ratings.fetchFor(it, allowOmdb = false) }
+        slide.advance(items, index, dir)
     }
     val infoShift by animateDpAsState(
         targetValue = if (focused) bottomInset - 4.dp + HeroRestLift else 0.dp,
@@ -381,35 +295,14 @@ fun HeroRow(
     )
 
     Box(modifier.fillMaxWidth().clipToBounds().focusRequester(focusRequester).focusable()) {
-        backBitmap?.let { bmp ->
-            Image(
-                bitmap = bmp,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().graphicsLayer {
-                    translationX = backX.value
-                    alpha = backAlpha.value
-                },
-            )
-        }
-        frontBitmap?.let { bmp ->
-            Image(
-                bitmap = bmp,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().graphicsLayer {
-                    translationX = frontX.value
-                    alpha = frontAlpha.value
-                },
-            )
-        }
+        TrendingSlideImages(slide)
         Column(
             Modifier.align(Alignment.BottomStart)
                 .padding(start = 45.dp, end = 160.dp, bottom = bottomInset + 28.dp + HeroRestLift)
                 .offset(y = infoShift)
                 .graphicsLayer {
-                    translationX = infoX.value
-                    alpha = infoAlpha.value
+                    translationX = slide.infoX.value
+                    alpha = slide.infoAlpha.value
                 },
         ) {
             val logo = titleLogo
