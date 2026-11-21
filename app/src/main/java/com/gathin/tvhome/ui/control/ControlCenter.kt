@@ -178,7 +178,7 @@ private fun MainPage(
     val context = LocalContext.current
     val laser = remember { HisenseLaserPanel.usable(context) }
     val showsVolume = remember { OutputDevice.showsVolume(context) }
-    val showsBrightness = remember { OutputDevice.showsBrightness() }
+    val showsBrightness = remember { OutputDevice.showsBrightness() && !SystemProbe.hidesBrightness(context) }
     PollBrightness(vm, laser, poll)
     val first = remember { FocusRequester() }
     val networkFocus = remember { FocusRequester() }
@@ -413,9 +413,13 @@ private fun SliderRow(
 private fun VolumeRow(vm: HomeViewModel, returnTo: FocusRequester) {
     val volume = vm.volume
     SliderRow(
-        glyph = if (volume.muted) Glyph.SpeakerMuted else Glyph.Speaker,
-        level = if (volume.muted) 0f else volume.fraction,
-        value = if (volume.muted) stringResource(R.string.cc_muted) else volume.level.toString(),
+        glyph = if (volume.muted && !volume.external) Glyph.SpeakerMuted else Glyph.Speaker,
+        level = if (volume.muted || volume.external) 0f else volume.fraction,
+        value = when {
+            volume.external -> stringResource(R.string.cc_volume_external)
+            volume.muted -> stringResource(R.string.cc_muted)
+            else -> volume.level.toString()
+        },
         steps = volume.max,
         onStep = vm::adjustVolume,
         modifier = Modifier.focusProperties { up = returnTo },
