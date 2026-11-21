@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import com.gathin.tvhome.R
 import com.gathin.tvhome.CityLookup
 import com.gathin.tvhome.QWeatherClient
+import com.gathin.tvhome.settings.AerialSettings
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -135,11 +136,20 @@ object Weather {
                     conditionText = prefs.getString("condition_text", null).takeIf { isKeyedSource() },
                 )
                 if (isKeyedSource()) alertTitle = prefs.getString("alert_title", null)
+                lastAttempt = prefs.getLong("fetched_at", 0)
             }
         }
     }
 
     private var failed = false
+
+    fun diagnostics(): String {
+        if (!started) return "not started in this process"
+        fun ago(at: Long) = if (at == 0L) "never" else "${(System.currentTimeMillis() - at) / 60_000} min ago"
+        return "shown=${now != null} chosen=$chosen located=${!prefs.getFloat("lat", Float.NaN).isNaN()}; " +
+            "read ${ago(prefs.getLong("fetched_at", 0))}; attempt ${ago(lastAttempt)}, result=${if (lastAttempt == 0L) "none" else if (failed) "failed" else "success"}, " +
+            "inFlight=${job?.isActive == true}"
+    }
 
     private const val LAUNCHER_PREFS = "launcher_settings"
     private lateinit var launcherPrefs: SharedPreferences
@@ -223,6 +233,7 @@ object Weather {
     private fun qweatherRefresh() {
         lastAttempt = System.currentTimeMillis()
         QWeatherClient.load(app) { result ->
+            if (weatherSource != "qweather") return@load
             if (result == null) {
                 failed = true
                 return@load
@@ -296,6 +307,7 @@ object Weather {
     }
 
     private fun refresh() {
+        if (!AerialSettings.showWeather) return
         if (weatherSource == "qweather") { qweatherRefresh(); return }
         lastAttempt = System.currentTimeMillis()
         job?.cancel()
