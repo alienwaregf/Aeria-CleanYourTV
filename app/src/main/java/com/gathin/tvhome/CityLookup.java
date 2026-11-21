@@ -154,26 +154,21 @@ public final class CityLookup {
         }
     }
 
-    private static String[] voteField(String[] g138, String[] gcn, int idx) {
-        String v138 = g138 != null && g138.length > idx ? g138[idx] : null;
-        String vcn = gcn != null && gcn.length > idx ? gcn[idx] : null;
-        if (v138 != null && !v138.isEmpty()) return new String[]{v138, "ip138"};
-        if (vcn != null && !vcn.isEmpty()) return new String[]{vcn, "ip.cn"};
-        return null;
-    }
-
     private static String[] ipCityName() {
         String ip = publicIpv4();
         String[] g138 = ip != null ? geoFromIp138(ip) : null;
         String[] gcn = ip != null ? geoFromIpcn(ip) : null;
-        String[] provVote = voteField(g138, gcn, 0);
-        String[] cityVote = voteField(g138, gcn, 1);
-        if (provVote != null && isChinaProv(provVote[0])) {
-            String name = cityVote != null ? cityVote[0] : provVote[0];
-            String src = cityVote != null ? cityVote[1] : provVote[1];
-            return new String[]{name, src};
+        String[] g = g138;
+        String src = "ip138";
+        if (g == null || g.length == 0 || !isChinaProv(g[0])) {
+            g = gcn;
+            src = "ip.cn";
         }
-        return null;
+        if (g == null || g.length == 0 || !isChinaProv(g[0])) return null;
+        String prov = g[0];
+        String city = g.length > 1 ? g[1] : "";
+        String name = city != null && !city.isEmpty() ? city : prov;
+        return new String[]{name, src};
     }
 
     private static String[] matchCity(Context context, String str) {

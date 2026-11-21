@@ -333,7 +333,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun bootTargetLabel(): String? {
-        AerialSettings.bootApp?.let { pkg -> return entry(pkg)?.label ?: hiddenApps.firstOrNull { it.key == pkg }?.label ?: pkg }
+        AerialSettings.bootApp?.let { pkg -> return entry(pkg)?.label ?: pkg }
         val id = AerialSettings.bootSource ?: return null
         return entry(SOURCE_KEY_PREFIX + id)?.label ?: sources.firstOrNull { it.id == id }?.label
     }

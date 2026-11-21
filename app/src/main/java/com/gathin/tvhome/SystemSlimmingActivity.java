@@ -1,15 +1,16 @@
 package com.gathin.tvhome;
 
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.util.Log;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.widget.Toast;
 
 import androidx.activity.ComponentActivity;
@@ -19,6 +20,7 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -51,7 +53,6 @@ public final class SystemSlimmingActivity extends ComponentActivity {
     private static final String KEY_LIST = "slimming_list";
     private static final String KEY_DATE = "slimming_date";
     private static final String KEY_LABEL = "slimming_label";
-    private static final String KEY_NOTES = "slimming_notes";
     static final String KEY_SLIMMING_DAILY = "slimming_daily_check";
     private static final String KEY_SLIMMING_LAST_DAILY = "slimming_last_daily_check";
 
@@ -78,7 +79,9 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                 if (pendingFolder != null) loadList(pendingFolder, false);
                 else loadAll();
             }
-            @Override public void onRow(String pkg) { openDetails(pkg); }
+            @Override public void onRow(String pkg) { toggleRow(pkg); }
+            @Override public void onDisable(boolean includeOptional) { disableRecommended(includeOptional); }
+            @Override public void onRestore(boolean includeOptional) { enableRecommended(includeOptional); }
             @Override public void onPickerPick(String folder) {
                 ui.setShowPicker(false);
                 loadList(folder, false);
@@ -164,12 +167,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
         ui.setListText(getString(R.string.slimming_list, currentLabel,
                 debloat.recommended.size(), debloat.optional.size()));
         ui.setSourceText(getString(R.string.slimming_cached, date == null ? "" : date));
-        showNotes(Config.prefs(this).getString(KEY_NOTES, ""));
         return true;
-    }
-
-    private void showNotes(String notes) {
-        ui.setNotes(notes == null || notes.isEmpty() ? null : notes);
     }
 
     private void loadAll() {
@@ -183,13 +181,14 @@ public final class SystemSlimmingActivity extends ComponentActivity {
         });
         new Thread(() -> {
             List<String> useFolders = liveFolders();
+            final boolean githubOk = useFolders != null;
             if (useFolders == null) useFolders = snapshotFolders();
             final List<String> found = useFolders;
             runOnUiThread(() -> {
                 if (gen != loadGen) return;
                 folders = found;
                 if (folders == null) {
-                    ui.setStatusText(getString(R.string.slimming_failed_folders));
+                    ui.setStatusText(getString(R.string.slimming_no_github));
                     ui.setShowRetry(true);
                     loading = false;
                     return;
@@ -198,15 +197,27 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                 Match match = matchDevice(folders);
                 if (match.level == Match.HIGH) {
                     loadList(match.folder, true);
+                } else if (!githubOk) {
+                    ui.setStatusText(getString(R.string.slimming_no_github));
+                    ui.setShowRetry(true);
+                    ui.setListText(getString(R.string.slimming_list_none));
+                    ui.setSourceText("");
+                    loading = false;
                 } else {
-                    if (match.closest != null) {
-                        ui.setStatusText(getString(R.string.slimming_match_medium, match.closest));
+                    String makerNorm = normalise(Build.MANUFACTURER == null ? "" : Build.MANUFACTURER);
+                    List<String> makerTokens = tokens(Build.MANUFACTURER);
+                    boolean sameBrand = false;
+                    for (String folder : folders) {
+                        if (!makerNorm.isEmpty() && normalise(folder).contains(makerNorm)) { sameBrand = true; break; }
+                        if (!makerTokens.isEmpty() && !java.util.Collections.disjoint(tokens(folder), makerTokens)) { sameBrand = true; break; }
+                    }
+                    if (sameBrand) {
+                        ui.setStatusText(getString(R.string.slimming_no_model_same_brand));
                     } else {
-                        ui.setStatusText(getString(R.string.slimming_match_none));
+                        ui.setStatusText(getString(R.string.slimming_no_brand));
                     }
                     ui.setListText(getString(R.string.slimming_list_none));
                     ui.setSourceText("");
-                    showNotes("");
                     loading = false;
                 }
             });
@@ -220,7 +231,6 @@ public final class SystemSlimmingActivity extends ComponentActivity {
         new Thread(() -> {
             String today = LocalDate.now().toString();
             String label = folder;
-            String notes = "";
             String tvJson = fetchText(EXAMPLES_RAW + folder + "/tv.json");
             if (tvJson == null) tvJson = snapshotTvJson(folder);
             if (tvJson != null) {
@@ -228,14 +238,12 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                     JSONObject o = new JSONObject(tvJson);
                     String tv = o.optString("tv");
                     if (!tv.isEmpty()) label = tv;
-                    notes = o.optString("notes");
                 } catch (Exception ignored) {
                 }
             }
             if (label.equals(folder) && folder.equals(Config.prefs(this).getString(KEY_FOLDER, ""))) {
                 String cachedLabel = Config.prefs(this).getString(KEY_LABEL, "");
                 if (!cachedLabel.isEmpty()) label = cachedLabel;
-                notes = Config.prefs(this).getString(KEY_NOTES, "");
             }
             byte[] live = fetchBytes(EXAMPLES_RAW + folder + "/debloat.txt", MAX_LIST_BYTES);
             String source;
@@ -264,7 +272,6 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                 date = null;
             }
             final String useLabel = label;
-            final String useNotes = notes;
             final String useSource = source;
             final Debloat useDebloat = debloat;
             final String useLiveText = liveText;
@@ -284,7 +291,6 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                 ui.setListText(getString(R.string.slimming_list, useLabel,
                         useDebloat.recommended.size(), useDebloat.optional.size()));
                 ui.setSourceText(useSource == null ? "" : useSource);
-                showNotes(useNotes);
                 if (useDebloat.isEmpty()) {
                     ui.setStatusText(getString(R.string.slimming_empty));
                 } else if (useAutoHigh) {
@@ -298,11 +304,9 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                             .putString(KEY_LIST, useLiveText)
                             .putString(KEY_DATE, useDate)
                             .putString(KEY_LABEL, useLabel)
-                            .putString(KEY_NOTES, useNotes)
                             .apply();
                 }
                 refreshStates();
-                ui.setFocusFirst(ui.getFocusFirst() + 1);
             });
         }).start();
     }
@@ -322,6 +326,255 @@ public final class SystemSlimmingActivity extends ComponentActivity {
         }).start();
     }
 
+    private volatile boolean busy;
+    private Toast disableToast;
+
+    private void toastDisable(String line, int duration) {
+        runOnUiThread(() -> {
+            if (disableToast != null) disableToast.cancel();
+            disableToast = Toast.makeText(SystemSlimmingActivity.this, line, duration);
+            disableToast.show();
+        });
+    }
+
+    private static String appName(PackageManager pm, ApplicationInfo ai, String pkg) {
+        if (ai == null) return pkg;
+        CharSequence label = pm.getApplicationLabel(ai);
+        if (label == null || label.length() == 0) return pkg;
+        return label.toString();
+    }
+
+    private void disableRecommended(boolean includeOptional) {
+        if (busy) return;
+        List<String> pkgs = new ArrayList<>();
+        for (Row row : ui.getRecommended()) pkgs.add(row.pkg);
+        if (includeOptional) {
+            for (Row row : ui.getOptional()) pkgs.add(row.pkg);
+        }
+        if (pkgs.isEmpty()) {
+            ui.setStatusText(getString(R.string.slimming_disable_nothing));
+            return;
+        }
+        busy = true;
+        final int total = pkgs.size();
+        new Thread(() -> {
+            try {
+                int done = 0;
+                int skipped = 0;
+                boolean disconnected = false;
+                List<String> failed = new ArrayList<>();
+                try (Adb adb = Adb.connect(getApplicationContext(), 120_000, () ->
+                        runOnUiThread(() -> ui.setStatusText(getString(R.string.slimming_disable_waiting))))) {
+                    PackageManager pm = getPackageManager();
+                    for (int i = 0; i < pkgs.size(); i++) {
+                        String pkg = pkgs.get(i);
+                        final int index = i;
+                        ApplicationInfo ai;
+                        try {
+                            ai = pm.getApplicationInfo(pkg, 0);
+                        } catch (PackageManager.NameNotFoundException e) {
+                            ai = null;
+                        }
+                        final String name = appName(pm, ai, pkg);
+                        if (ai == null) {
+                            skipped++;
+                            continue;
+                        }
+                        if (!ai.enabled) {
+                            skipped++;
+                            continue;
+                        }
+                        runOnUiThread(() -> ui.setStatusText(getString(R.string.slimming_disable_running, index + 1, total, name)));
+                        try {
+                            adb.shell("am force-stop " + pkg);
+                            adb.shell("pm clear " + pkg);
+                            adb.shell("pm disable-user " + pkg);
+                        } catch (IOException e) {
+                            failed.add(pkg);
+                            disconnected = true;
+                            break;
+                        }
+                        boolean disabled = false;
+                        try {
+                            disabled = !pm.getApplicationInfo(pkg, 0).enabled;
+                        } catch (PackageManager.NameNotFoundException e) {
+                            disabled = true;
+                        }
+                        if (disabled) {
+                            done++;
+                        } else {
+                            failed.add(pkg);
+                        }
+                    }
+                } catch (IOException e) {
+                    String msg = e.getMessage() == null ? "" : e.getMessage();
+                    final int res;
+                    if (msg.contains("port 5555 closed")) res = R.string.slimming_disable_no_adb;
+                    else if (msg.contains("wasn't accepted")) res = R.string.slimming_disable_not_accepted;
+                    else res = R.string.slimming_disable_failed;
+                    runOnUiThread(() -> {
+                        ui.setStatusText(getString(res, msg));
+                    });
+                    return;
+                }
+                final int useDone = done;
+                final int useSkipped = skipped;
+                final int useFailed = failed.size();
+                final boolean useDisconnected = disconnected;
+                runOnUiThread(() -> {
+                    if (useDisconnected) {
+                        ui.setStatusText(getString(R.string.slimming_adb_disconnected));
+                    } else {
+                        ui.setStatusText(getString(R.string.slimming_disable_done, useDone, useSkipped, useFailed));
+                    }
+                    refreshStates();
+                });
+            } finally {
+                busy = false;
+            }
+        }).start();
+    }
+
+    private void enableRecommended(boolean includeOptional) {
+        if (busy) return;
+        List<String> pkgs = new ArrayList<>();
+        for (Row row : ui.getRecommended()) pkgs.add(row.pkg);
+        if (includeOptional) {
+            for (Row row : ui.getOptional()) pkgs.add(row.pkg);
+        }
+        if (pkgs.isEmpty()) {
+            ui.setStatusText(getString(R.string.slimming_restore_nothing));
+            return;
+        }
+        busy = true;
+        final int total = pkgs.size();
+        new Thread(() -> {
+            try {
+                int done = 0;
+                int skipped = 0;
+                boolean disconnected = false;
+                List<String> failed = new ArrayList<>();
+                try (Adb adb = Adb.connect(getApplicationContext(), 120_000, () ->
+                        runOnUiThread(() -> ui.setStatusText(getString(R.string.slimming_disable_waiting))))) {
+                    PackageManager pm = getPackageManager();
+                    for (int i = 0; i < pkgs.size(); i++) {
+                        String pkg = pkgs.get(i);
+                        final int index = i;
+                        ApplicationInfo ai;
+                        try {
+                            ai = pm.getApplicationInfo(pkg, 0);
+                        } catch (PackageManager.NameNotFoundException e) {
+                            ai = null;
+                        }
+                        final String name = appName(pm, ai, pkg);
+                        if (ai == null) {
+                            skipped++;
+                            continue;
+                        }
+                        if (ai.enabled) {
+                            skipped++;
+                            continue;
+                        }
+                        runOnUiThread(() -> ui.setStatusText(getString(R.string.slimming_restore_running, index + 1, total, name)));
+                        try {
+                            adb.shell("pm enable " + pkg);
+                        } catch (IOException e) {
+                            failed.add(pkg);
+                            disconnected = true;
+                            break;
+                        }
+                        boolean enabled = false;
+                        try {
+                            enabled = pm.getApplicationInfo(pkg, 0).enabled;
+                        } catch (PackageManager.NameNotFoundException e) {
+                            enabled = false;
+                        }
+                        if (enabled) {
+                            done++;
+                        } else {
+                            failed.add(pkg);
+                        }
+                    }
+                } catch (IOException e) {
+                    String msg = e.getMessage() == null ? "" : e.getMessage();
+                    final int res;
+                    if (msg.contains("port 5555 closed")) res = R.string.slimming_disable_no_adb;
+                    else if (msg.contains("wasn't accepted")) res = R.string.slimming_disable_not_accepted;
+                    else res = R.string.slimming_disable_failed;
+                    runOnUiThread(() -> {
+                        ui.setStatusText(getString(res, msg));
+                    });
+                    return;
+                }
+                final int useDone = done;
+                final int useSkipped = skipped;
+                final int useFailed = failed.size();
+                final boolean useDisconnected = disconnected;
+                runOnUiThread(() -> {
+                    if (useDisconnected) {
+                        ui.setStatusText(getString(R.string.slimming_adb_disconnected));
+                    } else {
+                        ui.setStatusText(getString(R.string.slimming_restore_done, useDone, useSkipped, useFailed));
+                    }
+                    refreshStates();
+                });
+            } finally {
+                busy = false;
+            }
+        }).start();
+    }
+
+    private void toggleRow(String pkg) {
+        if (busy) return;
+        PackageManager pm = getPackageManager();
+        ApplicationInfo ai;
+        try {
+            ai = pm.getApplicationInfo(pkg, 0);
+        } catch (PackageManager.NameNotFoundException e) {
+            ai = null;
+        }
+        final String name = appName(pm, ai, pkg);
+        if (ai == null) {
+            toastDisable(getString(R.string.slimming_toast_not_installed, name), Toast.LENGTH_SHORT);
+            return;
+        }
+        final boolean enable = !ai.enabled;
+        busy = true;
+        new Thread(() -> {
+            try {
+                try (Adb adb = Adb.connect(getApplicationContext(), 120_000, () ->
+                        runOnUiThread(() -> ui.setStatusText(getString(R.string.slimming_disable_waiting))))) {
+                    adb.shell((enable ? "pm enable " : "pm disable-user ") + pkg);
+                } catch (IOException e) {
+                    String msg = e.getMessage() == null ? "" : e.getMessage();
+                    final int res;
+                    if (msg.contains("port 5555 closed")) res = R.string.slimming_disable_no_adb;
+                    else if (msg.contains("wasn't accepted")) res = R.string.slimming_disable_not_accepted;
+                    else res = R.string.slimming_disable_failed;
+                    runOnUiThread(() -> {
+                        ui.setStatusText(getString(res, msg));
+                        Toast.makeText(SystemSlimmingActivity.this, getString(res, msg), Toast.LENGTH_LONG).show();
+                    });
+                    return;
+                }
+                boolean nowEnabled = false;
+                try {
+                    nowEnabled = getPackageManager().getApplicationInfo(pkg, 0).enabled;
+                } catch (PackageManager.NameNotFoundException e) {
+                    nowEnabled = false;
+                }
+                if (enable == nowEnabled) {
+                    toastDisable(getString(enable ? R.string.slimming_toast_enabled : R.string.slimming_toast_row_disabled, name), Toast.LENGTH_SHORT);
+                } else {
+                    toastDisable(getString(enable ? R.string.slimming_toast_enable_failed : R.string.slimming_toast_disable_failed, name), Toast.LENGTH_SHORT);
+                }
+                runOnUiThread(() -> refreshStates());
+            } finally {
+                busy = false;
+            }
+        }).start();
+    }
+
     private void refreshStateList(PackageManager pm, List<Row> list) {
         for (int i = 0; i < list.size(); i++) {
             Row old = list.get(i);
@@ -330,12 +583,25 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                 ApplicationInfo ai = pm.getApplicationInfo(row.pkg, 0);
                 row.label = String.valueOf(pm.getApplicationLabel(ai));
                 row.state = ai.enabled ? STATE_INSTALLED : STATE_DISABLED;
+                row.icon = drawableToBitmap(ai.loadIcon(pm));
             } catch (PackageManager.NameNotFoundException e) {
                 row.label = row.pkg;
                 row.state = STATE_NOT_INSTALLED;
             }
             list.set(i, row);
         }
+    }
+
+    private static Bitmap drawableToBitmap(Drawable d) {
+        if (d == null) return null;
+        if (d instanceof BitmapDrawable) return ((BitmapDrawable) d).getBitmap();
+        int w = Math.max(1, d.getIntrinsicWidth());
+        int h = Math.max(1, d.getIntrinsicHeight());
+        Bitmap b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(b);
+        d.setBounds(0, 0, w, h);
+        d.draw(c);
+        return b;
     }
 
     private void showFolderPicker() {
@@ -678,35 +944,30 @@ public final class SystemSlimmingActivity extends ComponentActivity {
         Debloat debloat = parseDebloat(liveText);
         if (debloat.isEmpty()) return;
         String label = folder;
-        String notes = "";
         String tvJson = fetchText(EXAMPLES_RAW + folder + "/tv.json");
         if (tvJson != null) {
             try {
                 JSONObject o = new JSONObject(tvJson);
                 String tv = o.optString("tv");
                 if (!tv.isEmpty()) label = tv;
-                notes = o.optString("notes");
             } catch (Exception ignored) {
             }
         }
         if (label.equals(folder)) {
             String cachedLabel = Config.prefs(ctx).getString(KEY_LABEL, "");
             if (!cachedLabel.isEmpty()) label = cachedLabel;
-            notes = Config.prefs(ctx).getString(KEY_NOTES, "");
         }
         String cached = Config.prefs(ctx).getString(KEY_LIST, null);
         if (cached != null) {
             Debloat cachedDebloat = parseDebloat(cached);
             if (debloat.recommended.equals(cachedDebloat.recommended)
                     && debloat.optional.equals(cachedDebloat.optional)
-                    && label.equals(Config.prefs(ctx).getString(KEY_LABEL, ""))
-                    && notes.equals(Config.prefs(ctx).getString(KEY_NOTES, ""))) return;
+                    && label.equals(Config.prefs(ctx).getString(KEY_LABEL, ""))) return;
         }
         Config.prefs(ctx).edit()
                 .putString(KEY_LIST, liveText)
                 .putString(KEY_DATE, LocalDate.now().toString())
                 .putString(KEY_LABEL, label)
-                .putString(KEY_NOTES, notes)
                 .apply();
     }
 
@@ -714,19 +975,11 @@ public final class SystemSlimmingActivity extends ComponentActivity {
         final String pkg;
         String label;
         int state = STATE_NOT_INSTALLED;
+        Bitmap icon;
 
         Row(String pkg) {
             this.pkg = pkg;
             this.label = pkg;
-        }
-    }
-
-    private void openDetails(String pkg) {
-        try {
-            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                    Uri.parse("package:" + pkg)));
-        } catch (Exception e) {
-            Toast.makeText(this, R.string.not_available, Toast.LENGTH_LONG).show();
         }
     }
 }
