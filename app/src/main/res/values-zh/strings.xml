@@ -9,6 +9,7 @@
     <string name="cc_network">网络</string>
     <string name="cc_settings">设置</string>
     <string name="cc_muted">已静音</string>
+    <string name="cc_volume_external">外接</string>
     <string name="cc_home_default">Aerial 是默认桌面</string>
     <string name="cc_home_guarded">桌面守护已开启</string>
     <string name="cc_home_not_default">尚未设为默认桌面</string>
@@ -119,6 +120,11 @@
     <string name="st_clock_small">小</string>
     <string name="st_clock_large">大</string>
     <string name="st_clock_size_hint">小：时间和天气在角上一行小字。大：屏幕上方一个大时钟，上面是日期，下面是天气。</string>
+    <string name="st_clock_hours">时钟制式</string>
+    <string name="st_clock_hours_hint">12 小时、24 小时，或跟随系统设置。</string>
+    <string name="st_clock_hours_system">跟随系统</string>
+    <string name="st_clock_hours_12">12 小时</string>
+    <string name="st_clock_hours_24">24 小时</string>
     <string name="st_names">App 名称</string>
     <string name="st_names_focused">只显示选中的</string>
     <string name="st_names_all">全部显示</string>
@@ -265,11 +271,8 @@
     <string name="slimming_optional">根据使用情况选择停用</string>
     <string name="slimming_list_none">清单：未选择</string>
     <string name="slimming_match_high">匹配度：高（型号完全一致）</string>
-    <string name="slimming_match_medium">最接近：%1$s（匹配度：中）</string>
-    <string name="slimming_match_none">没有把握的匹配 — 请在下面手动选一个清单</string>
     <string name="slimming_loading">正在拉取清单…</string>
     <string name="slimming_failed">拉取 %1$s 的清单失败</string>
-    <string name="slimming_failed_folders">拉取机型清单失败</string>
     <string name="slimming_no_github">⚠️ 无法连接到GitHub，请稍后重试</string>
     <string name="slimming_no_model_same_brand">暂时没有这款电视的清单，请点选“选择其他型号”拉取同品牌其他型号清单</string>
     <string name="slimming_no_brand">⚠️ 暂不支持此品牌</string>
