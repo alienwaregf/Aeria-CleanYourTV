@@ -606,6 +606,7 @@ object SystemProbe {
                     ?: generic.takeIf { resolves(context, it) }
                     ?: droidLogicRoute(context, info)
                     ?: jmgoRoute(context, info)
+                    ?: haierRoute(context, info)
                     ?: tclPlayer?.let { tclRoute(it, kind, label, hw(info.id)) }
                     ?: generic
                 val device = cec
@@ -670,6 +671,22 @@ object SystemProbe {
                 (activity.permission == null || ContextCompat.checkSelfPermission(context, activity.permission) == PackageManager.PERMISSION_GRANTED)
         }
     }
+
+    private fun haierRoute(context: Context, info: TvInputInfo): Intent? {
+        if (info.type != TvInputInfo.TYPE_HDMI || !info.id.startsWith(DROIDLOGIC_INPUTS)) return null
+        val hw = hw(info.id) ?: return null
+        val intent = Intent().setComponent(ComponentName(HAIER_MENU, "$HAIER_MENU.RootActivity"))
+            .putExtra("isNewSource", 1)
+            .putExtra("sourceid", hw)
+        val activity = runCatching { context.packageManager.getActivityInfo(intent.component!!, 0) }.getOrNull() ?: return null
+        return intent.takeIf {
+            activity.exported && activity.enabled && activity.applicationInfo.enabled &&
+                (activity.permission == null || ContextCompat.checkSelfPermission(context, activity.permission) == PackageManager.PERMISSION_GRANTED)
+        }
+    }
+
+    private const val HAIER_MENU = "com.haier.tv.menusetting"
+    private const val DROIDLOGIC_INPUTS = "com.droidlogic.tvinput/"
 
     private const val JMGO_TV = "com.jmgo.tv"
     private val JMGO_PORT = Regex("""\.Hdmi(\d)InputService/""")
