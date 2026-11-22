@@ -29,24 +29,27 @@ import javax.net.ssl.SSLException
 import kotlin.math.roundToInt
 
 enum class WeatherKind {
-    Clear, PartlyCloudy, Cloudy, Fog, Rain, Snow, Thunder,
-    LightRain, ModerateRain, HeavyRain, StormRain,
+    Clear, PartlyCloudy, LessCloudy, Cloudy, Fog, Rain, Snow, Thunder, ThunderShower,
+    LightRain, ModerateRain, HeavyRain, StormRain, Shower,
     LightSnow, ModerateSnow, HeavySnow, StormSnow,
-    Haze, Dust, Sand, Wind, Hail, Sleet,
+    Haze, Dust, Sand, LightWind, Wind, Typhoon, Tornado, Hail, Sleet,
 }
 
 internal fun kindNameRes(kind: WeatherKind): Int = when (kind) {
     WeatherKind.Clear -> R.string.weather_clear
     WeatherKind.PartlyCloudy -> R.string.weather_partly_cloudy
+    WeatherKind.LessCloudy -> R.string.weather_less_cloudy
     WeatherKind.Cloudy -> R.string.weather_cloudy
     WeatherKind.Fog -> R.string.weather_fog
     WeatherKind.Rain -> R.string.weather_rain
     WeatherKind.Snow -> R.string.weather_snow
     WeatherKind.Thunder -> R.string.weather_thunder
+    WeatherKind.ThunderShower -> R.string.weather_thunder_shower
     WeatherKind.LightRain -> R.string.weather_light_rain
     WeatherKind.ModerateRain -> R.string.weather_moderate_rain
     WeatherKind.HeavyRain -> R.string.weather_heavy_rain
     WeatherKind.StormRain -> R.string.weather_storm_rain
+    WeatherKind.Shower -> R.string.weather_shower
     WeatherKind.LightSnow -> R.string.weather_light_snow
     WeatherKind.ModerateSnow -> R.string.weather_moderate_snow
     WeatherKind.HeavySnow -> R.string.weather_heavy_snow
@@ -54,7 +57,10 @@ internal fun kindNameRes(kind: WeatherKind): Int = when (kind) {
     WeatherKind.Haze -> R.string.weather_haze
     WeatherKind.Dust -> R.string.weather_dust
     WeatherKind.Sand -> R.string.weather_sand
+    WeatherKind.LightWind -> R.string.weather_light_wind
     WeatherKind.Wind -> R.string.weather_wind
+    WeatherKind.Typhoon -> R.string.weather_typhoon
+    WeatherKind.Tornado -> R.string.weather_tornado
     WeatherKind.Hail -> R.string.weather_hail
     WeatherKind.Sleet -> R.string.weather_sleet
 }
@@ -197,13 +203,18 @@ object Weather {
         "DUST" -> WeatherKind.Dust
         "SAND" -> WeatherKind.Sand
         "WIND" -> WeatherKind.Wind
+        "LIGHT_WIND" -> WeatherKind.LightWind
+        "TYPHOON" -> WeatherKind.Typhoon
+        "TORNADO" -> WeatherKind.Tornado
         "HAIL" -> WeatherKind.Hail
         "SLEET" -> WeatherKind.Sleet
-        "THUNDER_SHOWER" -> WeatherKind.Thunder
+        "SHOWER" -> WeatherKind.Shower
+        "THUNDER_SHOWER" -> WeatherKind.ThunderShower
         "FOG" -> WeatherKind.Fog
         "CLOUDY" -> WeatherKind.Cloudy
         else -> when {
             skycon.startsWith("CLEAR") -> WeatherKind.Clear
+            skycon.startsWith("LESS_CLOUDY") -> WeatherKind.LessCloudy
             skycon.startsWith("PARTLY_CLOUDY") -> WeatherKind.PartlyCloudy
             else -> WeatherKind.Cloudy
         }
@@ -431,10 +442,12 @@ object Weather {
 
     private fun kindOf(code: Int): WeatherKind = when (code) {
         0 -> WeatherKind.Clear
-        1, 2 -> WeatherKind.PartlyCloudy
+        1 -> WeatherKind.LessCloudy
+        2 -> WeatherKind.PartlyCloudy
         3 -> WeatherKind.Cloudy
         45, 48 -> WeatherKind.Fog
         in 71..77, 85, 86 -> WeatherKind.Snow
+        in 80..82 -> WeatherKind.Shower
         in 95..99 -> WeatherKind.Thunder
         else -> WeatherKind.Rain
     }
