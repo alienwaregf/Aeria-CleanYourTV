@@ -40,7 +40,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -49,7 +48,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
@@ -101,7 +99,6 @@ import com.gathin.tvhome.tmdb.TmdbTrending
 import com.gathin.tvhome.weather.Weather
 import com.gathin.tvhome.weather.WeatherKind
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -155,12 +152,6 @@ fun WallpaperSheet(
                 .padding(start = 40.dp, end = 32.dp, top = 24.dp),
         ) {
             val scroll = rememberScrollState()
-            val scope = rememberCoroutineScope()
-            var scrollToBottomJob by remember { mutableStateOf<Job?>(null) }
-            fun scrollToBottom() {
-                scrollToBottomJob?.cancel()
-                scrollToBottomJob = scope.launch { scroll.animateScrollTo(scroll.maxValue) }
-            }
             Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(scroll).latestBringIntoView(scroll)) {
                 BasicText(stringResource(R.string.wp_title), style = Type.LargeTitle)
                 Spacer(Modifier.height(16.dp))
@@ -325,18 +316,16 @@ fun WallpaperSheet(
                 Spacer(Modifier.height(10.dp))
                 Group(stringResource(R.string.st_pin_hint)) { note ->
                     SettingRow(R.string.st_pin, null, note, first = true) {
-                        PinChoice(onPin, onFocused = { scrollToBottom() })
+                        PinChoice(onPin)
                     }
                 }
                 Spacer(Modifier.height(10.dp))
                 Group { note ->
                     SettingRow(R.string.system_slimming, stringResource(R.string.slimming_note), note, first = true) {
-                        Box(Modifier.onFocusChanged { if (it.hasFocus) scrollToBottom() }) {
-                            ActionChip(
-                                stringResource(R.string.slimming_open),
-                                Glyph.ChevronRight,
-                            ) { context.startActivity(Intent(context, SystemSlimmingActivity::class.java)) }
-                        }
+                        ActionChip(
+                            stringResource(R.string.slimming_open),
+                            Glyph.ChevronRight,
+                        ) { context.startActivity(Intent(context, SystemSlimmingActivity::class.java)) }
                     }
                 }
                 Spacer(Modifier.height(24.dp))
@@ -482,10 +471,10 @@ private fun SectionTitle(title: Int) {
 }
 
 @Composable
-private fun PinChoice(onPin: (on: Boolean) -> Unit, onFocused: () -> Unit) {
+private fun PinChoice(onPin: (on: Boolean) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         listOf(false to R.string.st_pin_off, true to R.string.st_pin_on).forEach { (on, label) ->
-            Chip(stringResource(label), on = AerialSettings.pinSet == on, onFocused = onFocused) {
+            Chip(stringResource(label), on = AerialSettings.pinSet == on) {
                 if (AerialSettings.pinSet != on) onPin(on)
             }
         }
