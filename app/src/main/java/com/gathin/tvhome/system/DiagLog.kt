@@ -67,7 +67,14 @@ object DiagLog {
         val f = file ?: return
         writer.execute {
             runCatching {
-                if (f.length() > FILE_LIMIT) f.renameTo(File(f.parentFile, "aerial-diag.old.log"))
+                if (f.length() > FILE_LIMIT) {
+                    val old = File(f.parentFile, "aerial-diag.old.log")
+                    old.delete()
+                    if (!f.renameTo(old)) {
+                        Log.w(TAG, "log rotate failed, dropping oversized log")
+                        f.delete()
+                    }
+                }
                 val fresh = !f.exists()
                 f.appendText(line + "\n")
                 if (fresh) f.setReadable(true, false)
