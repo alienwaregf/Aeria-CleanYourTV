@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -256,13 +257,19 @@ private fun Labels(
             )
         }
         val drift = saverDrift(now)
+        val large = AerialSettings.largeClock
+        val laidOut = if (large) Type.Clock.fontSize else Type.Title.fontSize
         if (time > 0f && AerialSettings.screensaverClock) BasicText(
             timeText(now),
-            style = SaverClockStyle,
+            style = if (large) Type.Clock.copy(color = SaverClockStyle.color) else SaverClockStyle.copy(fontSize = laidOut),
             modifier = Modifier
                 .align(if (AerialSettings.clockRight) Alignment.TopEnd else Alignment.TopStart)
                 .padding(top = SaverClockTop, start = SaverClockSide, end = SaverClockSide)
                 .graphicsLayer {
+                    val s = SaverClockStyle.fontSize.toPx() / laidOut.toPx()
+                    transformOrigin = TransformOrigin(if (AerialSettings.clockRight) 1f else 0f, 0f)
+                    scaleX = s
+                    scaleY = s
                     alpha = time
                     translationX = drift.x.toPx()
                     translationY = drift.y.toPx()
