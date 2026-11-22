@@ -664,38 +664,45 @@ fun CornerClock(now: LocalDateTime, modifier: Modifier = Modifier, toSaver: () -
 
 private fun emojiFor(w: WeatherNow): String = when (w.kind) {
     WeatherKind.Clear -> if (!w.day) "🌙" else "☀️"
-    WeatherKind.PartlyCloudy -> "☁️"
+    WeatherKind.PartlyCloudy -> "⛅"
+    WeatherKind.LessCloudy -> "🌤️"
     WeatherKind.Cloudy -> "☁️"
     WeatherKind.Fog -> "🌫️"
     WeatherKind.Rain -> "🌧️"
-    WeatherKind.LightRain -> "🌧️"
+    WeatherKind.LightRain -> "☔"
     WeatherKind.ModerateRain -> "🌧️"
     WeatherKind.HeavyRain -> "🌧️"
     WeatherKind.StormRain -> "🌧️"
+    WeatherKind.Shower -> "🌦️"
     WeatherKind.Snow -> "❄️"
-    WeatherKind.LightSnow -> "❄️"
+    WeatherKind.LightSnow -> "🌨️"
     WeatherKind.ModerateSnow -> "❄️"
-    WeatherKind.HeavySnow -> "❄️"
-    WeatherKind.StormSnow -> "❄️"
-    WeatherKind.Thunder -> "⛈️"
+    WeatherKind.HeavySnow -> "⛄"
+    WeatherKind.StormSnow -> "⛄"
+    WeatherKind.Thunder -> "🌩️"
+    WeatherKind.ThunderShower -> "⛈️"
     WeatherKind.Haze -> "🌫️"
     WeatherKind.Dust -> "💨"
     WeatherKind.Sand -> "🏜️"
+    WeatherKind.LightWind -> "🍃"
     WeatherKind.Wind -> "🌬️"
+    WeatherKind.Typhoon -> "🌀"
+    WeatherKind.Tornado -> "🌪️"
     WeatherKind.Hail -> "🧊"
-    WeatherKind.Sleet -> "🌨️"
+    WeatherKind.Sleet -> "🌧️🌨️"
 }
 
 private fun glyphFor(w: WeatherNow): Glyph = when (w.kind) {
     WeatherKind.Clear -> if (w.day) Glyph.Sun else Glyph.Moon
     WeatherKind.PartlyCloudy -> if (w.day) Glyph.CloudSun else Glyph.Cloud
+    WeatherKind.LessCloudy -> if (w.day) Glyph.CloudSun else Glyph.Cloud
     WeatherKind.Cloudy -> Glyph.Cloud
     WeatherKind.Fog -> Glyph.CloudFog
-    WeatherKind.Rain, WeatherKind.LightRain, WeatherKind.ModerateRain, WeatherKind.HeavyRain, WeatherKind.StormRain -> Glyph.CloudRain
+    WeatherKind.Rain, WeatherKind.LightRain, WeatherKind.ModerateRain, WeatherKind.HeavyRain, WeatherKind.StormRain, WeatherKind.Shower -> Glyph.CloudRain
     WeatherKind.Snow, WeatherKind.LightSnow, WeatherKind.ModerateSnow, WeatherKind.HeavySnow, WeatherKind.StormSnow -> Glyph.CloudSnow
-    WeatherKind.Thunder -> Glyph.CloudBolt
+    WeatherKind.Thunder, WeatherKind.ThunderShower -> Glyph.CloudBolt
     WeatherKind.Haze, WeatherKind.Dust, WeatherKind.Sand -> Glyph.CloudFog
-    WeatherKind.Wind -> Glyph.Cloud
+    WeatherKind.Wind, WeatherKind.LightWind, WeatherKind.Typhoon, WeatherKind.Tornado -> Glyph.Cloud
     WeatherKind.Hail, WeatherKind.Sleet -> Glyph.CloudRain
 }
 
