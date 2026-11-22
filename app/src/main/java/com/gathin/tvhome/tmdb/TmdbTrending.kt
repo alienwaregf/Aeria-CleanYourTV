@@ -102,6 +102,8 @@ object TmdbTrending {
     private var started = false
     private var lastAttempt = 0L
     private var failed = false
+    @Volatile
+    private var tmdbBlockedUntil = 0L
     private var job: Job? = null
     private var ratingsFlushJob: Job? = null
 
@@ -306,7 +308,16 @@ object TmdbTrending {
         }
     }
 
+    private fun tmdbBlocked(): Boolean = System.currentTimeMillis() < tmdbBlockedUntil
+
+    private fun markTmdbBlocked(c: HttpURLConnection) {
+        val retryAfter = c.getHeaderField("Retry-After")?.toLongOrNull()?.coerceIn(1, 60) ?: 10
+        tmdbBlockedUntil = System.currentTimeMillis() + retryAfter * 1000
+        Log.w(TAG, "TMDB 429, backing off ${retryAfter}s")
+    }
+
     private fun fetchImageDetails(key: String, item: TmdbItem): Pair<String, String> {
+        if (tmdbBlocked()) return Pair("", "")
         return runCatching {
             val isV4 = key.startsWith("eyJ")
             val base = if (item.mediaType == "tv") {
@@ -322,7 +333,15 @@ object TmdbTrending {
             c.setRequestProperty("Accept", "application/json")
             if (isV4) c.setRequestProperty("Authorization", "Bearer $key")
             try {
-                if (c.responseCode !in 200..299) return Pair("", "")
+                val code = c.responseCode
+                if (code == 429) {
+                    markTmdbBlocked(c)
+                    return Pair("", "")
+                }
+                if (code !in 200..299) {
+                    Log.w(TAG, "TMDB images HTTP $code")
+                    return Pair("", "")
+                }
                 val body = c.inputStream.use { it.readBytes().decodeToString() }
                 val root = JSONObject(body)
                 Pair(
@@ -332,7 +351,7 @@ object TmdbTrending {
             } finally {
                 c.disconnect()
             }
-        }.getOrDefault(Pair("", ""))
+        }.onFailure { Log.w(TAG, "TMDB images failed", it) }.getOrDefault(Pair("", ""))
     }
 
     private fun pickBackdrop(backdrops: JSONArray?): String? {
@@ -385,6 +404,7 @@ object TmdbTrending {
     }
 
     private fun fetchProviderUrls(key: String, item: TmdbItem): List<String>? {
+        if (tmdbBlocked()) return null
         return runCatching {
             val isV4 = key.startsWith("eyJ")
             val base = if (item.mediaType == "tv") {
@@ -399,7 +419,15 @@ object TmdbTrending {
             c.setRequestProperty("Accept", "application/json")
             if (isV4) c.setRequestProperty("Authorization", "Bearer $key")
             try {
-                if (c.responseCode !in 200..299) return null
+                val code = c.responseCode
+                if (code == 429) {
+                    markTmdbBlocked(c)
+                    return null
+                }
+                if (code !in 200..299) {
+                    Log.w(TAG, "TMDB providers HTTP $code")
+                    return null
+                }
                 val body = c.inputStream.use { it.readBytes().decodeToString() }
                 val results = JSONObject(body).optJSONObject("results") ?: return emptyList()
                 val best = HashMap<Int, Triple<String, Int, Int>>()
@@ -434,7 +462,7 @@ object TmdbTrending {
             } finally {
                 c.disconnect()
             }
-        }.getOrNull()
+        }.onFailure { Log.w(TAG, "TMDB providers failed", it) }.getOrNull()
     }
 
     private suspend fun backfillDetails(list: List<TmdbItem>): List<TmdbItem> {
