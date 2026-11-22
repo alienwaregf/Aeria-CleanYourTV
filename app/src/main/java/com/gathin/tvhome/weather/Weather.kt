@@ -35,26 +35,6 @@ enum class WeatherKind {
     Haze, Dust, Sand, Wind, Hail, Sleet,
 }
 
-enum class CloudTrend { STEADY, CLEARING, CLOUDING }
-
-private fun cloudBand(cover: Double): Int = when {
-    cover <= 0.2 -> 0
-    cover <= 0.5 -> 1
-    cover <= 0.8 -> 2
-    else -> 3
-}
-
-internal fun cloudTrend(dayCover: Double, nightCover: Double): CloudTrend {
-    if (dayCover.isNaN() || nightCover.isNaN()) return CloudTrend.STEADY
-    val day = cloudBand(dayCover)
-    val night = cloudBand(nightCover)
-    return when {
-        night > day -> CloudTrend.CLOUDING
-        night < day -> CloudTrend.CLEARING
-        else -> CloudTrend.STEADY
-    }
-}
-
 internal fun kindNameRes(kind: WeatherKind): Int = when (kind) {
     WeatherKind.Clear -> R.string.weather_clear
     WeatherKind.PartlyCloudy -> R.string.weather_partly_cloudy
@@ -79,7 +59,7 @@ internal fun kindNameRes(kind: WeatherKind): Int = when (kind) {
     WeatherKind.Sleet -> R.string.weather_sleet
 }
 
-data class WeatherNow(val celsius: Int, val kind: WeatherKind, val day: Boolean, val high: Int? = null, val low: Int? = null, val aqi: String? = null, val forecast: List<DayForecast> = emptyList(), val trend: CloudTrend = CloudTrend.STEADY, val conditionText: String? = null)
+data class WeatherNow(val celsius: Int, val kind: WeatherKind, val day: Boolean, val high: Int? = null, val low: Int? = null, val aqi: String? = null, val forecast: List<DayForecast> = emptyList(), val conditionText: String? = null)
 
 data class DayForecast(val day: Int, val dayText: String?, val high: Int?, val low: Int?)
 
@@ -132,7 +112,6 @@ object Weather {
                         if (dayText == null && high == null && low == null) null
                         else DayForecast(day = i, dayText = dayText, high = high, low = low)
                     } else emptyList(),
-                    trend = if (isKeyedSource()) runCatching { CloudTrend.valueOf(prefs.getString("trend", null) ?: "") }.getOrNull() ?: CloudTrend.STEADY else CloudTrend.STEADY,
                     conditionText = prefs.getString("condition_text", null).takeIf { isKeyedSource() },
                 )
                 if (isKeyedSource()) alertTitle = prefs.getString("alert_title", null)
@@ -257,7 +236,6 @@ object Weather {
         failed = false
         val kind = kindFromSkycon(result.skycon)
         val forecast = forecastDays(result)
-        val trend = cloudTrend(result.dayCloudCover, result.nightCloudCover)
         now = WeatherNow(
             celsius = result.temperatureC.roundToInt(),
             kind = kind,
@@ -266,7 +244,6 @@ object Weather {
             low = result.lowC,
             forecast = forecast,
             aqi = result.aqi,
-            trend = trend,
             conditionText = result.nowText.takeIf { it.isNotEmpty() },
         )
         alertTitle = result.alertTitle
@@ -292,7 +269,6 @@ object Weather {
                     putInt("forecast_${i}_low", row.low ?: NONE)
                 }
             }
-            putString("trend", trend.name)
             putString("place", result.city)
             if (result.aqi.isNullOrEmpty()) remove("aqi") else putString("aqi", result.aqi)
             if (result.nowText.isEmpty()) remove("condition_text") else putString("condition_text", result.nowText)
