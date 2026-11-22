@@ -2,6 +2,7 @@ package com.gathin.tvhome.ratings
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.core.content.edit
 import com.gathin.tvhome.tmdb.TmdbItem
 import org.json.JSONObject
@@ -10,9 +11,13 @@ import java.net.URL
 import java.net.URLEncoder
 
 object OmdbRatings {
+    private const val TAG = "OmdbRatings"
     private const val PREFS = "launcher_settings"
     const val KEY_OMDB_KEY = "omdb_key"
     private const val OMDB_URL = "https://www.omdbapi.com/"
+
+    @Volatile
+    private var tmdbBlockedUntil = 0L
 
     private lateinit var launcherPrefs: SharedPreferences
 
@@ -34,6 +39,7 @@ object OmdbRatings {
         if (::launcherPrefs.isInitialized) launcherPrefs.getString(KEY_OMDB_KEY, "").orEmpty().trim() else ""
 
     fun fetchImdbId(item: TmdbItem, tmdbKey: String): String? {
+        if (System.currentTimeMillis() < tmdbBlockedUntil) return null
         return runCatching {
             val isV4 = tmdbKey.startsWith("eyJ")
             val base = if (item.mediaType == "tv") {
@@ -48,13 +54,23 @@ object OmdbRatings {
             c.setRequestProperty("Accept", "application/json")
             if (isV4) c.setRequestProperty("Authorization", "Bearer $tmdbKey")
             try {
-                if (c.responseCode !in 200..299) return@runCatching null
+                val code = c.responseCode
+                if (code == 429) {
+                    val retryAfter = c.getHeaderField("Retry-After")?.toLongOrNull()?.coerceIn(1, 60) ?: 10
+                    tmdbBlockedUntil = System.currentTimeMillis() + retryAfter * 1000
+                    Log.w(TAG, "TMDB external_ids 429, backing off ${retryAfter}s")
+                    return@runCatching null
+                }
+                if (code !in 200..299) {
+                    Log.w(TAG, "TMDB external_ids HTTP $code")
+                    return@runCatching null
+                }
                 val body = c.inputStream.use { it.readBytes().decodeToString() }
                 JSONObject(body).optString("imdb_id", "")
             } finally {
                 c.disconnect()
             }
-        }.getOrNull()
+        }.onFailure { Log.w(TAG, "TMDB external_ids failed", it) }.getOrNull()
     }
 
     data class OmdbResult(val imdbRating: String)

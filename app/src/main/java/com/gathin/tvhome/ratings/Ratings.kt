@@ -7,8 +7,7 @@ import com.gathin.tvhome.tmdb.TmdbTrending
 import com.gathin.tvhome.wallpaper.ScreensaverMode
 import com.gathin.tvhome.wallpaper.Wallpapers
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 object Ratings {
@@ -74,10 +73,9 @@ object Ratings {
     }
 
     suspend fun refreshAll(items: List<TmdbItem>, allowOmdb: Boolean = false) {
-        coroutineScope {
-            items.forEach { item ->
-                launch { fetchFor(item, allowOmdb) }
-            }
+        items.forEachIndexed { index, item ->
+            if (index > 0) delay(1000)
+            fetchFor(item, allowOmdb)
         }
     }
 
