@@ -179,6 +179,9 @@ object TopShelfContent {
     private val artCache = object : android.util.LruCache<String, Bitmap>(3) {
         override fun sizeOf(key: String, value: Bitmap): Int = 1
     }
+
+    fun isArtCached(bitmap: Bitmap): Boolean =
+        artCache.snapshot().values.any { it === bitmap }
     private val amazonArt = java.util.regex.Pattern.compile("""^(https://m\.media-amazon\.com/images/S/[^.]+)\._UR(\d+),(\d+)_\..*$""")
 
     fun appArtBackdrop(context: Context, pkg: String, cards: List<ShelfCard>, w: Int, h: Int): Bitmap? {
@@ -225,7 +228,10 @@ object TopShelfContent {
     }
 
     private fun still(context: Context, key: String, w: Int, h: Int): Bitmap? {
-        artCache.get(key)?.let { return it }
+        artCache.get(key)?.let {
+            if (!it.isRecycled) return it
+            artCache.remove(key)
+        }
         val file = File(File(context.filesDir, "appart"), key.hashCode().toString() + ".jpg")
         if (file.exists()) {
             runCatching {

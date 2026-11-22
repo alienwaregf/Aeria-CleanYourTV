@@ -276,7 +276,7 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
                 }
                 if (pkgNonnull == artFor) {
                     artShow(bitmap)
-                } else {
+                } else if (!bitmap.isRecycled && !TopShelfContent.isArtCached(bitmap)) {
                     bitmap.recycle()
                 }
             }
@@ -297,13 +297,13 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
                     }
                 })
         }
-        if (bitmap == null) {
+        if (bitmap == null || bitmap.isRecycled) {
             return
         }
         artAt = 1 - artAt
         val next = art[artAt]
         val old = (next.drawable as? BitmapDrawable)?.bitmap
-        if (old != null && old !== bitmap && !old.isRecycled) {
+        if (old != null && old !== bitmap && !old.isRecycled && !TopShelfContent.isArtCached(old)) {
             old.recycle()
         }
         next.setImageBitmap(bitmap)
