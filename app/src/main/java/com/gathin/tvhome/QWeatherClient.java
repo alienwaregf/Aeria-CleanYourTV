@@ -33,12 +33,10 @@ public final class QWeatherClient {
         public final String[] dailySkyconDay;
         public final String[] dailyTextDay;
         public final String nowText;
-        public final double dayCloudCover;
-        public final double nightCloudCover;
 
         public final String aqi;
 
-        Result(String str, double d, String str2, Integer high, Integer low, String alert, int[] dailyMin, int[] dailyMax, String[] dailyDay, String[] textDay, boolean day, String aqi, String nowText, double dayCloud, double nightCloud) {
+        Result(String str, double d, String str2, Integer high, Integer low, String alert, int[] dailyMin, int[] dailyMax, String[] dailyDay, String[] textDay, boolean day, String aqi, String nowText) {
             this.city = str;
             this.temperatureC = d;
             this.skycon = str2;
@@ -52,8 +50,6 @@ public final class QWeatherClient {
             this.dailySkyconDay = dailyDay;
             this.dailyTextDay = textDay;
             this.nowText = nowText;
-            this.dayCloudCover = dayCloud;
-            this.nightCloudCover = nightCloud;
         }
     }
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
@@ -140,10 +136,6 @@ public final class QWeatherClient {
         if (today == null) {
             return null;
         }
-        JSONObject dayPart0 = today.optJSONObject("daytime");
-        JSONObject nightPart0 = today.optJSONObject("nighttime");
-        double dayCloud = dayPart0 == null ? Double.NaN : dayPart0.optDouble("cloudCover", Double.NaN);
-        double nightCloud = nightPart0 == null ? Double.NaN : nightPart0.optDouble("cloudCover", Double.NaN);
         boolean isDay = isDayNow(today.optJSONObject("astro"));
         double temp = valueOf(current.optJSONObject("temperature"));
         String nowCode = codeOf(current.optJSONObject("condition"));
@@ -177,7 +169,7 @@ public final class QWeatherClient {
         }
 
         return new Result(city[1], temp, skycon, high, low, pickAlertTitle(warning),
-                dailyMin, dailyMax, dailyDay, textDay, isDay, pickAqiText(air), nowText, dayCloud, nightCloud);
+                dailyMin, dailyMax, dailyDay, textDay, isDay, pickAqiText(air), nowText);
     }
 
     private static String pickAlertTitle(JSONObject warning) {
