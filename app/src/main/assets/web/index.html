@@ -205,9 +205,15 @@
   .grab { width: 36px; height: 5px; border-radius: 3px; background: var(--tertiary); margin: 0 auto 14px; }
   .sheet .pic { border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; background: var(--fill); width: 62%; margin: 0 auto; }
   .sheet .pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
-  .libgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 52vh; overflow-y: auto; padding: 2px; }
-  .libpic { padding: 0; border: 0; background: var(--fill); border-radius: 8px; overflow: hidden; aspect-ratio: 16 / 9; }
-  .libpic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .libscroll { max-height: 52vh; overflow-y: auto; overscroll-behavior: contain; margin: 0 -4px; padding: 2px 4px; }
+  .libgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: max-content; gap: 12px 8px; }
+  .libpic { padding: 0; border: 0; background: none; display: block; min-width: 0; text-align: center; cursor: pointer; }
+  .libpic img { width: 100%; aspect-ratio: 16 / 9; height: auto; object-fit: cover; display: block; border-radius: 8px; background: var(--fill); }
+  .libpic span { display: block; font-size: 11px; color: var(--secondary); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .libpic:active img { opacity: .6; }
+  .libsearch { background: var(--card); border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; }
+  @media (prefers-color-scheme: dark) { .libsearch { background: #2c2c2e; } }
+  .libsearch input { font-size: 16px; }
   .item .ithumb { width: 64px; aspect-ratio: 16 / 9; border-radius: 6px; object-fit: cover; margin-right: 12px; flex: none; background: var(--fill); }
   .sheet h3 { text-align: center; font-size: 17px; font-weight: 600; margin: 12px 0 2px; }
   .sheet .meta { text-align: center; font-size: 13px; color: var(--secondary); margin: 0 0 16px; }
@@ -440,7 +446,7 @@ const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 let state = null, stateJson = '';
 
-const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "g_live", "g_live_sub", "g_auto", "toast_wallpaper", "aria_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_haze", "wx_dust", "wx_sand", "wx_wind", "wx_hail", "wx_sleet", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "aria_rename", "toast_renamed", "toast_pinned", "toast_unpinned", "toast_folder_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "toast_tv_updated", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "ss_videos", "hint_videos", "ss_trending", "ss_system", "hint_trending", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "bg_url_ph", "bg_url_hint", "toast_bg_set", "toast_bg_bad", "this_tv", "folder_count", "folder_ph", "inputs_h", "inputs_hint", "rename_hint_app", "was_named", "arrange_hint", "arrange_unready", "hidden_h", "hidden_none", "hidden_locked", "show_app", "hide_app", "to_folder", "new_folder", "out_of_folder", "ungroup", "ungroup_confirm", "folder_hint", "toast_hidden", "toast_shown", "toast_in_folder", "toast_out_folder", "toast_ungrouped", "tab_looks", "looks_title", "show_on_home", "source_device", "source_plain", "source_device_hint", "tv_model", "sw_always", "sw_always_sub", "sw_weather", "sw_saver_time", "sw_saver_time_sub", "icon_h", "icon_library", "icon_own", "icon_custom", "toast_icon_picked", "drop_hint", "drop_sub", "drop_none", "toast_diag_paste", "tab_slimming", "slimming_h", "slimming_refresh", "slimming_daily_on", "slimming_daily_off", "slimming_no_list", "slimming_list_line", "wx_source", "wx_source_openmeteo", "slim_cmd_h", "slim_cmd_hint", "slim_cmd_mac", "slim_cmd_win", "slim_cmd_ip", "slim_cmd_mac_sub", "wx_source_qweather", "wx_qw_key_ph", "wx_qw_key_save", "wx_qw_key_saved", "wx_qw_host_ph", "wx_qw_host_save", "wx_qw_host_saved", "wx_qw_credit", "wx_qw_host_link", "tmdb_h", "tmdb_key_ph", "tmdb_key_save", "tmdb_key_saved", "tmdb_credit", "omdb_key_ph", "omdb_key_save", "omdb_key_saved", "trakt_key_ph", "trakt_key_save", "trakt_key_saved", "icon_more", "icon_more_hint", "icon_more_fail", "video_err_format", "video_err_room", "video_err_send"];
+const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "g_live", "g_live_sub", "g_auto", "toast_wallpaper", "aria_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_haze", "wx_dust", "wx_sand", "wx_wind", "wx_hail", "wx_sleet", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "aria_rename", "toast_renamed", "toast_pinned", "toast_unpinned", "toast_folder_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "toast_tv_updated", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "ss_videos", "hint_videos", "ss_trending", "ss_system", "hint_trending", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "bg_url_ph", "bg_url_hint", "toast_bg_set", "toast_bg_bad", "this_tv", "folder_count", "folder_ph", "inputs_h", "inputs_hint", "rename_hint_app", "was_named", "arrange_hint", "arrange_unready", "hidden_h", "hidden_none", "hidden_locked", "show_app", "hide_app", "to_folder", "new_folder", "out_of_folder", "ungroup", "ungroup_confirm", "folder_hint", "toast_hidden", "toast_shown", "toast_in_folder", "toast_out_folder", "toast_ungrouped", "tab_looks", "looks_title", "show_on_home", "source_device", "source_plain", "source_device_hint", "tv_model", "sw_always", "sw_always_sub", "sw_weather", "sw_saver_time", "sw_saver_time_sub", "icon_h", "icon_library", "icon_own", "icon_custom", "toast_icon_picked", "drop_hint", "drop_sub", "drop_none", "toast_diag_paste", "tab_slimming", "slimming_h", "slimming_refresh", "slimming_daily_on", "slimming_daily_off", "slimming_no_list", "slimming_list_line", "wx_source", "wx_source_openmeteo", "slim_cmd_h", "slim_cmd_hint", "slim_cmd_mac", "slim_cmd_win", "slim_cmd_ip", "slim_cmd_mac_sub", "wx_source_qweather", "wx_qw_key_ph", "wx_qw_key_save", "wx_qw_key_saved", "wx_qw_host_ph", "wx_qw_host_save", "wx_qw_host_saved", "wx_qw_credit", "wx_qw_host_link", "tmdb_h", "tmdb_key_ph", "tmdb_key_save", "tmdb_key_saved", "tmdb_credit", "omdb_key_ph", "omdb_key_save", "omdb_key_saved", "trakt_key_ph", "trakt_key_save", "trakt_key_saved", "icon_more", "icon_more_hint", "icon_more_fail", "video_err_format", "video_err_room", "video_err_send", "icon_search_ph", "icon_search_none"];
 const TEXTS = {
  "zh": [
   "屏幕保护程序",
@@ -479,7 +485,7 @@ const TEXTS = {
   "显示 {place} 的天气。",
   "改回按网络自动定位",
   "已改回自动定位",
-  "按网络自动定位：{place}。用了代理时常会定错，不对的话输入你所在的城市。",
+  "按网络自动定位：{place}。用了代理，或宽带的出口在外地（常见于联通、移动）时会定错，不对的话输入你所在的城市。",
   "还没有定位到。输入你所在的城市。",
   "信号源",
   "起名字",
@@ -618,7 +624,9 @@ const TEXTS = {
   "图标库没加载出来：电视或手机连不上 Aerial 官网。",
   "这个视频放不了：电视读不到视频轨道，请换一个 MP4 / MOV 文件",
   "电视空间不足，存不下这部视频",
-  "上传中断了，请再试一次"
+  "上传中断了，请再试一次",
+  "搜索 App 名称或包名",
+  "没有找到。换个叫法试试，或者输入包名。"
 ],
  "en": [
   "Screensaver",
@@ -657,7 +665,7 @@ const TEXTS = {
   "Showing the weather for {place}.",
   "Go back to locating by network",
   "Back to locating by network",
-  "Located from the network: {place}. A proxy often throws it off; if it is wrong, enter your city.",
+  "Located from the network: {place}. A proxy, or an internet line that exits in another city, throws it off; if it is wrong, enter your city.",
   "Not located yet. Enter your city.",
   "Input",
   "Rename",
@@ -796,7 +804,9 @@ const TEXTS = {
   "The icon library did not load: the TV or the phone cannot reach Aerial's website.",
   "This video cannot play: the TV found no video track in it. Try another MP4 / MOV file.",
   "Not enough room on the TV for this video.",
-  "The upload was interrupted. Please try again."
+  "The upload was interrupted. Please try again.",
+  "Search an app name or package",
+  "Nothing found. Try another name for it, or its package name."
 ]
 };
 const LANGS = Object.keys(TEXTS);
@@ -1479,18 +1489,29 @@ function tileSheet(e, inFolder, hidden) {
 async function libraryChooser(a) {
   const body = $('#sheetBody'); body.replaceChildren();
   body.appendChild(el('h3', '', t('icon_more'))); body.appendChild(el('p', 'meta', a.label));
-  const grid = el('div', 'libgrid'); body.appendChild(grid);
+  const search = el('label', 'field libsearch'); const q = el('input');
+  q.type = 'search'; q.placeholder = t('icon_search_ph'); q.autocomplete = 'off'; q.enterKeyHint = 'search';
+  q.setAttribute('autocapitalize', 'off'); q.spellcheck = false;
+  search.appendChild(q); body.appendChild(search);
+  const scroll = el('div', 'libscroll'); const grid = el('div', 'libgrid'); scroll.appendChild(grid); body.appendChild(scroll);
+  const none = el('p', 'empty', t('icon_search_none')); none.hidden = true; body.appendChild(none);
   const foot = body.appendChild(el('p', 'foot', t('icon_more_hint'))); foot.style.marginBottom = '12px';
   const c = el('div', 'list'); body.appendChild(c);
   action(c, t('cancel'), 'tint', closeSheet).style.fontWeight = '600';
   let lib;
   try { lib = await api('api/library/all'); } catch (err) { foot.textContent = t('icon_more_fail'); return; }
-  const apps = (lib.apps || []).slice().sort((x, y) => (y.app === a.key) - (x.app === a.key));
+  const names = new Map((state.apps || []).map(x => [x.key, [x.label, x.default, x.name].filter(Boolean)]));
+  const named = n => n ? (LANG === 'zh' ? [n.zh, n.en] : [n.en, n.zh]).filter(Boolean) : [];
+  const rank = x => x.app === a.key ? 0 : names.has(x.app) ? 1 : 2;
+  const apps = (lib.apps || []).slice().sort((x, y) => rank(x) - rank(y));
   for (const app of apps) for (const pic of app.choices) {
-    const b = el('button', 'libpic'); b.setAttribute('aria-label', app.app);
-    const img = el('img'); img.alt = ''; img.loading = 'lazy'; img.src = lib.base + pic.p;
+    const label = (names.get(app.app) || [])[0] || named(app.name)[0] || '';
+    const b = el('button', 'libpic'); b.setAttribute('aria-label', label || app.app);
+    b.dataset.find = [app.app, ...(names.get(app.app) || []), ...named(app.name), (app.name || {}).also || ''].join(' ').toLowerCase();
+    const img = el('img'); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; img.src = lib.base + pic.p;
     img.onerror = () => b.remove();
     b.appendChild(img);
+    if (label) b.appendChild(el('span', '', label));
     b.onclick = async () => {
       closeSheet(); toast(t('toast_sending_icon'));
       try {
@@ -1501,7 +1522,16 @@ async function libraryChooser(a) {
     };
     grid.appendChild(b);
   }
-  if (!grid.children.length) foot.textContent = t('icon_more_fail');
+  if (!grid.children.length) { foot.textContent = t('icon_more_fail'); return; }
+  q.oninput = () => {
+    const words = q.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    let shown = 0;
+    for (const b of grid.children) {
+      const on = words.every(w => b.dataset.find.includes(w));
+      b.hidden = !on; if (on) shown++;
+    }
+    none.hidden = shown > 0; scroll.hidden = shown === 0; scroll.scrollTop = 0;
+  };
 }
 function deviceChooser(a, e) {
   const body = $('#sheetBody'); body.replaceChildren();
