@@ -301,7 +301,29 @@ class HomeGuardService : AccessibilityService() {
             screenOnAt = SystemClock.elapsedRealtime()
             restartForegroundCheck()
             takeOverOnceSettled("screen on", woke = true)
+            closeChooserAfterWake()
         }
+    }
+
+    private var chooserCheckRun = 0
+
+    private fun closeChooserAfterWake(run: Int = 0, left: Int = WAKE_CHOOSER_RECHECKS) {
+        if (run == 0) {
+            chooserCheckRun++
+            return closeChooserAfterWake(chooserCheckRun, left)
+        }
+        if (run != chooserCheckRun || left <= 0 || aerialResumed) return
+        handler.postDelayed({ closeChooserAfterWake(run, left - 1) }, WAKE_CHOOSER_RECHECK_MS)
+        if (SystemClock.uptimeMillis() - aerialPausedAt > WAKE_CHOOSER_MS) return
+        val front = foreground()?.first ?: return
+        if (!isHomeChooser(front.first, front.second)) return
+        val since = SystemClock.uptimeMillis() - aerialPausedAt
+        Log.i(TAG, "the Home chooser is in front after the wake; closing it")
+        DiagLog.i(
+            "guard: wake, usage stats name ${front.first}/${front.second} in front, " +
+                "sincePaused=$since, wide=${wideResolvedHome()}; Back"
+        )
+        performGlobalAction(GLOBAL_ACTION_BACK)
     }
 
     private var screenOff = false
@@ -670,6 +692,12 @@ class HomeGuardService : AccessibilityService() {
         Log.i(TAG, "$reason with the stock launcher in front; bringing Aerial back")
         DiagLog.i("guard: $reason, front ${last?.first ?: "unknown"}; bringing Aerial back")
         goHome(woke)
+    }
+
+    override fun dump(fd: java.io.FileDescriptor?, writer: java.io.PrintWriter, args: Array<out String>?) {
+        writer.println("Aerial guard")
+        if (GuardSetup.isUserUnlocked(this)) runCatching { writer.println(diagnosticState()) }
+        DiagLog.dump(writer)
     }
 
     override fun onDestroy() {
@@ -1121,6 +1149,12 @@ class HomeGuardService : AccessibilityService() {
             PackageManager.MATCH_DEFAULT_ONLY,
         )?.activityInfo?.packageName
 
+    private fun wideResolvedHome(): String? =
+        packageManager.resolveActivity(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+            0,
+        )?.activityInfo?.packageName
+
     private val refreshHomesAfterPackageChange = Runnable { refreshStockHomes() }
 
     private val packageChanges = object : BroadcastReceiver() {
@@ -1262,6 +1296,9 @@ class HomeGuardService : AccessibilityService() {
         private const val BOOT_STOCK_CAP_MS = 20_000L
         private const val STOCK_OPENING_MS = 2_000L
         private const val WAKE_WINDOW_MS = 15_000L
+        private const val WAKE_CHOOSER_RECHECK_MS = 1_000L
+        private const val WAKE_CHOOSER_RECHECKS = 15
+        private const val WAKE_CHOOSER_MS = 60_000L
         private val BOOT_RECHECKS_MS = listOf(30_000L, 45_000L)
         private const val COVERED_UNSEEN_MS = 3_000L
         private const val DEAF_AFTER_MS = 20_000L
@@ -1273,6 +1310,9 @@ class HomeGuardService : AccessibilityService() {
         private const val STOCK_HOME_SLACK_MS = 100L
         private const val UI_BOOST = "mitv_fast_cur_anim_scale"
         private const val XGIMI_FRAMEWORK = "com.xgimi.xgimiframeworkui"
+        internal fun isHomeChooser(pkg: String, cls: String): Boolean =
+            (pkg == XGIMI_FRAMEWORK && cls.endsWith(".resolver.ResolverActivity")) ||
+                (pkg == "android" && cls == "com.android.internal.app.ResolverActivity")
         private const val JMGO_TV = "com.jmgo.tv"
         private const val FOREGROUND_POLL_MS = 1_000L
         private const val FOREGROUND_LOOKBACK_MS = 10_000L
@@ -1558,6 +1598,7 @@ class HomeGuardService : AccessibilityService() {
                 s.goHome()
                 return true
             }
+            if (SystemClock.elapsedRealtime() < BOOT_WINDOW_MS) s.closeChooserAfterWake()
             return false
         }
     }
