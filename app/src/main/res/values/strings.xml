@@ -86,6 +86,12 @@
     <string name="wx_wind">Strong Wind</string>
     <string name="wx_hail">Hail</string>
     <string name="wx_sleet">Sleet</string>
+    <string name="wx_less_cloudy">Few Clouds</string>
+    <string name="wx_shower">Showers</string>
+    <string name="wx_thunder_shower">Thunder Showers</string>
+    <string name="wx_light_wind">Light Wind</string>
+    <string name="wx_typhoon">Typhoon</string>
+    <string name="wx_tornado">Tornado</string>
     <string name="wp_live">Moving aerial films. They play while Home is on the top row (either row in two rows) and stop on the frame showing when you go further down to the apps, which stays as the picture; the next film picks up from there.</string>
     <string name="wp_auto_note">Light taken from the selected app\'s artwork.</string>
     <string name="wp_trending_note">Today\'s trending movies and TV from TMDB, full screen, rotating every 8 seconds. Add your TMDB key on the phone page.</string>
@@ -220,6 +226,12 @@
     <string name="weather_wind">Strong Wind</string>
     <string name="weather_hail">Hail</string>
     <string name="weather_sleet">Sleet</string>
+    <string name="weather_less_cloudy">Few Clouds</string>
+    <string name="weather_shower">Showers</string>
+    <string name="weather_thunder_shower">Thunder Showers</string>
+    <string name="weather_light_wind">Light Wind</string>
+    <string name="weather_typhoon">Typhoon</string>
+    <string name="weather_tornado">Tornado</string>
     <string name="weather_temperature">%1$d°</string>
     <string name="weather_high_low">H:%1$d°  L:%2$d°</string>
     <string name="weather_high_low_qweather">H:%1$d°C  L:%2$d°C</string>
