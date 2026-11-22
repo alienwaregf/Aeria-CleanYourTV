@@ -109,7 +109,6 @@ import com.gathin.tvhome.ui.components.diagLayer
 import com.gathin.tvhome.weather.Weather
 import com.gathin.tvhome.weather.WeatherKind
 import com.gathin.tvhome.weather.WeatherNow
-import com.gathin.tvhome.weather.CloudTrend
 import com.gathin.tvhome.weather.kindNameRes
 import java.text.SimpleDateFormat
 import java.time.LocalDateTime
@@ -632,10 +631,6 @@ private fun Modifier.capBox(fontSize: TextUnit) = layout { measurable, constrain
 }
 
 private fun conditionName(w: WeatherNow): Int {
-    if (w.day) {
-        if (w.trend == CloudTrend.CLOUDING && (w.kind == WeatherKind.Clear || w.kind == WeatherKind.PartlyCloudy)) return R.string.weather_clear_to_cloudy
-        if (w.trend == CloudTrend.CLEARING && w.kind == WeatherKind.PartlyCloudy) return R.string.weather_partly_to_clear
-    }
     return kindNameRes(w.kind)
 }
 
@@ -668,12 +663,8 @@ fun CornerClock(now: LocalDateTime, modifier: Modifier = Modifier, toSaver: () -
 }
 
 private fun emojiFor(w: WeatherNow): String = when (w.kind) {
-    WeatherKind.Clear -> if (!w.day) "🌙" else if (w.trend == CloudTrend.CLOUDING) "🌤️" else "☀️"
-    WeatherKind.PartlyCloudy -> if (!w.day) "☁️" else when (w.trend) {
-        CloudTrend.CLOUDING -> "🌤️"
-        CloudTrend.CLEARING -> "🌥️"
-        else -> "☁️"
-    }
+    WeatherKind.Clear -> if (!w.day) "🌙" else "☀️"
+    WeatherKind.PartlyCloudy -> "☁️"
     WeatherKind.Cloudy -> "☁️"
     WeatherKind.Fog -> "🌫️"
     WeatherKind.Rain -> "🌧️"
