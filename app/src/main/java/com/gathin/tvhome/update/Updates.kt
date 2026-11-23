@@ -143,11 +143,11 @@ object Updates {
 
 
     fun newer(a: String, b: String): Boolean {
-        val x = a.split('.').map { it.toIntOrNull() ?: 0 }
-        val y = b.split('.').map { it.toIntOrNull() ?: 0 }
+        val x = a.split('.').map { it.toLongOrNull() ?: 0 }
+        val y = b.split('.').map { it.toLongOrNull() ?: 0 }
         for (i in 0 until maxOf(x.size, y.size)) {
             val d = x.getOrElse(i) { 0 } - y.getOrElse(i) { 0 }
-            if (d != 0) return d > 0
+            if (d != 0L) return d > 0
         }
         return false
     }
