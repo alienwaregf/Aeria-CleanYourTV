@@ -40,6 +40,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -48,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
@@ -61,9 +63,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.gathin.tvhome.BuildConfig
 import com.gathin.tvhome.R
 import com.gathin.tvhome.SystemSlimmingActivity
 import com.gathin.tvhome.settings.AerialSettings
+import com.gathin.tvhome.system.HomeStatus
 import com.gathin.tvhome.settings.ClockHours
 import com.gathin.tvhome.settings.FocusStyle
 import com.gathin.tvhome.settings.UiSounds
@@ -86,6 +90,7 @@ import com.gathin.tvhome.ui.theme.GlyphIcon
 import com.gathin.tvhome.ui.theme.Motion
 import com.gathin.tvhome.ui.theme.Palette
 import com.gathin.tvhome.ui.theme.Type
+import com.gathin.tvhome.update.Updates
 import com.gathin.tvhome.wallpaper.PhoneServer
 import com.gathin.tvhome.wallpaper.AerialFormats
 import com.gathin.tvhome.wallpaper.AerialQuality
@@ -112,6 +117,8 @@ fun WallpaperSheet(
     onHiddenApps: () -> Unit,
     onStartScreensaver: () -> Unit,
     onPin: (on: Boolean) -> Unit,
+    homeStatus: HomeStatus,
+    onUpdate: () -> Unit,
     onSettled: (Boolean) -> Unit = {},
     warm: Boolean = false,
 ) {
@@ -152,6 +159,7 @@ fun WallpaperSheet(
                 .padding(start = 40.dp, end = 32.dp, top = 24.dp),
         ) {
             val scroll = rememberScrollState()
+            val scope = rememberCoroutineScope()
             Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(scroll).latestBringIntoView(scroll)) {
                 BasicText(stringResource(R.string.wp_title), style = Type.LargeTitle)
                 Spacer(Modifier.height(16.dp))
@@ -326,6 +334,30 @@ fun WallpaperSheet(
                             stringResource(R.string.slimming_open),
                             Glyph.ChevronRight,
                         ) { context.startActivity(Intent(context, SystemSlimmingActivity::class.java)) }
+                    }
+                }
+                Spacer(Modifier.height(22.dp))
+                SectionTitle(R.string.cc_about)
+                Group(stringResource(R.string.cc_about_version, Updates.current) + " · " + BuildConfig.FLAVOR) { note ->
+                    val latest = Updates.available
+                    SettingRow(R.string.cc_about_update, null, note, first = true) {
+                        Box(Modifier.onFocusChanged { if (it.hasFocus) scope.launch { scroll.animateScrollTo(scroll.maxValue) } }) {
+                            ActionChip(
+                                latest?.let { stringResource(R.string.cc_update_to, it) } ?: stringResource(R.string.cc_about_latest),
+                                Glyph.ChevronRight,
+                                onClick = { if (latest != null) onUpdate() else Updates.checkIfStale(force = true) },
+                            )
+                        }
+                    }
+                    val (dot, label) = when (homeStatus) {
+                        HomeStatus.Default -> Palette.Green to R.string.cc_home_default
+                        HomeStatus.Guarded -> Palette.Green to R.string.cc_home_guarded
+                        HomeStatus.NotDefault -> Palette.Orange to R.string.cc_home_not_default
+                    }
+                    Box(Modifier.padding(start = 18.dp).fillMaxWidth().height(1.dp).background(Palette.Hairline))
+                    Row(Modifier.fillMaxWidth().height(58.dp).padding(start = 18.dp, end = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                        BasicText(stringResource(label), style = Type.Body, modifier = Modifier.weight(1f), maxLines = 1)
+                        Box(Modifier.size(10.dp).clip(CircleShape).background(dot))
                     }
                 }
                 Spacer(Modifier.height(24.dp))
