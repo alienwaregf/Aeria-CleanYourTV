@@ -63,7 +63,7 @@ sealed interface Overlay {
     data class Pin(val mode: PinMode, val onDone: () -> Unit) : Overlay
 }
 
-enum class CcPage { Main, Inputs, InputSettings, Setup }
+enum class CcPage { Main, Inputs, InputSettings, Setup, Update }
 
 private const val LEADING_TILES = 13
 

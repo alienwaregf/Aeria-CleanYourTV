@@ -71,6 +71,7 @@ import com.gathin.tvhome.ui.home.TileFaces
 import com.gathin.tvhome.ui.theme.FontWarmup
 import com.gathin.tvhome.ui.theme.canvasDensity
 import com.gathin.tvhome.update.SelfCompile
+import com.gathin.tvhome.update.Updates
 import com.gathin.tvhome.ui.components.UhdCanvas
 import com.gathin.tvhome.settings.AerialSettings
 import com.gathin.tvhome.wallpaper.PhoneServer
@@ -121,6 +122,7 @@ class MainActivity : ComponentActivity() {
             vm.refreshNetwork()
             Weather.refreshIfStale(networkCameUp = true)
             TmdbTrending.refreshIfStale()
+            Updates.checkIfStale(networkCameUp = true)
         }
         override fun onLost(network: Network) = runOnUiThread { vm.refreshNetwork() }
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = runOnUiThread { vm.refreshNetwork() }
@@ -216,6 +218,7 @@ class MainActivity : ComponentActivity() {
         val uhd = UhdCanvas.scale(this)
         Wallpapers.init(this)
         Weather.init(this)
+        Updates.init(this)
         TmdbTrending.init(this)
         Ratings.init(this)
         startClockTick()
@@ -746,6 +749,7 @@ class MainActivity : ComponentActivity() {
         }
         Weather.refreshIfStale()
         TmdbTrending.refreshIfStale()
+        Updates.checkIfStale()
     }
 
     override fun onResume() {
@@ -766,6 +770,7 @@ class MainActivity : ComponentActivity() {
         restartIdleTimer()
         GuardSetup.setHomeInFront(this, true)
         HomeGuardService.onAerialResumed()
+        Updates.onHomeResumed()
         Weather.refreshOnResume()
         TmdbTrending.refreshIfStale()
         vm.refreshSystem()
@@ -798,6 +803,7 @@ class MainActivity : ComponentActivity() {
         DiagLog.i("onPause")
         leftForAnApp = openedAppSinceHome
         GuardSetup.setHomeInFront(this, false)
+        Updates.onHomePaused()
         if (HomeGuardService.onAerialPaused()) {
             vm.homeBounce = true
             idleHandler.removeCallbacks(endHomeBounce)
