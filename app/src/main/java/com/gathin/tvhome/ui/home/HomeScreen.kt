@@ -86,7 +86,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRequester
 import com.gathin.tvhome.apps.AppBackgrounds
 import com.gathin.tvhome.apps.AppEntry
+import com.gathin.tvhome.apps.BilibiliSubs
+import com.gathin.tvhome.apps.HuyaSubs
 import com.gathin.tvhome.apps.TopShelfContent
+import com.gathin.tvhome.apps.YoutubeSubs
 import com.gathin.tvhome.apps.ShelfHostView
 import com.gathin.tvhome.apps.rememberShelfHost
 import com.gathin.tvhome.ui.control.ControlCenter
@@ -287,7 +290,7 @@ fun HomeScreen(
             shelfDataVersion++
         }
     }
-    LaunchedEffect(vm.resumed) {
+    LaunchedEffect(vm.resumed, YoutubeSubs.version, BilibiliSubs.version, HuyaSubs.version) {
         if (!vm.resumed) return@LaunchedEffect
         shelfHost.shelf.refresh()
         withContext(Dispatchers.IO) {
@@ -304,6 +307,15 @@ fun HomeScreen(
             shelfHost.shelf.focus(null, focusedIndex)
             return@LaunchedEffect
         }
+        if (YoutubeSubs.isYoutube(key)) {
+            YoutubeSubs.refreshAsync(key)
+        }
+        if (BilibiliSubs.isBilibili(key)) {
+            BilibiliSubs.refreshAsync(key)
+        }
+        if (HuyaSubs.isHuya(key)) {
+            HuyaSubs.refreshAsync(key)
+        }
         if (Wallpapers.moves() || Wallpapers.isTrending()) {
             shelfHost.shelf.focus(null, focusedIndex)
             return@LaunchedEffect
@@ -319,7 +331,20 @@ fun HomeScreen(
             else shelfHost.shelfAppFor(appContext, key)
         shelfHost.shelf.focus(app, focusedIndex)
     }
-
+    LaunchedEffect(BilibiliSubs.version) {
+        val key = focusedKey
+        if (!isDockApp || key == null || !BilibiliSubs.isBilibili(key)) return@LaunchedEffect
+        if (Wallpapers.moves() || Wallpapers.isTrending()) return@LaunchedEffect
+        if (TopShelfContent.cardsFor(key).isEmpty()) return@LaunchedEffect
+        shelfHost.shelf.focus(shelfHost.shelfAppFor(appContext, key), focusedIndex)
+    }
+    LaunchedEffect(HuyaSubs.version) {
+        val key = focusedKey
+        if (!isDockApp || key == null || !HuyaSubs.isHuya(key)) return@LaunchedEffect
+        if (Wallpapers.moves() || Wallpapers.isTrending()) return@LaunchedEffect
+        if (TopShelfContent.cardsFor(key).isEmpty()) return@LaunchedEffect
+        shelfHost.shelf.focus(shelfHost.shelfAppFor(appContext, key), focusedIndex)
+    }
     val gridEnabled = overlay == Overlay.None
 
     val filmCover = remember { Animatable(0f) }
