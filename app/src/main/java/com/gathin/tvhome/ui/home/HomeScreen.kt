@@ -1124,6 +1124,8 @@ fun HomeScreen(
                 if (on) vm.overlay = Overlay.Pin(PinMode.Create) { vm.overlay = Overlay.Wallpaper }
                 else vm.whenUnlocked { AerialSettings.choosePin(null); vm.overlay = Overlay.Wallpaper }
             },
+            homeStatus = vm.homeStatus,
+            onUpdate = { vm.overlay = Overlay.ControlCenter(CcPage.Update) },
         )
 
         val pin = overlay as? Overlay.Pin
