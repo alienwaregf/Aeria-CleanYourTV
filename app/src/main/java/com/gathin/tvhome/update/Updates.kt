@@ -128,7 +128,10 @@ object Updates {
                     val api = JSONObject(read(API_URL))
                     val tag = api.optString("tag_name").removePrefix("v")
                     val lines = JSONArray()
-                    api.optString("body").split("\n").map { it.trim() }.filter { it.isNotEmpty() }.forEach { lines.put(it) }
+                    val raw = api.optString("body").split("\n").map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("|") }
+                    val head = raw.indexOfFirst { it.trimStart('#').trim() == "更新日志" }
+                    val shown = if (head < 0) raw else raw.drop(head + 1).takeWhile { !it.startsWith("##") }
+                    shown.map { it.removePrefix("·").trim() }.filter { it.isNotEmpty() }.forEach { lines.put(it) }
                     JSONObject().put("releases", JSONArray().put(JSONObject().put("v", tag).put("en", lines))).toString()
                 }
             }.onFailure { Log.i(TAG, "release notes: ${it.javaClass.simpleName}") }.getOrNull()
