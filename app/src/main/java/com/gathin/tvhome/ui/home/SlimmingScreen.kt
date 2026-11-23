@@ -324,7 +324,7 @@ private fun SlimmingChoice(
     onKey: ((KeyEvent) -> Boolean)? = null,
     enabled: Boolean = true,
 ) {
-    Pressable(onClick = { if (enabled) onClick() }, modifier = modifier.fillMaxWidth().graphicsLayer { alpha = if (enabled) 1f else 0.5f }, focusRequester = focusRequester, focusedScale = 1.03f, onKey = onKey) { state ->
+    Pressable(onClick = { if (enabled) onClick() }, modifier = modifier.fillMaxWidth().graphicsLayer { alpha = if (enabled) 1f else 0.5f }, focusRequester = focusRequester, focusedScale = if (enabled) 1.03f else 1f, onKey = onKey) { state ->
         val bg by animateColorAsState(
             if (state.focused) Palette.Focus else Palette.Fill,
             tween(140, easing = Motion.EaseOut),
@@ -358,7 +358,7 @@ private fun SlimmingRow(
         onClick = { if (enabled) onClick() },
         modifier = Modifier.fillMaxWidth(),
         focusRequester = focusRequester,
-        focusedScale = 1.03f,
+        focusedScale = if (enabled) 1.03f else 1f,
     ) { state ->
         val bg by animateColorAsState(
             if (state.focused) Palette.Focus else Palette.Fill,
