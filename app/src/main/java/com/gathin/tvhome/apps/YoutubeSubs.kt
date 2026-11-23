@@ -507,6 +507,7 @@ object YoutubeSubs {
                 continue
             }
             delay(1500)
+            if (isShort(video.id)) continue
             val cover = if (maxresOk(video.id)) "https://i.ytimg.com/vi/${video.id}/maxresdefault.jpg" else "https://i.ytimg.com/vi/${video.id}/hqdefault.jpg"
             kept += video.copy(cover = cover)
         }
@@ -769,6 +770,21 @@ object YoutubeSubs {
             }
         }
         return out to feedTitle.ifBlank { feedAuthor }.ifBlank { null }
+    }
+
+    private fun isShort(id: String): Boolean {
+        return runCatching {
+            val conn = URL("https://www.youtube.com/shorts/$id").openConnection() as HttpURLConnection
+            conn.requestMethod = "HEAD"
+            conn.connectTimeout = 5_000
+            conn.readTimeout = 5_000
+            conn.instanceFollowRedirects = false
+            try {
+                conn.responseCode == 200
+            } finally {
+                conn.disconnect()
+            }
+        }.getOrDefault(false)
     }
 
     private fun maxresOk(id: String): Boolean {

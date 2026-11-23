@@ -1,7 +1,6 @@
 package com.gathin.tvhome.apps
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -15,7 +14,6 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -29,14 +27,12 @@ data class HuyaRoom(
     val nick: String,
     val cover: String,
     val logo: String?,
+    val totalCount: Long = 0L,
 )
 
 object HuyaSubs {
     val HUYA_PKGS = setOf("com.huya.nftv")
     private const val TAG = "HuyaSubs"
-    private const val LAUNCHER_PREFS = "launcher_settings"
-    private const val TTL_MS = 30 * 60_000L
-    private const val FETCH_INTERVAL_MS = 10 * 60_000L
     private const val RETRY_MS = 3 * 60 * 1000L
     private const val MAX_ITEMS = 30
     private const val LIVELIST_URL = "https://www.huya.com/cache.php?m=LiveList&do=getLiveListByPage&tagAll=0&page=1"
@@ -46,7 +42,6 @@ object HuyaSubs {
         private set
 
     private lateinit var app: Context
-    private lateinit var prefs: SharedPreferences
     private var started = false
     private var lastAttempt = 0L
     private var failed = false
@@ -59,11 +54,6 @@ object HuyaSubs {
         if (started) return
         started = true
         app = context.applicationContext
-        prefs = app.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE)
-        val cached = readRooms()
-        if (cached.isNotEmpty()) {
-            synchronized(lock) { rooms = cached }
-        }
     }
 
     fun isHuya(pkg: String): Boolean = pkg in HUYA_PKGS
@@ -84,7 +74,7 @@ object HuyaSubs {
         return list.map { v ->
             ShelfCard(
                 pkg = pkg,
-                title = v.title,
+                title = if (v.nick.isBlank()) v.title else "${v.nick}：${v.title}",
                 imageUri = v.cover,
                 backdropUri = v.cover,
                 intentUri = "intent:#Intent;component=com.huya.nftv/com.duowan.kiwitv.tv.activity.TVTransferActivity;S.huya_action=living;S.presenter_id=${v.uid};end",
@@ -94,38 +84,28 @@ object HuyaSubs {
         }
     }
 
-    private fun fetchedAt(): Long =
-        if (::prefs.isInitialized) prefs.getLong("huya_cards_at", 0L) else 0L
-
-    private fun isFresh(now: Long): Boolean {
-        if (now - fetchedAt() >= TTL_MS) return false
-        return synchronized(lock) { rooms }.isNotEmpty()
-    }
-
     fun refreshAsync(pkg: String) {
-        ioScope.launch { refreshIfStale(pkg) }
+        ioScope.launch { refresh(pkg) }
     }
 
-    suspend fun refreshIfStale(pkg: String) {
+    suspend fun refresh(pkg: String) {
         if (!started || !isHuya(pkg)) return
         if (!isAnyInstalled()) return
         val now = System.currentTimeMillis()
-        if (isFresh(now) && now - fetchedAt() < FETCH_INTERVAL_MS) return
         if (failed && now - lastAttempt < RETRY_MS) return
         fetchMutex.withLock {
             val at = System.currentTimeMillis()
-            if (isFresh(at) && at - fetchedAt() < FETCH_INTERVAL_MS) return
             if (failed && at - lastAttempt < RETRY_MS) return
-            fetchAndSave()
+            fetch()
         }
     }
 
-    suspend fun refreshAllIfStale() {
+    suspend fun refreshAll() {
         if (!started) return
-        refreshIfStale(HUYA_PKGS.first())
+        refresh(HUYA_PKGS.first())
     }
 
-    private suspend fun fetchAndSave() {
+    private suspend fun fetch() {
         lastAttempt = System.currentTimeMillis()
         val fetched = try {
             fetchLiveList()
@@ -141,7 +121,7 @@ object HuyaSubs {
             return
         }
         failed = false
-        saveRooms(fetched)
+        synchronized(lock) { rooms = fetched }
         changed()
     }
 
@@ -168,7 +148,6 @@ object HuyaSubs {
         val list = root.optJSONObject("data")?.optJSONArray("datas") ?: return emptyList()
         val out = ArrayList<HuyaRoom>()
         for (i in 0 until list.length()) {
-            if (out.size >= MAX_ITEMS) break
             val obj = list.optJSONObject(i) ?: continue
             val roomId = obj.optString("profileRoom", "")
             if (roomId.isBlank()) continue
@@ -184,49 +163,10 @@ object HuyaSubs {
             val face = obj.optString("avatar180", "").let {
                 if (it.startsWith("http://")) "https://" + it.substring(7) else it
             }.ifBlank { null }
-            out += HuyaRoom(roomId, uid, title, nick, cover, face)
+            val totalCount = obj.optString("totalCount", "").toLongOrNull() ?: 0L
+            out += HuyaRoom(roomId, uid, title, nick, cover, face, totalCount)
         }
-        return out
-    }
-
-    private fun saveRooms(list: List<HuyaRoom>) {
-        val arr = JSONArray()
-        for (room in list) {
-            arr.put(JSONObject().apply {
-                put("room", room.roomId)
-                put("uid", room.uid)
-                put("title", room.title)
-                put("nick", room.nick)
-                put("cover", room.cover)
-                put("face", room.logo ?: "")
-            })
-        }
-        prefs.edit().apply {
-            putString("huya_cards", arr.toString())
-            putLong("huya_cards_at", System.currentTimeMillis())
-        }.apply()
-        synchronized(lock) { rooms = list }
-    }
-
-    private fun readRooms(): List<HuyaRoom> {
-        if (!::prefs.isInitialized) return emptyList()
-        val arr = runCatching { JSONArray(prefs.getString("huya_cards", "") ?: "") }.getOrNull() ?: return emptyList()
-        val out = ArrayList<HuyaRoom>()
-        for (i in 0 until arr.length()) {
-            if (out.size >= MAX_ITEMS) break
-            val obj = arr.optJSONObject(i) ?: continue
-            val roomId = obj.optString("room", "")
-            if (roomId.isBlank()) continue
-            out += HuyaRoom(
-                roomId,
-                obj.optString("uid", ""),
-                obj.optString("title", ""),
-                obj.optString("nick", ""),
-                obj.optString("cover", ""),
-                obj.optString("face", "").ifBlank { null },
-            )
-        }
-        return out
+        return out.sortedByDescending { it.totalCount }.take(MAX_ITEMS)
     }
 
     private fun openGet(url: String): HttpURLConnection {
