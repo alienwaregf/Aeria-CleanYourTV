@@ -328,8 +328,8 @@ class MainActivity : ComponentActivity() {
                 val next = ((now / BILI_HUYA_TICK_MS) + 1) * BILI_HUYA_TICK_MS
                 delay(next - now)
                 if (Wallpapers.selectedId == Wallpapers.AUTO) {
-                    launch(Dispatchers.IO) { BilibiliSubs.refreshAllIfStale() }
-                    launch(Dispatchers.IO) { HuyaSubs.refreshAllIfStale() }
+                    launch(Dispatchers.IO) { BilibiliSubs.refreshAll() }
+                    launch(Dispatchers.IO) { HuyaSubs.refreshAll() }
                 }
             }
         }
