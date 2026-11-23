@@ -94,8 +94,18 @@ class ConfigReceiver : BroadcastReceiver() {
         if (intent.hasExtra("keep_adb")) GuardSetup.setKeepAdb(context, intent.getBooleanExtra("keep_adb", false))
         if (intent.hasExtra("adb_probe_port")) GuardSetup.adbProbePort = intent.getIntExtra("adb_probe_port", 5555)
         if (intent.hasExtra("guard_off_in_standby")) GuardSetup.setOffInStandby(context, intent.getBooleanExtra("guard_off_in_standby", false))
+        if (intent.hasExtra("update_test")) {
+            com.gathin.tvhome.update.Updates.testApk = if (intent.getBooleanExtra("update_test", false)) {
+                java.io.File(context.getExternalFilesDir(null) ?: context.filesDir, "update-test.apk")
+            } else null
+        }
+        if (intent.getBooleanExtra("update_test_self", false)) com.gathin.tvhome.update.Updates.testApk = java.io.File(context.applicationInfo.sourceDir)
         if (intent.getBooleanExtra("self_compile", false)) com.gathin.tvhome.update.SelfCompile.runNow(context)
         if (intent.getBooleanExtra("system_compile", false)) com.gathin.tvhome.update.SelfCompile.askSystemNow(context)
+        if (intent.getBooleanExtra("check_update", false)) {
+            com.gathin.tvhome.update.Updates.init(context)
+            com.gathin.tvhome.update.Updates.checkIfStale(force = true)
+        }
         if (intent.hasExtra("own_screensaver")) GuardSetup.setOwnScreensaver(context, intent.getBooleanExtra("own_screensaver", false))
         intent.getStringExtra("screensaver")?.let { key ->
             Wallpapers.init(context)
