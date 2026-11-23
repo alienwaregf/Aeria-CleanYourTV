@@ -28,6 +28,7 @@ object Palette {
     val Green = Color(0xFF30D158)
     val Orange = Color(0xFFFF9F0A)
     val Red = Color(0xFFFF453A)
+    val Blue = Color(0xFF0A84FF)
     val NightRed = Color(0xFFB03A2E)
 
     val Focus = Color(0xFFF5F5F7)
