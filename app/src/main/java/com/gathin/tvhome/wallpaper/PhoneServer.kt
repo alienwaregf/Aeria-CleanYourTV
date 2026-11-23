@@ -9,6 +9,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.getSystemService
 import com.gathin.tvhome.apps.AppBackgrounds
+import com.gathin.tvhome.apps.YoutubeSubs
 import com.gathin.tvhome.apps.AppCatalog
 import com.gathin.tvhome.apps.FOLDER_KEY_PREFIX
 import com.gathin.tvhome.apps.AppEntry
@@ -54,6 +55,7 @@ class PhoneServer private constructor(private val context: Context, private val 
         return runCatching {
             when {
                 path == "/" -> newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", page())
+                path == "/youtube.png" -> youtubeIcon()
                 path == "/api/state" -> json(state())
                 path == "/api/diagnostics" -> text(Response.Status.OK, Diagnostics.report(context))
                 path.startsWith("/thumb/") -> thumb(path.removePrefix("/thumb/"))
@@ -93,6 +95,9 @@ class PhoneServer private constructor(private val context: Context, private val 
                 path.startsWith("/library/") -> libraryPicture(java.net.URLDecoder.decode(path.removePrefix("/library/"), "UTF-8"), session.parameters["c"]?.firstOrNull())
                 session.method == Method.POST && path == "/api/icon" -> icon(session)
                 session.method == Method.POST && path == "/api/app/background" -> background(session)
+                session.method == Method.POST && path == "/api/app/subscriptions" -> subscriptions(session)
+                session.method == Method.POST && path == "/api/app/ytmode" -> ytMode(session)
+                session.method == Method.POST && path == "/api/app/keywords" -> keywords(session)
                 session.method == Method.POST && path == "/api/app/name" -> {
                     val f = form(session)
                     val key = f["app"].orEmpty()
@@ -214,6 +219,11 @@ class PhoneServer private constructor(private val context: Context, private val 
     private fun page(): String = context.assets.open("web/index.html").bufferedReader().use { it.readText() }
         .replace("{{DEVICE}}", Build.MODEL.replace("_", " "))
 
+    private fun youtubeIcon(): Response {
+        val bytes = context.assets.open("web/youtube.png").readBytes()
+        return newFixedLengthResponse(Response.Status.OK, "image/png", ByteArrayInputStream(bytes), bytes.size.toLong())
+    }
+
     private fun state(): JSONObject {
         val list = JSONArray()
         val selected = Wallpapers.selectedId
@@ -251,7 +261,11 @@ class PhoneServer private constructor(private val context: Context, private val 
                         .put("custom", CustomIcons.has(a.key)).put("library", IconLibrary.has(a.key)).put("icon", icon)
                         .put("choices", libraryChoices(a.key, icon == "library"))
                         .put("stamp", CustomIcons.stamp(a.key) + IconLibrary.stamp(a.key) + icon.hashCode())
-                        .put("backgroundUrl", AppBackgrounds.url(a.key)))
+                        .put("backgroundUrl", AppBackgrounds.url(a.key))
+                        .put("subscriptions", JSONArray(YoutubeSubs.subs(a.key)))
+                        .put("subscriptionTitles", JSONObject(YoutubeSubs.titles(a.key)))
+                        .put("ytMode", YoutubeSubs.mode(a.key))
+                        .put("keywords", JSONArray(YoutubeSubs.keywords(a.key))))
                 }
             })
             .put("layout", layoutState())
@@ -412,6 +426,36 @@ class PhoneServer private constructor(private val context: Context, private val 
         if (!installed(pkg)) return json(state().put("saved", false))
         val saved = AppBackgrounds.setUrl(context, pkg, url)
         if (saved) onMain { AppBackgrounds.changed() }
+        return json(state().put("saved", saved))
+    }
+
+    private fun subscriptions(session: IHTTPSession): Response {
+        val f = form(session)
+        val pkg = f["app"].orEmpty()
+        val subs = f["subs"].orEmpty()
+        if (!installed(pkg) || !YoutubeSubs.isYoutube(pkg)) return json(state().put("saved", false))
+        val saved = YoutubeSubs.setSubs(pkg, subs)
+        if (saved) onMain { YoutubeSubs.changed() }
+        return json(state().put("saved", saved))
+    }
+
+    private fun ytMode(session: IHTTPSession): Response {
+        val f = form(session)
+        val pkg = f["app"].orEmpty()
+        val mode = f["mode"].orEmpty()
+        if (!installed(pkg) || !YoutubeSubs.isYoutube(pkg)) return json(state().put("saved", false))
+        val saved = YoutubeSubs.setMode(pkg, mode)
+        if (saved) onMain { YoutubeSubs.changed() }
+        return json(state().put("saved", saved))
+    }
+
+    private fun keywords(session: IHTTPSession): Response {
+        val f = form(session)
+        val pkg = f["app"].orEmpty()
+        val words = f["keywords"].orEmpty()
+        if (!installed(pkg) || !YoutubeSubs.isYoutube(pkg)) return json(state().put("saved", false))
+        val saved = YoutubeSubs.setKeywords(pkg, words)
+        if (saved) onMain { YoutubeSubs.changed() }
         return json(state().put("saved", saved))
     }
 

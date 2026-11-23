@@ -538,7 +538,7 @@ object Wallpapers {
 
     private fun rebuildList() {
         val zh = Locale.getDefault().language == "zh"
-        val auto = Wallpaper(AUTO, WallpaperKind.Auto, if (zh) "没有壁纸就是最好的壁纸" else "No wallpaper is the best wallpaper")
+        val auto = Wallpaper(AUTO, WallpaperKind.Auto, "Top Shelf")
         val live = Wallpaper(LIVE, WallpaperKind.Live, if (zh) "航拍" else "Aerial")
         val trending = Wallpaper(TRENDING, WallpaperKind.Trending, app.getString(R.string.st_hero))
         val films = ScreensaverVideos.all(app)
