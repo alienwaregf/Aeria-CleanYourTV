@@ -131,6 +131,20 @@
     flex: 1; min-width: 0; font: inherit; font-size: 17px; color: var(--label); background: none; border: 0; outline: none; padding: 0;
   }
   .field input::placeholder { color: var(--tertiary); }
+  .field textarea {
+    flex: 1; min-width: 0; font: inherit; font-size: 15px; line-height: 1.5; color: var(--label); background: none; border: 0; outline: none; padding: 0; resize: vertical; min-height: 110px;
+  }
+  .field textarea::placeholder { color: var(--tertiary); }
+  .chipsfield { align-items: flex-start; }
+  .chipsfield .link { padding-top: 5px; }
+  .chipsfield .chips { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 2px 0; }
+  .chipsfield .chips input { flex: 1 1 100%; min-width: 0; font: inherit; font-size: 15px; color: var(--label); background: none; border: 0; outline: none; padding: 4px 0; }
+  .chipsfield .chips input::placeholder { color: var(--tertiary); }
+  .chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 4px 5px 4px 7px; border-radius: 999px; background: var(--tint); color: #fff; }
+  .chiplink { display: inline-flex; align-items: center; gap: 5px; min-width: 0; color: #fff; text-decoration: none; }
+  .chiplink svg, .chiplink img { flex-shrink: 0; display: block; }
+  .chiplink span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; line-height: 1.2; }
+  .chip .x { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 0; padding: 0; border-radius: 50%; background: rgba(255,255,255,.28); color: #fff; cursor: pointer; flex-shrink: 0; }
   .field .link { font-weight: 600; }
   .ks-in { width: 76px; font: inherit; font-size: 17px; text-align: right; color: var(--label); background: none; border: 0; outline: none; padding: 0; }
   .ks-in[type="time"] { width: 132px; }
@@ -446,7 +460,7 @@ const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 let state = null, stateJson = '';
 
-const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "g_live", "g_live_sub", "g_auto", "toast_wallpaper", "aria_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_haze", "wx_dust", "wx_sand", "wx_wind", "wx_hail", "wx_sleet", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "aria_rename", "toast_renamed", "toast_pinned", "toast_unpinned", "toast_folder_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "toast_tv_updated", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "ss_videos", "hint_videos", "ss_trending", "ss_system", "hint_trending", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "bg_url_ph", "bg_url_hint", "toast_bg_set", "toast_bg_bad", "this_tv", "folder_count", "folder_ph", "inputs_h", "inputs_hint", "rename_hint_app", "was_named", "arrange_hint", "arrange_unready", "hidden_h", "hidden_none", "hidden_locked", "show_app", "hide_app", "to_folder", "new_folder", "out_of_folder", "ungroup", "ungroup_confirm", "folder_hint", "toast_hidden", "toast_shown", "toast_in_folder", "toast_out_folder", "toast_ungrouped", "tab_looks", "looks_title", "show_on_home", "source_device", "source_plain", "source_device_hint", "tv_model", "sw_always", "sw_always_sub", "sw_weather", "sw_saver_time", "sw_saver_time_sub", "icon_h", "icon_library", "icon_own", "icon_custom", "toast_icon_picked", "drop_hint", "drop_sub", "drop_none", "toast_diag_paste", "tab_slimming", "slimming_h", "slimming_refresh", "slimming_daily_on", "slimming_daily_off", "slimming_no_list", "slimming_list_line", "wx_source", "wx_source_openmeteo", "slim_cmd_h", "slim_cmd_hint", "slim_cmd_mac", "slim_cmd_win", "slim_cmd_ip", "slim_cmd_mac_sub", "wx_source_qweather", "wx_qw_key_ph", "wx_qw_key_save", "wx_qw_key_saved", "wx_qw_host_ph", "wx_qw_host_save", "wx_qw_host_saved", "wx_qw_credit", "wx_qw_host_link", "tmdb_h", "tmdb_key_ph", "tmdb_key_save", "tmdb_key_saved", "tmdb_credit", "omdb_key_ph", "omdb_key_save", "omdb_key_saved", "trakt_key_ph", "trakt_key_save", "trakt_key_saved", "icon_more", "icon_more_hint", "icon_more_fail", "video_err_format", "video_err_room", "video_err_send", "icon_search_ph", "icon_search_none"];
+const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "g_live", "g_live_sub", "g_auto", "toast_wallpaper", "aria_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_haze", "wx_dust", "wx_sand", "wx_wind", "wx_hail", "wx_sleet", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "aria_rename", "toast_renamed", "toast_pinned", "toast_unpinned", "toast_folder_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "toast_tv_updated", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "ss_videos", "hint_videos", "ss_trending", "ss_system", "hint_trending", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "bg_url_ph", "bg_url_hint", "toast_bg_set", "toast_bg_bad", "this_tv", "folder_count", "folder_ph", "inputs_h", "inputs_hint", "rename_hint_app", "was_named", "arrange_hint", "arrange_unready", "hidden_h", "hidden_none", "hidden_locked", "show_app", "hide_app", "to_folder", "new_folder", "out_of_folder", "ungroup", "ungroup_confirm", "folder_hint", "toast_hidden", "toast_shown", "toast_in_folder", "toast_out_folder", "toast_ungrouped", "tab_looks", "looks_title", "show_on_home", "source_device", "source_plain", "source_device_hint", "tv_model", "sw_always", "sw_always_sub", "sw_weather", "sw_saver_time", "sw_saver_time_sub", "icon_h", "icon_library", "icon_own", "icon_custom", "toast_icon_picked", "drop_hint", "drop_sub", "drop_none", "toast_diag_paste", "tab_slimming", "slimming_h", "slimming_refresh", "slimming_daily_on", "slimming_daily_off", "slimming_no_list", "slimming_list_line", "wx_source", "wx_source_openmeteo", "slim_cmd_h", "slim_cmd_hint", "slim_cmd_mac", "slim_cmd_win", "slim_cmd_ip", "slim_cmd_mac_sub", "wx_source_qweather", "wx_qw_key_ph", "wx_qw_key_save", "wx_qw_key_saved", "wx_qw_host_ph", "wx_qw_host_save", "wx_qw_host_saved", "wx_qw_credit", "wx_qw_host_link", "tmdb_h", "tmdb_key_ph", "tmdb_key_save", "tmdb_key_saved", "tmdb_credit", "omdb_key_ph", "omdb_key_save", "omdb_key_saved", "trakt_key_ph", "trakt_key_save", "trakt_key_saved", "icon_more", "icon_more_hint", "icon_more_fail", "video_err_format", "video_err_room", "video_err_send", "icon_search_ph", "icon_search_none", "yt_subs_ph", "yt_subs_hint", "toast_yt_subs_set", "toast_yt_subs_bad", "yt_mode_subs", "yt_mode_keywords", "yt_kw_ph", "yt_kw_hint", "toast_yt_kw_set", "toast_yt_kw_bad"];
 const TEXTS = {
  "zh": [
   "屏幕保护程序",
@@ -608,11 +622,11 @@ const TEXTS = {
   "Host 已保存",
   "天气数据由和风天气提供",
   "在和风控制台查看 API Host ↗",
-  "TMDB 资深影迷",
+  "私人API，只存在于本机",
   "粘贴 TMDB API Key 或 Read Access Token",
   "保存 Key",
   "Key 已保存",
-  "趋势数据由 TMDB 提供",
+  "数据由您的API提供",
   "粘贴 OMDb API Key",
   "保存 Key",
   "Key 已保存",
@@ -626,7 +640,17 @@ const TEXTS = {
   "电视空间不足，存不下这部视频",
   "上传中断了，请再试一次",
   "搜索 App 名称或包名",
-  "没有找到。换个叫法试试，或者输入包名。"
+  "没有找到。换个叫法试试，或者输入包名。",
+  "输入频道链接",
+  "输入完按回车变成标签，点标签在新窗口打开频道；最多 30 个，Top Shelf 按时间显示最新 30 条视频",
+  "订阅已保存",
+  "订阅保存失败",
+  "订阅频道",
+  "关键词",
+  "输入关键词",
+  "输入完按回车变成标签；最多 10 个，Top Shelf 按时间显示最新 30 条视频",
+  "关键词已保存",
+  "关键词保存失败"
 ],
  "en": [
   "Screensaver",
@@ -788,11 +812,11 @@ const TEXTS = {
   "Host saved",
   "Weather data by QWeather",
   "View API Host in the QWeather console ↗",
-  "TMDB Trending",
+  "Private API, stored only on this device",
   "Paste your TMDB API Key or Read Access Token",
   "Save Key",
   "Key saved",
-  "Trending data by TMDB",
+  "Data provided by your API",
   "Paste your OMDb API Key",
   "Save Key",
   "Key saved",
@@ -806,7 +830,17 @@ const TEXTS = {
   "Not enough room on the TV for this video.",
   "The upload was interrupted. Please try again.",
   "Search an app name or package",
-  "Nothing found. Try another name for it, or its package name."
+  "Nothing found. Try another name for it, or its package name.",
+  "Type a channel link",
+  "Press Enter to turn a link into a tag; tap a tag to open the channel in a new window. Up to 30 channels; Top Shelf shows the newest 30 videos by time",
+  "Subscriptions saved",
+  "Could not save subscriptions",
+  "Subscribed channels",
+  "Keywords",
+  "Type a keyword",
+  "Press Enter to turn a word into a tag. Up to 10 keywords; Top Shelf shows the newest 30 videos by time",
+  "Keywords saved",
+  "Could not save keywords"
 ]
 };
 const LANGS = Object.keys(TEXTS);
@@ -1472,6 +1506,146 @@ function tileSheet(e, inFolder, hidden) {
         } catch (err) { toast(t('toast_bg_bad')); }
       };
       body.appendChild(el('p', 'foot', t('bg_url_hint'))).style.marginBottom = '12px';
+      if (['com.google.android.youtube.tv', 'com.google.android.youtube.tvmusic'].includes(a.key)) {
+        let ytMode = a.ytMode === 'keywords' ? 'keywords' : 'subs';
+        const ml = el('div', 'list'); ml.setAttribute('role', 'radiogroup'); ml.setAttribute('aria-label', 'YouTube'); body.appendChild(ml);
+        const modeBtns = {};
+        for (const [v, label] of [['subs', t('yt_mode_subs')], ['keywords', t('yt_mode_keywords')]]) {
+          const b = el('button', 'item'); b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(ytMode === v));
+          b.append(el('span', 'txt', label)); b.insertAdjacentHTML('beforeend', ICON.tick);
+          ml.appendChild(b); modeBtns[v] = b;
+        }
+        const sl = el('div', 'list'); sl.style.marginTop = '12px'; body.appendChild(sl);
+        const sf = el('form', 'item field chipsfield');
+        const box = el('div', 'chips');
+        const sinput = el('input'); sinput.type = 'text';
+        sinput.placeholder = t('yt_subs_ph'); sinput.setAttribute('aria-label', t('yt_subs_ph')); sinput.autocomplete = 'off'; sinput.setAttribute('autocapitalize', 'off'); sinput.spellcheck = false; sinput.setAttribute('enterkeyhint', 'done');
+        const ssave = el('button', 'link', t('save'));
+        const orig = (a.subscriptions || []).slice();
+        const titles = a.subscriptionTitles || {};
+        let chips = orig.slice();
+        const norm = raw => {
+          const s = raw.trim().split('?')[0].split('#')[0];
+          if (!s) return null;
+          const dec = h => { try { return decodeURIComponent(h); } catch (e) { return null; } };
+          const at = s.indexOf('@');
+          if (at < 0) { const h = dec(s); if (!h || /[\s\/]/.test(h)) return null; return 'https://www.youtube.com/@' + h; }
+          let h = s.slice(at + 1).split('/')[0];
+          if (!h) return null;
+          h = dec(h);
+          if (!h || /[\s\/]/.test(h)) return null;
+          return 'https://www.youtube.com/@' + h;
+        };
+        const labelOf = u => titles[u] || ('@' + u.slice(u.indexOf('@') + 1));
+        const render = () => {
+          box.querySelectorAll('.chip').forEach(c => c.remove());
+          for (const u of chips) {
+            const chip = el('span', 'chip');
+            const link = el('a', 'chiplink'); link.href = u; link.target = '_blank'; link.rel = 'noopener';
+            const ic = el('img'); ic.src = 'youtube.png'; ic.width = 14; ic.alt = '';
+            link.appendChild(ic);
+            link.appendChild(el('span', '', labelOf(u)));
+            const x = el('button', 'x'); x.type = 'button'; x.setAttribute('aria-label', t('aria_delete'));
+            x.insertAdjacentHTML('beforeend', ICON.close);
+            x.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); chips = chips.filter(v => v !== u); render(); ssync(); };
+            chip.append(link, x); box.insertBefore(chip, sinput);
+          }
+        };
+        const add = raw => {
+          const u = norm(raw);
+          if (!u || chips.includes(u) || chips.length >= 30) return;
+          chips.push(u);
+        };
+        const commit = () => { const v = sinput.value.trim(); if (!v) return; add(v); sinput.value = ''; render(); ssync(); };
+        sinput.addEventListener('keydown', ev => {
+          if (ev.isComposing || ev.keyCode === 229) return;
+          if (ev.key === 'Enter') { ev.preventDefault(); commit(); }
+          else if (ev.key === 'Backspace' && !sinput.value && chips.length) { chips.pop(); render(); ssync(); }
+        });
+        sinput.addEventListener('paste', ev => {
+          const text = (ev.clipboardData || window.clipboardData).getData('text');
+          if (!text || !/[\r\n]/.test(text)) return;
+          ev.preventDefault();
+          for (const line of text.split(/[\r\n]+/)) add(line);
+          render(); ssync();
+        });
+        const ssync = () => ssave.disabled = chips.join('\n').trim() === orig.join('\n').trim();
+        box.appendChild(sinput); render(); ssync();
+        sf.append(box, ssave); sl.appendChild(sf);
+        sf.onsubmit = async ev => {
+          ev.preventDefault(); commit();
+          const subs = chips.join('\n'); closeSheet();
+          try {
+            const next = await api('api/app/subscriptions', { app: a.key, subs });
+            if (!next.saved) throw new Error('not saved');
+            take(next); toast(t('toast_yt_subs_set'));
+          } catch (err) { toast(t('toast_yt_subs_bad')); }
+        };
+        const subsHint = el('p', 'foot', t('yt_subs_hint')); subsHint.style.marginBottom = '12px'; body.appendChild(subsHint);
+        const kl = el('div', 'list'); kl.style.marginTop = '12px'; body.appendChild(kl);
+        const kf = el('form', 'item field chipsfield');
+        const kbox = el('div', 'chips');
+        const kinput = el('input'); kinput.type = 'text';
+        kinput.placeholder = t('yt_kw_ph'); kinput.setAttribute('aria-label', t('yt_kw_ph')); kinput.autocomplete = 'off'; kinput.setAttribute('autocapitalize', 'off'); kinput.spellcheck = false; kinput.setAttribute('enterkeyhint', 'done');
+        const ksave = el('button', 'link', t('save'));
+        const korig = (a.keywords || []).slice();
+        let kchips = korig.slice();
+        const knorm = raw => { const s = raw.trim(); if (!s || /\s/.test(s)) return null; return s; };
+        const krender = () => {
+          kbox.querySelectorAll('.chip').forEach(c => c.remove());
+          for (const w of kchips) {
+            const chip = el('span', 'chip');
+            chip.appendChild(el('span', '', w));
+            const x = el('button', 'x'); x.type = 'button'; x.setAttribute('aria-label', t('aria_delete'));
+            x.insertAdjacentHTML('beforeend', ICON.close);
+            x.onclick = ev => { ev.preventDefault(); ev.stopPropagation(); kchips = kchips.filter(v => v !== w); krender(); ksync(); };
+            chip.append(x); kbox.insertBefore(chip, kinput);
+          }
+        };
+        const kadd = raw => { const w = knorm(raw); if (!w || kchips.includes(w) || kchips.length >= 10) return; kchips.push(w); };
+        const kcommit = () => { const v = kinput.value.trim(); if (!v) return; kadd(v); kinput.value = ''; krender(); ksync(); };
+        kinput.addEventListener('keydown', ev => {
+          if (ev.isComposing || ev.keyCode === 229) return;
+          if (ev.key === 'Enter') { ev.preventDefault(); kcommit(); }
+          else if (ev.key === 'Backspace' && !kinput.value && kchips.length) { kchips.pop(); krender(); ksync(); }
+        });
+        kinput.addEventListener('paste', ev => {
+          const text = (ev.clipboardData || window.clipboardData).getData('text');
+          if (!text || !/[\r\n]/.test(text)) return;
+          ev.preventDefault();
+          for (const line of text.split(/[\r\n]+/)) kadd(line);
+          krender(); ksync();
+        });
+        const ksync = () => ksave.disabled = kchips.join('\n').trim() === korig.join('\n').trim();
+        kbox.appendChild(kinput); krender(); ksync();
+        kf.append(kbox, ksave); kl.appendChild(kf);
+        kf.onsubmit = async ev => {
+          ev.preventDefault(); kcommit();
+          const keywords = kchips.join('\n'); closeSheet();
+          try {
+            const next = await api('api/app/keywords', { app: a.key, keywords });
+            if (!next.saved) throw new Error('not saved');
+            take(next); toast(t('toast_yt_kw_set'));
+          } catch (err) { toast(t('toast_yt_kw_bad')); }
+        };
+        const kwHint = el('p', 'foot', t('yt_kw_hint')); kwHint.style.marginBottom = '12px'; body.appendChild(kwHint);
+        const syncMode = () => {
+          for (const [v, b] of Object.entries(modeBtns)) b.setAttribute('aria-checked', String(ytMode === v));
+          sl.hidden = ytMode !== 'subs'; subsHint.hidden = ytMode !== 'subs';
+          kl.hidden = ytMode !== 'keywords'; kwHint.hidden = ytMode !== 'keywords';
+        };
+        for (const [v, b] of Object.entries(modeBtns)) {
+          b.onclick = async () => {
+            if (ytMode === v) return;
+            try {
+              const next = await api('api/app/ytmode', { app: a.key, mode: v });
+              if (!next.saved) throw new Error('not saved');
+              take(next); ytMode = v; syncMode();
+            } catch (err) { toast(t('toast_set_fail')); }
+          };
+        }
+        syncMode();
+      }
     }
 
     const pl = el('div', 'list'); pl.style.marginTop = '12px'; body.appendChild(pl);
