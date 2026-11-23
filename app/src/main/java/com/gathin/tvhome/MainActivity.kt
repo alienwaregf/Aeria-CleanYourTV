@@ -50,6 +50,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.gathin.tvhome.apps.AppBackgrounds
+import com.gathin.tvhome.apps.BilibiliSubs
+import com.gathin.tvhome.apps.HuyaSubs
+import com.gathin.tvhome.apps.YoutubeSubs
 import com.gathin.tvhome.apps.AppEntry
 import com.gathin.tvhome.apps.CustomIcons
 import com.gathin.tvhome.apps.IconLibrary
@@ -222,10 +225,14 @@ class MainActivity : ComponentActivity() {
         TmdbTrending.init(this)
         Ratings.init(this)
         startClockTick()
+        startBiliHuyaTick()
         Aerials.refreshIfStale(this)
         lifecycleScope.launch(Dispatchers.IO) { SelfCompile.init(this@MainActivity) }
         CustomIcons.init(this)
         AppBackgrounds.init(this)
+        YoutubeSubs.init(this)
+        BilibiliSubs.init(this)
+        HuyaSubs.init(this)
         IconLibrary.init(this)
         SourceLooks.init(this)
         AppNames.init(this)
@@ -303,7 +310,26 @@ class MainActivity : ComponentActivity() {
                 delay(next - now)
                 if (vm.resumed) {
                     Weather.refreshClockTick()
+                }
+                if (TmdbTrending.trendingGateOpen()) {
                     TmdbTrending.refreshClockTick()
+                }
+                if (Wallpapers.selectedId == Wallpapers.AUTO) {
+                    launch(Dispatchers.IO) { YoutubeSubs.refreshAllIfStale() }
+                }
+            }
+        }
+    }
+
+    private fun startBiliHuyaTick() {
+        lifecycleScope.launch {
+            while (true) {
+                val now = System.currentTimeMillis()
+                val next = ((now / BILI_HUYA_TICK_MS) + 1) * BILI_HUYA_TICK_MS
+                delay(next - now)
+                if (Wallpapers.selectedId == Wallpapers.AUTO) {
+                    launch(Dispatchers.IO) { BilibiliSubs.refreshAllIfStale() }
+                    launch(Dispatchers.IO) { HuyaSubs.refreshAllIfStale() }
                 }
             }
         }
@@ -937,6 +963,7 @@ class MainActivity : ComponentActivity() {
         private const val SAVER_AHEAD_MS = 8_000L
 
         private const val CLOCK_TICK_MS = 30 * 60 * 1000L
+        private const val BILI_HUYA_TICK_MS = 10 * 60 * 1000L
 
         private var dreamFailsNow = false
 
