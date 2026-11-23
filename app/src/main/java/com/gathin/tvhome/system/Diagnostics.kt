@@ -18,6 +18,7 @@ import com.gathin.tvhome.BuildConfig
 import com.gathin.tvhome.guard.GuardSetup
 import com.gathin.tvhome.guard.HomeGuardService
 import com.gathin.tvhome.settings.AerialSettings
+import com.gathin.tvhome.update.Updates
 import com.gathin.tvhome.wallpaper.PhoneServer
 import com.gathin.tvhome.wallpaper.Wallpapers
 import org.json.JSONArray
@@ -108,6 +109,11 @@ object Diagnostics {
         runCatching { com.gathin.tvhome.weather.Weather.diagnostics() }.getOrNull()?.let { appendLine("Weather     $it") }
         appendLine("```")
 
+        appendLine()
+        appendLine("**Update check**")
+        appendLine("```")
+        appendLine(Updates.diagnostics())
+        appendLine("```")
 
         appendLine()
         appendLine("**Brightness**")
