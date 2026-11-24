@@ -9,6 +9,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
@@ -120,9 +123,47 @@ object HuyaSubs {
             failed = true
             return
         }
+        val live = filterLive(fetched)
+        val final = if (live.isEmpty()) {
+            Log.w(TAG, "huya live check filtered all rooms, keeping livelist")
+            fetched
+        } else {
+            live
+        }
         failed = false
-        synchronized(lock) { rooms = fetched }
+        synchronized(lock) { rooms = final }
         changed()
+    }
+
+    private suspend fun filterLive(list: List<HuyaRoom>): List<HuyaRoom> {
+        if (list.isEmpty()) return list
+        val results = coroutineScope {
+            list.map { room -> async { room to isRoomLive(room.roomId) } }.awaitAll()
+        }
+        return results.filter { it.second }.map { it.first }
+    }
+
+    private suspend fun isRoomLive(roomId: String): Boolean {
+        val conn = try {
+            val c = URL("https://www.huya.com/$roomId").openConnection() as HttpURLConnection
+            c.connectTimeout = 5_000
+            c.readTimeout = 5_000
+            c.instanceFollowRedirects = true
+            c.setRequestProperty("User-Agent", UA)
+            c
+        } catch (t: Throwable) {
+            return true
+        }
+        try {
+            val code = conn.responseCode
+            if (code !in 200..299) return true
+            val body = conn.inputStream.use { readCapped(it, 128 * 1024).decodeToString() }
+            return body.contains("liveStatus-on")
+        } catch (t: Throwable) {
+            return true
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private suspend fun fetchLiveList(): List<HuyaRoom> {

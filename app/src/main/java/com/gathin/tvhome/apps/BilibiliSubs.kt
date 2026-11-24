@@ -73,17 +73,12 @@ object BilibiliSubs {
         if (!started || !isBilibili(pkg)) return emptyList()
         val list = synchronized(lock) { videos }
         return list.map { v ->
-            val intentUri = if (pkg == "com.xiaodianshi.tv.yst" && v.aid != 0L) {
-                "yst://com.xiaodianshi.tv.yst?type=3&isBangumi=0&avId=${v.aid}&stay=1&from=androidlauncher"
-            } else {
-                "https://www.bilibili.com/video/${v.bvid}"
-            }
             ShelfCard(
                 pkg = pkg,
                 title = v.title,
                 imageUri = v.cover,
                 backdropUri = v.cover,
-                intentUri = intentUri,
+                intentUri = "https://www.bilibili.com/video/${v.bvid}",
                 source = ShelfSource.BILIBILI_POPULAR,
                 logoUri = v.logo,
             )
