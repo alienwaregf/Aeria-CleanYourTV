@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.core.content.edit
 import com.gathin.tvhome.tmdb.TmdbItem
+import com.gathin.tvhome.tmdb.TmdbTrending
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -18,6 +19,8 @@ object OmdbRatings {
 
     @Volatile
     private var tmdbBlockedUntil = 0L
+
+    fun tmdbBlockedRaw(): Boolean = System.currentTimeMillis() < tmdbBlockedUntil
 
     private lateinit var launcherPrefs: SharedPreferences
 
@@ -39,7 +42,7 @@ object OmdbRatings {
         if (::launcherPrefs.isInitialized) launcherPrefs.getString(KEY_OMDB_KEY, "").orEmpty().trim() else ""
 
     fun fetchImdbId(item: TmdbItem, tmdbKey: String): String? {
-        if (System.currentTimeMillis() < tmdbBlockedUntil) return null
+        if (tmdbBlockedRaw() || TmdbTrending.tmdbBlockedRaw()) return null
         return runCatching {
             val isV4 = tmdbKey.startsWith("eyJ")
             val base = if (item.mediaType == "tv") {

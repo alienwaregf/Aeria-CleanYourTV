@@ -1,6 +1,8 @@
 package com.gathin.tvhome.ratings
 
 import android.content.Context
+import android.content.SharedPreferences
+import android.util.Log
 import com.gathin.tvhome.R
 import com.gathin.tvhome.tmdb.TmdbItem
 import com.gathin.tvhome.tmdb.TmdbTrending
@@ -11,6 +13,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 object Ratings {
+    private const val TAG = "Ratings"
     private const val RETRY_MS = 3 * 60 * 1000L
     private const val DAY_MS = 24 * 60 * 60 * 1000L
     private const val OMDB_TTL_MS = 30 * 60 * 1000L
@@ -19,17 +22,39 @@ object Ratings {
     private val inFlight = HashSet<String>()
     private val failedAt = HashMap<String, Long>()
 
+    private var diagOmdbDue = 0
+    private var diagOmdbFound = 0
+    private var diagOmdbFoundBlank = 0
+    private var diagOmdbNotFound = 0
+    private var diagOmdbBadId = 0
+    private var diagOmdbLimit = 0
+    private var diagOmdbFailed = 0
+    private var diagOmdbNoId = 0
+    private var diagTraktDue = 0
+    private var diagTraktFound = 0
+    private var diagTraktNoRt = 0
+    private var diagTraktNoRating = 0
+    private var diagTraktFailed = 0
+    private var diagTraktNoId = 0
+
     @Volatile
     private var omdbLimitDay = -1L
+
+    private const val KEY_OMDB_LIMIT_DAY = "omdb_limit_day"
+
+    private lateinit var prefs: SharedPreferences
 
     fun omdbLimitReachedToday(): Boolean =
         omdbLimitDay == System.currentTimeMillis() / DAY_MS
 
     private fun markOmdbLimitReached() {
         omdbLimitDay = System.currentTimeMillis() / DAY_MS
+        if (::prefs.isInitialized) prefs.edit().putLong(KEY_OMDB_LIMIT_DAY, omdbLimitDay).apply()
     }
 
     fun init(context: Context) {
+        prefs = context.applicationContext.getSharedPreferences("launcher_settings", Context.MODE_PRIVATE)
+        omdbLimitDay = prefs.getLong(KEY_OMDB_LIMIT_DAY, -1L)
         OmdbRatings.init(context)
         TraktRatings.init(context)
     }
@@ -62,6 +87,8 @@ object Ratings {
         val omdbDue = allowOmdb && now - item.omdbFetchedAt >= OMDB_TTL_MS && OmdbRatings.keySet()
         val traktDue = now - item.traktFetchedAt >= TRAKT_TTL_MS && TraktRatings.clientIdSet()
         if (!omdbDue && !traktDue) return
+        if (omdbDue) diagOmdbDue++
+        if (traktDue) diagTraktDue++
         val idKey = item.mediaType + ":" + item.id
         synchronized(inFlight) { if (!inFlight.add(idKey)) return }
         try {
@@ -73,10 +100,26 @@ object Ratings {
     }
 
     suspend fun refreshAll(items: List<TmdbItem>, allowOmdb: Boolean = false) {
+        diagOmdbDue = 0
+        diagOmdbFound = 0
+        diagOmdbFoundBlank = 0
+        diagOmdbNotFound = 0
+        diagOmdbBadId = 0
+        diagOmdbLimit = 0
+        diagOmdbFailed = 0
+        diagOmdbNoId = 0
+        diagTraktDue = 0
+        diagTraktFound = 0
+        diagTraktNoRt = 0
+        diagTraktNoRating = 0
+        diagTraktFailed = 0
+        diagTraktNoId = 0
+        Log.i(TAG, "ratings refreshAll: ${items.size} items, omdbKeySet=${OmdbRatings.keySet()}, traktIdSet=${TraktRatings.clientIdSet()}, allowOmdb=$allowOmdb")
         items.forEachIndexed { index, item ->
             if (index > 0) delay(1000)
             fetchFor(item, allowOmdb)
         }
+        Log.i(TAG, "ratings done: omdb due $diagOmdbDue found $diagOmdbFound foundBlank $diagOmdbFoundBlank notFound $diagOmdbNotFound badId $diagOmdbBadId limit $diagOmdbLimit failed $diagOmdbFailed noId $diagOmdbNoId | trakt due $diagTraktDue found $diagTraktFound noRt $diagTraktNoRt noRating $diagTraktNoRating failed $diagTraktFailed noId $diagTraktNoId")
     }
 
     private fun fetchNow(item: TmdbItem, allowOmdb: Boolean): TmdbItem {
@@ -91,14 +134,16 @@ object Ratings {
             if (tmdbKey.isBlank()) return cur
             val resolved = OmdbRatings.fetchImdbId(cur, tmdbKey)
             if (resolved == null) {
-                if (omdbDue) markFailed(cur, "omdb")
-                if (traktDue) markFailed(cur, "trakt")
                 return cur
             }
-            if (resolved.isBlank()) return cur.copy(
-                omdbFetchedAt = if (omdbDue) now else cur.omdbFetchedAt,
-                traktFetchedAt = if (traktDue) now else cur.traktFetchedAt,
-            )
+            if (resolved.isBlank()) {
+                if (omdbDue) diagOmdbNoId++
+                if (traktDue) diagTraktNoId++
+                return cur.copy(
+                    omdbFetchedAt = if (omdbDue) now else cur.omdbFetchedAt,
+                    traktFetchedAt = if (traktDue) now else cur.traktFetchedAt,
+                )
+            }
             imdbId = resolved
             cur = cur.copy(imdbId = resolved)
         }
@@ -114,14 +159,25 @@ object Ratings {
         if (omdbLimitReachedToday()) return item
         if (imdbId.isBlank()) return item.copy(omdbFetchedAt = System.currentTimeMillis(), traktFetchedAt = System.currentTimeMillis())
         return when (val outcome = OmdbRatings.fetchRatings(imdbId)) {
-            is OmdbRatings.OmdbFetch.Found -> item.copy(imdbId = imdbId, imdbRating = outcome.result.imdbRating, omdbFetchedAt = System.currentTimeMillis())
-            OmdbRatings.OmdbFetch.NotFound -> item.copy(imdbId = imdbId, omdbFetchedAt = System.currentTimeMillis())
-            OmdbRatings.OmdbFetch.BadId -> item.copy(imdbId = imdbId, omdbFetchedAt = System.currentTimeMillis(), traktFetchedAt = System.currentTimeMillis())
+            is OmdbRatings.OmdbFetch.Found -> {
+                if (outcome.result.imdbRating.isBlank()) diagOmdbFoundBlank++ else diagOmdbFound++
+                item.copy(imdbId = imdbId, imdbRating = outcome.result.imdbRating.ifBlank { item.imdbRating }, omdbFetchedAt = System.currentTimeMillis())
+            }
+            OmdbRatings.OmdbFetch.NotFound -> {
+                diagOmdbNotFound++
+                item.copy(imdbId = imdbId, omdbFetchedAt = System.currentTimeMillis())
+            }
+            OmdbRatings.OmdbFetch.BadId -> {
+                diagOmdbBadId++
+                item.copy(imdbId = imdbId, omdbFetchedAt = System.currentTimeMillis())
+            }
             OmdbRatings.OmdbFetch.LimitReached -> {
+                diagOmdbLimit++
                 markOmdbLimitReached()
                 item
             }
             OmdbRatings.OmdbFetch.Failed -> {
+                diagOmdbFailed++
                 markFailed(item, "omdb")
                 item
             }
@@ -134,6 +190,8 @@ object Ratings {
         return when (val outcome = TraktRatings.fetchRatings(item, imdbId)) {
             is TraktRatings.TraktFetch.Found -> {
                 val result = outcome.result
+                diagTraktFound++
+                if (result.rtPercent < 0) diagTraktNoRt++
                 item.copy(
                     imdbId = imdbId,
                     traktRating = result.rating,
@@ -145,8 +203,12 @@ object Ratings {
                     traktFetchedAt = System.currentTimeMillis(),
                 )
             }
-            TraktRatings.TraktFetch.NoRating -> item.copy(imdbId = imdbId, traktFetchedAt = System.currentTimeMillis())
+            TraktRatings.TraktFetch.NoRating -> {
+                diagTraktNoRating++
+                item.copy(imdbId = imdbId, traktFetchedAt = System.currentTimeMillis())
+            }
             TraktRatings.TraktFetch.Failed -> {
+                diagTraktFailed++
                 markFailed(item, "trakt")
                 item
             }
