@@ -29,9 +29,9 @@ object UhdCanvas {
 
     fun scale(context: Context): Float = known ?: compute(context).also { known = it }
 
+    /** true or false forces it, null decides by the display; either way the slow mark is cleared. */
     fun choose(context: Context, on: Boolean?) {
         prefs(context).edit().apply { if (on == null) remove(FORCED) else putBoolean(FORCED, on) }.remove(SLOW).apply()
-        known = null
     }
 
     private fun compute(context: Context): Float {
@@ -44,8 +44,16 @@ object UhdCanvas {
         val display = context.getSystemService(DisplayManager::class.java)?.getDisplay(Display.DEFAULT_DISPLAY) ?: return no("no display")
         val ui = context.resources.displayMetrics.let { maxOf(it.widthPixels, it.heightPixels) }
         val mode = maxOf(display.mode.physicalWidth, display.mode.physicalHeight)
+        // A 4K mode alone says nothing about the UI: most TV chips compose the UI on a 1080p
+        // graphics plane and only send video at 4K. Unless forced, only a chip that says it has a
+        // 4K UI plane gets it.
         if (forced == null && !chipHas4kUi()) return no("auto: no 4K UI plane (mode $mode for a $ui UI)")
         val panel = maxOf(mode, tclPanel(), vendorDisplaySize())
+        // TCL 75Q10L (MT9655) did turn it on by itself, but its HWC composes the 4K surface on the
+        // GPU and sends 1080p to the panel all the same, so it was no sharper and cost about half
+        // a core more (#607); another MT9655 TCL drew Home at 51 ms a frame with it on (#736).
+        //
+        // Until a TV is seen to show it 1:1, it stays off unless forced.
         if (forced == null) return no("auto: off until a 4K UI plane is seen to show it ($panel for a $ui UI)")
         if (ui <= 0 || panel < ui * 2) return no("mode $mode for a $ui UI")
         why = "${if (forced == true) "forced" else "auto"}: $panel for a $ui UI"
