@@ -123,6 +123,7 @@ object Updates {
         if (readingNotes) return
         readingNotes = true
         scope.launch {
+            try {
             val json = runCatching {
                 withContext(Dispatchers.IO) {
                     val api = JSONObject(read(API_URL))
@@ -130,17 +131,19 @@ object Updates {
                     val lines = JSONArray()
                     val raw = api.optString("body").split("\n").map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("|") }
                     val head = raw.indexOfFirst { it.trimStart('#').trim() == "更新日志" }
-                    val shown = if (head < 0) raw else raw.drop(head + 1).takeWhile { !it.startsWith("##") }
+                    val shown = if (head < 0) raw else raw.drop(head + 1).takeWhile { !(it.startsWith("##") && !it.startsWith("###")) }
                     shown.map { it.removePrefix("·").trim() }.filter { it.isNotEmpty() }.forEach { lines.put(it) }
                     JSONObject().put("releases", JSONArray().put(JSONObject().put("v", tag).put("en", lines))).toString()
                 }
             }.onFailure { Log.i(TAG, "release notes: ${it.javaClass.simpleName}") }.getOrNull()
-            readingNotes = false
             val parsed = json?.let { runCatching { ReleaseNotesParser.parse(it, current, latest, zh) }.getOrNull() }
 
             if (parsed.isNullOrEmpty() || parsed.first().version != latest || available != latest) return@launch
             prefs.edit { putString("notes", json); putString("notes_for", latest) }
             notes = parsed
+            } finally {
+                readingNotes = false
+            }
         }
     }
 
@@ -149,8 +152,8 @@ object Updates {
         val x = a.split('.').map { it.toLongOrNull() ?: 0 }
         val y = b.split('.').map { it.toLongOrNull() ?: 0 }
         for (i in 0 until maxOf(x.size, y.size)) {
-            val d = x.getOrElse(i) { 0 } - y.getOrElse(i) { 0 }
-            if (d != 0L) return d > 0
+            val d = x.getOrElse(i) { 0 }.compareTo(y.getOrElse(i) { 0 })
+            if (d != 0) return d > 0
         }
         return false
     }
@@ -201,6 +204,7 @@ object Updates {
 
 
     fun install(context: Context) {
+        if (!started) return
         if (install is Install.Downloading || install == Install.Opened) return
 
         if (awaiting != null) return
@@ -274,7 +278,11 @@ object Updates {
     @RequiresApi(28)
     internal fun reinstallSelf(app: Context, auto: Boolean) {
         val apk = File(app.applicationInfo.sourceDir)
-        val dm = dexMetadata(apk) ?: return
+        val dm = dexMetadata(apk)
+        if (dm == null) {
+            DiagLog.i("self compile: no dex metadata")
+            return
+        }
         runCatching {
             val result = Intent(app, UpdateResult::class.java).putExtra(EXTRA_WITH_DM, true)
                 .putExtra(EXTRA_SELF, if (auto) SELF_AUTO else SELF_ASKED)
@@ -310,7 +318,7 @@ object Updates {
                     out.write(dm)
                     session.fsync(out)
                 }
-                val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+                val flags = PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
                 GuardSetup.noteInstallerOpened(app)
                 session.commit(PendingIntent.getBroadcast(app, id, result, flags).intentSender)
             }
@@ -357,7 +365,7 @@ object Updates {
 
     private fun mayInstallSilently(app: Context): Boolean = Build.VERSION.SDK_INT >= 31 && runCatching {
         app.packageManager.getInstallSourceInfo(app.packageName).installingPackageName == app.packageName
-    }.getOrDefault(true)
+    }.getOrDefault(false)
 
 
     private const val CONFIRM_TIMEOUT_MS = 4_000L
@@ -372,7 +380,10 @@ object Updates {
         app: Context, id: Int, ms: Long, why: String,
         confirmation: Boolean = false, showConfirmation: Runnable? = null,
     ) {
-        awaiting?.let { main.removeCallbacks(it.check) }
+        awaiting?.let {
+            main.removeCallbacks(it.check)
+            if (it.id != id) runCatching { app.packageManager.packageInstaller.abandonSession(it.id) }
+        }
         val a = Awaiting(app, id, confirmation, showConfirmation)
         a.check = Runnable {
             if (awaiting !== a || (a.confirmation && a.homeLeft)) return@Runnable
@@ -528,21 +539,19 @@ object Updates {
     private suspend fun downloadFrom(context: Context, file: File): PackageInfo? {
         testApk?.takeIf { it.isFile }?.let { test ->
             file.parentFile?.mkdirs()
-            test.copyTo(file, overwrite = true)
-            if (Build.VERSION.SDK_INT < 24) file.setReadable(true, false)
-            return verify(context, file)
+            val copied = runCatching {
+                test.copyTo(file, overwrite = true)
+                if (Build.VERSION.SDK_INT < 24) file.setReadable(true, false)
+            }.onFailure { Log.w(TAG, "could not copy test apk", it) }.isSuccess
+            if (copied) return verify(context, file)
         }
         val name = if (BuildConfig.FLAVOR == "guard") "Aeria-CleanYourTV-NoHome.apk" else "Aeria-CleanYourTV.apk"
-        val sources = listOf(
-            "https://github.com/alienwaregf/Aeria-CleanYourTV/releases/latest/download/$name",
-        )
-        for (url in sources) {
-            val ok = runCatching { download(url, file) }
-                .onFailure { Log.w(TAG, "could not download $url", it) }
-                .isSuccess
-            if (ok) verify(context, file)?.let { return it }
-            file.delete()
-        }
+        val url = "https://github.com/alienwaregf/Aeria-CleanYourTV/releases/latest/download/$name"
+        val ok = runCatching { download(url, file) }
+            .onFailure { Log.w(TAG, "could not download $url", it) }
+            .isSuccess
+        if (ok) verify(context, file)?.let { return it }
+        file.delete()
         return null
     }
 
@@ -642,9 +651,9 @@ object Updates {
             val sigs = if (Build.VERSION.SDK_INT >= 28) info?.signingInfo?.apkContentsSigners else info?.signatures
             return sigs?.takeIf { it.isNotEmpty() }?.map { it.toCharsString() }?.toSet()
         }
-        val theirs = signers(apk) ?: return true
+        val theirs = signers(apk) ?: return false
         val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
-        val ours = signers(runCatching { pm.getPackageInfo(context.packageName, flags) }.getOrNull()) ?: return true
+        val ours = signers(runCatching { pm.getPackageInfo(context.packageName, flags) }.getOrNull()) ?: return false
         return theirs == ours
     }
 
