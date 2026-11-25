@@ -11,4 +11,9 @@ object HomeReopen {
         lastAt = now
         return true
     }
+
+    @Synchronized
+    internal fun reset() {
+        lastAt = Long.MIN_VALUE / 2
+    }
 }

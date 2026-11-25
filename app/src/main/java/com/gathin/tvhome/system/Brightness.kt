@@ -106,16 +106,18 @@ object Brightness {
         val r = context.contentResolver
         val changhong = ChanghongPicture.usable(context)
         if (!changhong && !isTcl(context) && !usesXiaomiBacklight(context) && MitvPanel.usable(context)) {
-            val ok = runCatching {
+            runCatching {
+                // Start the relative step from the level Aerial set last: the middleware's getter is
+                // animated, so a panel reading taken mid-step is only the seed of the first step
+                // after a restart.
                 val from = mitvLevel ?: MitvPanel.level(context) ?: storedLevel(context) ?: percent
                 MitvPanel.setBacklight(context, from, next)
-                MitvPanel.readBacklight(context)?.let { if (it != next) return@runCatching false }
                 mitvLevel = next
                 context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                     .edit().putInt(KEY_MITV_LEVEL, next).apply()
-                true
-            }.getOrDefault(false)
-            if (!ok) return percent / 100f
+            }
+            // Return what was asked for rather than reading it back: the MiTV middleware animates
+            // the panel and its getter reports the transient level, which made the slider jump.
             return next / 100f
         }
         runCatching {
