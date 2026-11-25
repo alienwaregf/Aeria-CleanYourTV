@@ -181,7 +181,6 @@ object Updates {
 
         data object NeedsPermission : Install
 
-        data object NeedsStoragePermission : Install
         data class Failed(val reason: Failure) : Install
     }
 
@@ -204,17 +203,12 @@ object Updates {
 
 
     fun install(context: Context) {
-        if (!started) return
         if (install is Install.Downloading || install == Install.Opened) return
 
+        // A second press while the first session's confirmation is awaited (#1004: two sessions).
         if (awaiting != null) return
         val app = context.applicationContext
         if (!canInstall(app)) { install = Install.Failed(Failure.NotOfficial); return }
-        if (LegacyUpdateStorage.needsPermission(app)) {
-            install = Install.NeedsStoragePermission
-            LegacyUpdateStorage.requestPermission(context)
-            return
-        }
         if (Build.VERSION.SDK_INT >= 26 && !app.packageManager.canRequestPackageInstalls()) {
 
             val settings = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${app.packageName}"))
@@ -376,24 +370,25 @@ object Updates {
     private const val ANSWER_AFTER_RETURN_MS = 1_500L
 
 
+    /** Wait for an answer, or for a requested confirmation page to pause Home. */
     private fun awaitSession(
         app: Context, id: Int, ms: Long, why: String,
         confirmation: Boolean = false, showConfirmation: Runnable? = null,
     ) {
-        awaiting?.let {
-            main.removeCallbacks(it.check)
-            if (it.id != id) runCatching { app.packageManager.packageInstaller.abandonSession(it.id) }
-        }
+        awaiting?.let { main.removeCallbacks(it.check) }
+
         val a = Awaiting(app, id, confirmation, showConfirmation)
         a.check = Runnable {
             if (awaiting !== a || (a.confirmation && a.homeLeft)) return@Runnable
             a.timedOut = true
 
+            // Do not open an installer over another app or while the TV is asleep.
             if (homeInFront) giveUpOnSession(app, id, why)
         }
         awaiting = a
         install = Install.Waiting
 
+        // A confirmation requested while away is opened on resume; its timer starts then.
         if (showConfirmation == null) main.postDelayed(a.check, ms)
     }
 
@@ -644,16 +639,21 @@ object Updates {
     }
 
 
+    /** Whether [apk] is signed like this copy. If the archive's signers cannot be read, the installer decides. */
     @Suppress("DEPRECATION")
     private fun sameSigner(context: Context, apk: PackageInfo): Boolean {
         val pm = context.packageManager
+
         fun signers(info: PackageInfo?): Set<String>? {
             val sigs = if (Build.VERSION.SDK_INT >= 28) info?.signingInfo?.apkContentsSigners else info?.signatures
             return sigs?.takeIf { it.isNotEmpty() }?.map { it.toCharsString() }?.toSet()
         }
-        val theirs = signers(apk) ?: return false
+
+        val theirs = signers(apk) ?: return true
+
         val flags = if (Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else PackageManager.GET_SIGNATURES
-        val ours = signers(runCatching { pm.getPackageInfo(context.packageName, flags) }.getOrNull()) ?: return false
+        val ours = signers(runCatching { pm.getPackageInfo(context.packageName, flags) }.getOrNull()) ?: return true
+
         return theirs == ours
     }
 

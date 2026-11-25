@@ -13,7 +13,6 @@ import androidx.core.content.edit
 import com.gathin.tvhome.BuildConfig
 import com.gathin.tvhome.system.DiagLog
 import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
 
 object SelfCompile {
     private const val TAG = "AerialUpdates"
@@ -32,7 +31,6 @@ object SelfCompile {
     private var inFront = false
     private var checkedThisRun = false
     private var app: Context? = null
-    private val askingSystem = AtomicBoolean(false)
 
     fun odexBytes(context: Context): Long? = runCatching {
         val dir = File(File(context.applicationInfo.sourceDir).parentFile, "oat")
@@ -54,14 +52,17 @@ object SelfCompile {
 
     private fun askedSystemThisInstall(context: Context) = prefs(context).getLong(KEY_ASKED_SYSTEM, -1) == installedAt(context)
 
-    private fun uncompiled(context: Context) = odexBytes(context)?.let { it < COMPILED_BYTES } ?: true
+    private fun uncompiled(context: Context) = odexBytes(context)?.let { it < COMPILED_BYTES } == true
 
     private fun systemWorthIt(context: Context) =
         Build.VERSION.SDK_INT in 24..30 && !askedSystemThisInstall(context) && uncompiled(context)
 
+    /** Whether reinstalling would help: Android 9+, the official package, uncompiled, metadata in the APK, not tried for this version. */
     private fun worthIt(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < 28 || !Updates.canInstall(context) || triedThisVersion(context)) return false
-        val odex = odexBytes(context) ?: 0L
+
+        val odex = odexBytes(context) ?: return false
+
         return odex < COMPILED_BYTES && Updates.ownDexMetadata(context) != null
     }
 
@@ -123,28 +124,42 @@ object SelfCompile {
         if (worthIt(context)) run(context, auto = true)
     }
 
+    /**
+     * Android 7 to 11: the package manager compiles Aerial where it is (PackageCompile), with the
+     * Baseline Profile that ProfileInstaller wrote at the first start; with no profile there,
+     * everything ("speed"). Once per install; if Aerial is still uncompiled after it, Android 9 to
+     * 11 offer the reinstall in Control Center. Off the main thread: it takes tens of seconds.
+     */
     private fun askSystem(context: Context) {
-        if (!askingSystem.compareAndSet(false, true)) return
-        try {
         val app = context.applicationContext
+
         prefs(app).edit { putLong(KEY_ASKED_SYSTEM, installedAt(app)) }
+
         val before = odexBytes(app)
+
         val started = android.os.SystemClock.elapsedRealtime()
+
         var said = runCatching { PackageCompile.compile(app, "speed-profile") }.getOrElse { "${it.javaClass.simpleName}: ${it.message}" }
+
         if (said.contains("Success") && uncompiled(app)) {
             said = runCatching { PackageCompile.compile(app, "speed") }.getOrElse { "${it.javaClass.simpleName}: ${it.message}" }
         }
+
         val after = odexBytes(app)
+
         val done = after != null && after >= COMPILED_BYTES
+
         val took = android.os.SystemClock.elapsedRealtime() - started
+
         val result = if (done) "compiled, odex ${after!! / 1024} KB in ${took / 1000} s" else "not compiled (${said.take(120)}), odex ${after?.div(1024)} KB"
+
         prefs(app).edit { putString(KEY_SYSTEM_RESULT, result) }
+
         Log.i(TAG, "self compile: package manager asked, odex $before -> $after bytes in $took ms: $said")
+
         DiagLog.i("self compile: package manager: $result")
+
         if (!done) main.post { offered = worthIt(app) }
-        } finally {
-            askingSystem.set(false)
-        }
     }
 
     fun run(context: Context, auto: Boolean) {
