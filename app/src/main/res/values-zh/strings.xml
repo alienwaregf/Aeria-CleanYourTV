@@ -165,6 +165,8 @@
     <string name="st_hero">资深影迷</string>
     <string name="hero_movie">电影</string>
     <string name="hero_tv">电视剧</string>
+    <string name="trailer_none">这部没有预告片</string>
+    <string name="trailer_no_youtube">没有安装 YouTube</string>
 
     <string name="st_plate">第一排底板</string>
     <string name="st_plate_hint">第一排下面垫一块磨砂玻璃，像 Apple TV 一样；或者让 App 直接放在壁纸上。</string>
@@ -317,6 +319,8 @@
     <string name="slimming_state_disabled">✓ 已停用</string>
     <string name="slimming_state_not_installed">未安装</string>
     <string name="slimming_note">需先打开USB调试/无线调试，执行清理会弹授权，选择允许，后悔了可以恢复</string>
+    <string name="slimming_adb_unauthorized">❌ USB调试/无线调试/ADB调试未授权，请先在开发者模式中打开功能开关</string>
+    <string name="slimming_adb_authorized">✅ 已授权，执行清理会弹授权，选择允许，后悔了可以恢复</string>
     <string name="slimming_empty">这个清单是空的。</string>
     <string name="slimming_daily_state">♻️ 自动更新清单：%1$s</string>
     <string name="slimming_disable_recommended">⚙️ 一键停用建议清单</string>
@@ -337,6 +341,5 @@
     <string name="slimming_disable_no_adb">连不上电视 ADB：请先在开发者选项里打开 USB 调试。</string>
     <string name="slimming_disable_not_accepted">电视上没有确认调试授权。</string>
     <string name="slimming_disable_failed">停用失败：%1$s</string>
-    <string name="slimming_adb_disconnected">⚠️ ADB断开，请重试</string>
     <string name="slimming_toast_not_installed">未安装%1$s，跳过</string>
 </resources>
