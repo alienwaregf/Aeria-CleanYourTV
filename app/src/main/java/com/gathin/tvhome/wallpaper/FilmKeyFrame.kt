@@ -32,6 +32,7 @@ internal object FilmKeyFrame {
     class Frame(val bitmap: Bitmap, val timeMs: Long, val codec: String, val readMs: Long, val decodeMs: Long, val convertMs: Long, val sampleBytes: Int, val indexKept: Boolean)
 
     fun decode(source: DataSource.Factory, uri: Uri, key: String, atMs: Long, w: Int, h: Int): Frame {
+        require(w > 0 && h > 0)
         val started = SystemClock.elapsedRealtime()
         val kept = index?.takeIf { it.uri == uri && it.key == key }
         val sample = readKeySample(source, uri, key, atMs * 1000)
@@ -95,6 +96,7 @@ internal object FilmKeyFrame {
         }
     }
 
+    @Synchronized
     private fun readKeySample(factory: DataSource.Factory, uri: Uri, key: String, atUs: Long): Sample {
         index?.takeIf { it.uri == uri && it.key == key }?.let { kept ->
             return runCatching { readFrom(factory, kept, atUs) }.getOrElse { e ->

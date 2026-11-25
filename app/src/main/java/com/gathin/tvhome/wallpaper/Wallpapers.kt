@@ -65,6 +65,7 @@ object Wallpapers {
 
     private lateinit var app: Context
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val frameWrites = Dispatchers.IO.limitedParallelism(1)
     private val prefs by lazy { app.getSharedPreferences("wallpaper", Context.MODE_PRIVATE) }
     private val liveFrame by lazy { File(app.filesDir, "live-frame.jpg") }
     private val videoFrame by lazy { File(app.filesDir, "video-frame.jpg") }
@@ -87,6 +88,7 @@ object Wallpapers {
     fun isTrending(id: String = selectedId) = id == TRENDING
 
     fun videoFilms(id: String = selectedId): List<ScreensaverVideo> {
+        if (!ready()) return emptyList()
         val all = ScreensaverVideos.all(app)
         return if (id.startsWith(VIDEO_PREFIX)) all.filter { it.id == id.removePrefix(VIDEO_PREFIX) } else all
     }
@@ -111,24 +113,27 @@ object Wallpapers {
     var pictureVersion by mutableIntStateOf(0); private set
 
     private var backdropJob: Job? = null
+    @Volatile
     private var started = false
 
     var screenW = 1920; private set
     var screenH = 1080; private set
 
+    @Synchronized
     fun init(context: Context) {
         if (started) return
-        started = true
         app = context.applicationContext
         val scale = UhdCanvas.scale(context)
         context.resources.displayMetrics.let {
             screenW = (maxOf(it.widthPixels, it.heightPixels) * scale).roundToInt()
             screenH = (minOf(it.widthPixels, it.heightPixels) * scale).roundToInt()
         }
-        selectedId = (prefs.getString("selected", AUTO) ?: AUTO).let {
-            if (it.startsWith("daily:") || it.startsWith("grad:") || it.startsWith("photo:") || it == "photos:rotate") AUTO else it
-        }
-        chosenScreensaver = ScreensaverMode.of(prefs.getString("screensaver", null))
+        selectedId = runCatching {
+            (prefs.getString("selected", AUTO) ?: AUTO).let {
+                if (it.startsWith("daily:") || it.startsWith("grad:") || it.startsWith("photo:") || it == "photos:rotate") AUTO else it
+            }
+        }.getOrDefault(AUTO)
+        chosenScreensaver = runCatching { ScreensaverMode.of(prefs.getString("screensaver", null)) }.getOrDefault(ScreensaverMode.Aerial)
         rebuildList()
         scope.launch {
             loadBaked()
@@ -136,7 +141,10 @@ object Wallpapers {
         }
         scope.launch(Dispatchers.IO) { clearStaleUploads() }
         scope.launch(Dispatchers.IO) { keepForLockedBoot() }
+        started = true
     }
+
+    private fun ready() = ::app.isInitialized
 
     private fun clearStaleUploads() {
         val before = System.currentTimeMillis() - 60 * 60 * 1000L
@@ -147,6 +155,7 @@ object Wallpapers {
     }
 
     fun select(id: String) {
+        if (!ready()) return
         if (items.isNotEmpty() && items.none { it.id == id }) return
         selectedId = id
         prefs.edit { putString("selected", id) }
@@ -155,6 +164,7 @@ object Wallpapers {
     }
 
     fun chooseScreensaver(mode: ScreensaverMode) {
+        if (!ready()) return
         chosenScreensaver = mode
         prefs.edit { putString("screensaver", mode.key) }
         GuardSetup.screensaverModeChanged(app)
@@ -165,13 +175,16 @@ object Wallpapers {
             ?: if (isSource(id)) Wallpaper(id, WallpaperKind.Source, id.substringAfterLast('/')) else null
 
 
-    fun picture(wp: Wallpaper, w: Int, h: Int): Bitmap? = when (wp.kind) {
+    fun picture(wp: Wallpaper, w: Int, h: Int): Bitmap? {
+        if (!ready()) return null
+        return when (wp.kind) {
         WallpaperKind.Auto -> null
         WallpaperKind.Live -> liveFrame.takeIf { it.exists() }?.let { Images.decodeCover(it, w, h) }
             ?: Gradients.render(Gradients.presets.first(), w, h)
         WallpaperKind.Video -> videoPicture(wp.id, w, h) ?: Gradients.render(Gradients.presets.first(), w, h)
         WallpaperKind.Source -> Gradients.byKey(SOURCE_PICTURE)?.let { Gradients.render(it, w, h) }
         WallpaperKind.Trending -> trendingPicture(w, h) ?: transparentPicture(w, h)
+    }
     }
 
     private fun trendingPicture(w: Int, h: Int): Bitmap? {
@@ -228,12 +241,13 @@ object Wallpapers {
     fun trimMemory() = synchronized(thumbs) { thumbs.clear() }
 
     fun thumbnail(id: String): Bitmap? {
+        if (!ready()) return null
         synchronized(thumbs) { thumbs[id] }?.let { return it }
         val version = pictureVersion
         val wp = items.firstOrNull { it.id == id } ?: return null
         val b = when (wp.kind) {
             WallpaperKind.Auto -> Gradients.render(Gradients.autoThumb, 384, 216)
-            WallpaperKind.Video -> videoPicture(id, 384, 216) ?: return Gradients.render(Gradients.presets.first(), 384, 216)
+            WallpaperKind.Video -> videoPicture(id, 384, 216) ?: Gradients.render(Gradients.presets.first(), 384, 216)
             else -> picture(wp, 384, 216)
         }
         if (b != null) synchronized(thumbs) { if (version == pictureVersion) thumbs[id] = b }
@@ -284,6 +298,7 @@ object Wallpapers {
         }
     }
 
+    @Volatile
     private var bakedKey: String? = null
 
     private fun bakedKey(wp: Wallpaper): String {
@@ -303,7 +318,7 @@ object Wallpapers {
             runCatching {
                 val key = File(bakedDir, "key").takeIf { it.exists() }?.readText() ?: return@runCatching null
                 val home = BitmapFactory.decodeFile(File(bakedDir, "home.jpg").path) ?: return@runCatching null
-                val frost = BitmapFactory.decodeFile(File(bakedDir, "frost.png").path) ?: return@runCatching null
+                val frost = BitmapFactory.decodeFile(File(bakedDir, "frost.png").path) ?: run { home.recycle(); return@runCatching null }
                 if (home.width != screenW || home.height != screenH || frost.width != 320 || frost.height != 180) {
                     home.recycle()
                     frost.recycle()
@@ -356,6 +371,11 @@ object Wallpapers {
         withContext(Dispatchers.Default) { PreparedFrame(frame, Images.frost(frame)) }
 
     fun applyLiveFrame(prepared: PreparedFrame, film: String, atMs: Long): Boolean {
+        if (!ready()) {
+            prepared.frame.recycle()
+            prepared.frost.recycle()
+            return false
+        }
         val id = selectedId
         if (!moves()) {
             prepared.frame.recycle()
@@ -377,11 +397,13 @@ object Wallpapers {
         frosted = prepared.frost.asImageBitmap()
         pictureVersion++
         val target = if (video) videoFrame else liveFrame
-        scope.launch(Dispatchers.IO) {
+        scope.launch(frameWrites) {
             val part = File(target.path + ".part")
-            runCatching { part.outputStream().use { prepared.frame.compress(Bitmap.CompressFormat.JPEG, 90, it) } }
+            val kept = runCatching { part.outputStream().use { prepared.frame.compress(Bitmap.CompressFormat.JPEG, 90, it) } }
                 .onFailure { Log.w(TAG, "could not keep the film's frame", it) }
-            if (part.exists() && !part.renameTo(target)) part.delete()
+                .getOrDefault(false)
+            if (!kept) part.delete()
+            else if (part.exists() && !part.renameTo(target)) part.delete()
             if (video) videoFilms(VIDEOS).firstOrNull { it.id == film }?.let { keepPoster(it, prepared.frame) }
             if (selectedId == id) resolve(id)?.let { saveBaked(bakedKey(it), prepared.frame, prepared.frost) }
         }
@@ -389,6 +411,10 @@ object Wallpapers {
     }
 
     suspend fun useLiveFrame(frame: Bitmap, film: String, atMs: Long, wanted: () -> Boolean = { true }): Boolean {
+        if (!ready()) {
+            frame.recycle()
+            return false
+        }
         if (!moves()) {
             frame.recycle()
             return false
@@ -403,14 +429,19 @@ object Wallpapers {
         return applyLiveFrame(prepared, film, atMs)
     }
 
-    fun liveSpot(): Pair<String, Long>? = leftLiveSpot() ?: livePictureSpot()
+    fun liveSpot(): Pair<String, Long>? {
+        if (!ready()) return null
+        return leftLiveSpot() ?: livePictureSpot()
+    }
 
     fun livePictureSpot(): Pair<String, Long>? {
+        if (!ready()) return null
         val film = prefs.getString("live_film", null)?.takeIf { it.isNotEmpty() } ?: return null
         return film to prefs.getLong("live_at", 0L)
     }
 
     fun leftLiveSpot(): Pair<String, Long>? {
+        if (!ready()) return null
         leftHere?.let { return it }
         val film = prefs.getString("live_left_film", null)?.takeIf { it.isNotEmpty() } ?: return null
         return film to prefs.getLong("live_left_at", 0L)
@@ -421,11 +452,13 @@ object Wallpapers {
 
     fun dropLeftLiveSpot() {
         leftHere = null
+        if (!ready()) return
         prefs.edit { remove("live_left_film").remove("live_left_at") }
     }
 
     fun leaveLiveFilm(film: String, atMs: Long, persist: Boolean = true) {
         if (!persist) { leftHere = film to atMs; return }
+        if (!ready()) return
         val picture = livePictureSpot()
         if (picture != null && picture.first == film && abs(picture.second - atMs) < SAME_SPOT_MS) {
             leftHere = null
@@ -439,16 +472,26 @@ object Wallpapers {
     @Volatile
     private var videoLeftHere: Pair<String, Long>? = null
 
-    fun leaveVideo(film: String, atMs: Long) { videoLeftHere = film to atMs }
+    fun leaveVideo(film: String, atMs: Long) {
+        videoLeftHere = film to atMs
+        if (ready()) prefs.edit { putString("video_left_film", film).putLong("video_left_at", atMs) }
+    }
 
-    fun videoLeftSpot(): Pair<String, Long>? = videoLeftHere
+    fun videoLeftSpot(): Pair<String, Long>? {
+        videoLeftHere?.let { return it }
+        if (!ready()) return null
+        val film = prefs.getString("video_left_film", null)?.takeIf { it.isNotEmpty() } ?: return null
+        return film to prefs.getLong("video_left_at", 0L)
+    }
 
     fun videoSpot(): Pair<String, Long>? {
+        if (!ready()) return null
         val film = prefs.getString("video_film", null)?.takeIf { it.isNotEmpty() } ?: return null
         return film to prefs.getLong("video_at", 0L)
     }
 
     fun videosChanged() {
+        if (!ready()) return
         synchronized(thumbs) { thumbs.keys.removeAll { isVideo(it) } }
         rebuildList()
         val spot = prefs.getString("video_film", null)
@@ -461,6 +504,7 @@ object Wallpapers {
     }
 
     fun setSources(list: List<Pair<String, String>>) {
+        if (!ready()) return
         if (list == sources) return
         sources = list
         rebuildList()
@@ -488,7 +532,7 @@ object Wallpapers {
         filmFrostOf = null
         filmFrost = withContext(Dispatchers.Default) {
             val src = start.asAndroidBitmap()
-            val quarter = Bitmap.createScaledBitmap(src, src.width / 4, src.height / 4, true)
+            val quarter = Bitmap.createScaledBitmap(src, maxOf(1, src.width / 4), maxOf(1, src.height / 4), true)
             val tiny = Bitmap.createScaledBitmap(quarter, 16, 9, true)
             quarter.recycle()
             Images.frost(tiny).also { tiny.recycle() }
@@ -506,6 +550,7 @@ object Wallpapers {
     var clipGlass by mutableStateOf<Pair<String, ImageBitmap>?>(null); private set
 
     suspend fun showClipGlass(clip: String?) {
+        if (!ready()) return
         if (clip == null || clipGlass?.first == clip) return
         val file = File(clipGlassDir, "$clip.png")
         val bmp = withContext(Dispatchers.IO) { if (file.exists()) BitmapFactory.decodeFile(file.path) else null }
@@ -513,7 +558,9 @@ object Wallpapers {
     }
 
     suspend fun keepClipGlass(clip: String, frame: Bitmap, showing: () -> String?) {
-        if (clip in clipGlassMade) return
+        if (!ready()) return
+        val fresh = synchronized(clipGlassMade) { clipGlassMade.add(clip) }
+        if (!fresh) return
         val file = File(clipGlassDir, "$clip.png")
         val (bmp, kept) = withContext(Dispatchers.IO) {
             if (file.exists()) {
@@ -528,7 +575,7 @@ object Wallpapers {
                 .onFailure { Log.w(TAG, "could not keep the clip's glass", it) }
             frost to kept
         }
-        if (kept) clipGlassMade += clip
+        if (!kept) synchronized(clipGlassMade) { clipGlassMade -= clip }
         if (showing() == clip) clipGlass = clip to bmp.asImageBitmap()
     }
 

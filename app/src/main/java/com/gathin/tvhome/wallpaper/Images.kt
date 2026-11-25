@@ -18,6 +18,7 @@ import kotlin.random.Random
 object Images {
 
     fun decodeCover(file: File, w: Int, h: Int): Bitmap? {
+        if (w <= 0 || h <= 0) return null
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.path, bounds)
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null

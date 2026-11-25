@@ -45,7 +45,7 @@ object AerialFormats {
     @Volatile
     private var probed: Set<AerialQuality>? = null
 
-    fun supported(context: Context): Set<AerialQuality> = probed ?: probe(context).also { probed = it }
+    fun supported(context: Context): Set<AerialQuality> = probed ?: synchronized(this) { probed ?: probe(context).also { probed = it } }
 
     fun resolve(context: Context, chosen: AerialQuality): AerialQuality {
         val ok = supported(context)
@@ -105,31 +105,45 @@ object Aerials {
         cache ?: load(context).also { cache = it }
     }
 
+    @Volatile
+    private var refreshing = false
+
+    @Synchronized
     fun refreshIfStale(context: Context) {
         val app = context.applicationContext
         val prefs = app.getSharedPreferences("aerials_catalog", Context.MODE_PRIVATE)
         if (System.currentTimeMillis() - prefs.getLong("checked_at", 0) < 24 * 60 * 60 * 1000L) return
-        Thread {
-            runCatching {
-                val c = URL(CATALOG_URL).openConnection() as HttpURLConnection
-                c.connectTimeout = 8_000
-                c.readTimeout = 10_000
+        if (refreshing) return
+        refreshing = true
+        try {
+            Thread {
                 try {
-                    if (c.responseCode !in 200..299) return@runCatching
-                    val text = c.inputStream.use { it.readBytes().decodeToString() }
-                    val films = parse(text)
-                    if (films.isEmpty()) return@runCatching
-                    val dir = app.filesDir
-                    val tmp = File(dir, "aerials.json.tmp")
-                    tmp.writeText(text)
-                    if (!tmp.renameTo(File(dir, "aerials.json"))) tmp.delete()
-                    cache = null
-                    prefs.edit().putLong("checked_at", System.currentTimeMillis()).apply()
+                    runCatching {
+                        val c = URL(CATALOG_URL).openConnection() as HttpURLConnection
+                        c.connectTimeout = 8_000
+                        c.readTimeout = 10_000
+                        try {
+                            if (c.responseCode !in 200..299) return@runCatching
+                            val text = c.inputStream.use { it.readBytes().decodeToString() }
+                            val films = parse(text)
+                            if (films.isEmpty()) return@runCatching
+                            val dir = app.filesDir
+                            val tmp = File(dir, "aerials.json.tmp")
+                            tmp.writeText(text)
+                            if (!tmp.renameTo(File(dir, "aerials.json"))) tmp.delete()
+                            cache = null
+                            prefs.edit().putLong("checked_at", System.currentTimeMillis()).apply()
+                        } finally {
+                            c.disconnect()
+                        }
+                    }
                 } finally {
-                    c.disconnect()
+                    refreshing = false
                 }
-            }
-        }.start()
+            }.start()
+        } catch (e: Exception) {
+            refreshing = false
+        }
     }
 
     private const val CATALOG_URL = "https://raw.githubusercontent.com/pengchujin/aerial-tv/main/app/src/main/assets/aerials.json"
@@ -140,9 +154,9 @@ object Aerials {
             runCatching { cached.readText() }.getOrNull()?.takeIf { runCatching { parse(it) }.getOrNull()?.isNotEmpty() == true }
                 ?: run { cached.delete(); null }
         } else null
-        return parse(
-            text ?: context.assets.open("aerials.json").bufferedReader().use { it.readText() },
-        )
+        return runCatching {
+            parse(text ?: context.assets.open("aerials.json").bufferedReader().use { it.readText() })
+        }.getOrDefault(emptyList())
     }
 
     private fun parse(text: String): List<Aerial> {
@@ -153,11 +167,12 @@ object Aerials {
             runCatching {
                 val o = arr.getJSONObject(i)
                 val url = o.getString("url")
-                if (!url.startsWith("https://sylvan.apple.com/")) null
+                val id = o.getString("id")
+                if (!url.startsWith("https://sylvan.apple.com/") || id.isEmpty() || !id.all { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' || it == '-' || it == '_' }) null
                 else {
                     val caps = o.getJSONArray("captions")
                     Aerial(
-                        id = o.getString("id"),
+                        id = id,
                         label = o.getString("label"),
                         category = o.getString("category"),
                         url = url,

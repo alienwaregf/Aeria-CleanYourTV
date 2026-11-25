@@ -97,6 +97,7 @@ object Gradients {
     val autoThumb get() = byKey("hills_night")!!
 
     fun render(preset: GradientPreset, width: Int, height: Int): Bitmap {
+        require(width > 0 && height > 0)
         val out = createBitmap(width, height)
         Canvas(out).apply { preset.draw(this, width.toFloat(), height.toFloat()) }
         Images.dither(out)

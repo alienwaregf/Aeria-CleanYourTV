@@ -27,7 +27,7 @@ object ScreensaverVideos {
         .mapNotNull { dir ->
             runCatching {
                 val file = File(dir, "video.mp4").takeIf { it.isFile && it.length() > 0 } ?: return@runCatching null
-                val name = JSONObject(File(dir, "info.json").readText()).getString("name")
+                val name = runCatching { JSONObject(File(dir, "info.json").readText()).getString("name") }.getOrNull() ?: dir.name
                 ScreensaverVideo(dir.name, name, file)
             }.getOrNull()
         }.sortedBy { it.id }

@@ -517,9 +517,10 @@ class PhoneServer private constructor(private val context: Context, private val 
             }.onFailure { Log.w(TAG, "could not listen", it) }.getOrNull()
         }
 
+        @Synchronized
         fun start(context: Context): String? {
-            val ip = lanAddress(context) ?: return null
             val server = listen(context) ?: return null
+            val ip = lanAddress(context) ?: "0.0.0.0"
             return "http://$ip:$PORT/${server.token}/"
         }
 

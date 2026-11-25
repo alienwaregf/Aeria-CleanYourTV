@@ -24,6 +24,7 @@ object AerialSet {
         val all = Aerials.all(context)
         val known = ids(context).mapNotNull { id -> all.firstOrNull { it.id == id } }
         if (known.isNotEmpty()) return known
+        if (all.isEmpty()) return emptyList()
         val first = runCatching { Wallpapers.liveSpot() }.getOrNull()?.first?.let { id -> all.firstOrNull { it.id == id } } ?: all.random()
         save(context, listOf(first.id), today())
         return listOf(first)
@@ -48,7 +49,7 @@ object AerialSet {
         val all = Aerials.all(context)
         prefs(context).getString("next", null)?.let { id -> all.firstOrNull { it.id == id } }?.let { return it }
         val kept = ids(context).toSet()
-        val film = all.filter { it.id !in kept }.randomOrNull() ?: all.random()
+        val film = all.filter { it.id !in kept }.randomOrNull() ?: all.randomOrNull() ?: error("no aerial films")
         prefs(context).edit { putString("next", film.id) }
         return film
     }
@@ -65,6 +66,7 @@ object AerialSet {
 
     fun due(context: Context): Boolean = prefs(context).getString("day", null) != today()
 
+    @Synchronized
     fun takeDaily(context: Context): Aerial? = if (due(context)) addNew(context) else null
 
     internal var today: () -> String = { LocalDate.now().toString() }

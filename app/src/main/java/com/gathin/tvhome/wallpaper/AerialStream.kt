@@ -63,7 +63,7 @@ object AerialStream {
     private val evictor = AerialEvictor { keepBytes }
 
     private fun cache(context: Context): SimpleCache {
-        return cache ?: synchronized(this) {
+        val created = cache ?: synchronized(this) {
             cache ?: run {
                 val dir = File(context.applicationContext.cacheDir, "aerials")
                 val kept = dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
@@ -71,6 +71,8 @@ object AerialStream {
                 SimpleCache(dir, evictor, StandaloneDatabaseProvider(context.applicationContext)).also { cache = it }
             }
         }
+        keepBytes = keepLimit(context)
+        return created
     }
 
     fun keepLimit(context: Context): Long =
@@ -150,7 +152,7 @@ object AerialStream {
             val cache = cache(context)
             val key = key(film, quality)
             val known = ContentMetadata.getContentLength(cache.getContentMetadata(key))
-            if (known > 0 && cache.isCached(key, 0, LEAD_BYTES) && cache.isCached(key, known - TAIL_BYTES, TAIL_BYTES)) return@runInterruptible
+            if (known > 0 && cache.isCached(key, 0, LEAD_BYTES) && cache.isCached(key, maxOf(0L, known - TAIL_BYTES), TAIL_BYTES)) return@runInterruptible
             val started = SystemClock.elapsedRealtime()
             runCatching {
                 val uri = android.net.Uri.parse(url(film, quality, overHttp))
@@ -255,7 +257,7 @@ object AerialStream {
         try {
             source.open(DataSpec.Builder().setUri(uri).setPosition(0).setLength(1).build())
             val range = source.responseHeaders.entries
-                .firstOrNull { it.key.equals("Content-Range", ignoreCase = true) }?.value?.firstOrNull()
+                .firstOrNull { it.key?.equals("Content-Range", ignoreCase = true) == true }?.value?.firstOrNull()
             return range?.substringAfterLast('/')?.toLongOrNull() ?: error("no Content-Range: $range")
         } finally {
             source.close()
