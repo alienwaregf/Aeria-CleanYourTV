@@ -53,6 +53,10 @@ internal object VidaaSiloSources {
     fun open(context: Context, intent: Intent): Boolean {
         if (intent.action != SWITCH_ACTION || intent.`package` != null || intent.component != null ||
             intent.getIntExtra(SOURCE_EXTRA, 0) !in HDMI_IDS.values + LIVE_TV) return false
+        if (!File(CONFIG).canRead()) {
+            Log.w(TAG, "silo config is not readable; not claiming the source switch worked")
+            return false
+        }
         context.sendBroadcast(Intent(intent))
         return true
     }

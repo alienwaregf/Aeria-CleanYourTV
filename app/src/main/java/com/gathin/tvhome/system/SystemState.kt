@@ -127,7 +127,11 @@ object SystemProbe {
         val am = context.getSystemService<AudioManager>() ?: return
         val flags = volumeFlags(context, fromKey, showUi)
         val before = runCatching { am.getStreamVolume(AudioManager.STREAM_MUSIC) }.getOrNull()
-        stepVolume(am, direction, flags)
+        val stepped = stepVolume(am, direction, flags)
+        if (!stepped) {
+            stuckSteps = 0
+            return
+        }
         if (before != null) runCatching {
             val after = am.getStreamVolume(AudioManager.STREAM_MUSIC)
             val muted = Build.VERSION.SDK_INT >= 23 && am.isStreamMute(AudioManager.STREAM_MUSIC)
@@ -138,18 +142,19 @@ object SystemProbe {
         }
     }
 
-    private fun stepVolume(am: AudioManager, direction: Int, flags: Int) {
+    private fun stepVolume(am: AudioManager, direction: Int, flags: Int): Boolean {
         try {
             am.adjustStreamVolume(
                 AudioManager.STREAM_MUSIC,
                 if (direction > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
                 flags,
             )
+            return true
         } catch (e: SecurityException) {
-            runCatching {
+            return runCatching {
                 val level = am.getStreamVolume(AudioManager.STREAM_MUSIC) + if (direction > 0) 1 else -1
                 am.setStreamVolume(AudioManager.STREAM_MUSIC, level.coerceIn(0, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)), flags)
-            }
+            }.isSuccess
         }
     }
 
