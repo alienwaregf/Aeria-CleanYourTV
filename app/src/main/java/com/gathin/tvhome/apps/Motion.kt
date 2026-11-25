@@ -13,156 +13,23 @@ import kotlin.math.abs
 object Motion {
 
 
-    const val APP_GROW = "app.grow"
-    const val APP_LAND = "app.land"
-    const val APP_OPEN = "app.open"
-    const val APP_RECEDE = "app.recede"
-    const val APP_RETURN = "app.return"
-    const val APP_SETTLE = "app.settle"
-    const val BACKDROP_DARK = "backdrop.dark"
-    const val BACKDROP_DIP = "backdrop.dip"
-    const val BACKDROP_LAND = "backdrop.land"
-    const val BACKDROP_LIVE = "backdrop.live"
-    const val BACKDROP_RISE = "backdrop.rise"
-    const val BACKDROP_SHARPEN = "backdrop.sharpen"
-    const val CARD_SOFTEN = "card.soften"
-    const val CLOCK_CARRY = "clock.carry"
-    const val CLOCK_RETURN = "clock.return"
-    const val CLOCK_REVEAL = "clock.reveal"
-    const val CONTROLS_SHRINK = "controls.shrink"
-    const val DIALOG_FOCUS = "dialog.focus"
-    const val DIALOG_GROW = "dialog.grow"
-    const val DIALOG_IN = "dialog.in"
-    const val DOCK_PAGE = "dock.page"
-    const val FOCUS_POP = "focus.pop"
-    const val FOLDER_GROW = "folder.grow"
-    const val FOLDER_LAND = "folder.land"
-    const val FOLDER_PAGE = "folder.page"
-    const val FOLDER_SHRINK = "folder.shrink"
-    const val FULL_HINT = "full.hint"
-    const val FULL_SCREEN = "full.screen"
-    const val GLASS_FOCUS = "glass.focus"
-    const val GRID = "grid"
-    const val GRID_SCROLL = "grid.scroll"
-    const val HEADER_FADE = "header.fade"
-    const val KEYBOARD_IN = "keyboard.in"
-    const val KEY_GLIDE = "key.glide"
-    const val KEY_PULSE = "key.pulse"
-    const val LABEL_IN = "label.in"
-    const val LIST_FOCUS = "list.focus"
-    const val LIST_LAND = "list.land"
-    const val LIST_LEAVE = "list.leave"
-    const val LIST_PAGE = "list.page"
-    const val LIST_PRESS = "list.press"
-    const val LIST_SCROLL = "list.scroll"
-    const val MENU_GROW = "menu.grow"
-    const val MENU_SHRINK = "menu.shrink"
-    const val PICKER_FADE = "picker.fade"
-    const val PICKER_LIFT = "picker.lift"
-    const val PICTURE_FADE = "picture.fade"
-    const val RECENTS_DISMISS = "recents.dismiss"
-    const val RECENTS_FADE = "recents.fade"
-    const val RECENTS_HANDOVER = "recents.handover"
-    const val RECENTS_HOME = "recents.home"
-    const val RECENTS_IN = "recents.in"
-    const val RECENTS_OUT = "recents.out"
-    const val RECENTS_STEP = "recents.step"
-    const val ROWS_LIFT = "rows.lift"
     const val ROW_GLIDE = "row.glide"
-    const val SHEET_CLOSE = "sheet.close"
-    const val SHEET_GROW = "sheet.grow"
-    const val SHEET_OPEN = "sheet.open"
-    const val SHEET_SHRINK = "sheet.shrink"
-    const val SHEET_TAB = "sheet.tab"
-    const val SHEET_TAB_OUT = "sheet.tab.out"
     const val SHELF_SWAP = "shelf.swap"
     const val TILE_FOCUS = "tile.focus"
-    const val TILE_GLOSS = "tile.gloss"
-    const val TILE_MOVE = "tile.move"
-    const val TOAST_DIP = "toast.dip"
-    const val TOAST_IN = "toast.in"
-    const val TOAST_OUT = "toast.out"
 
     private val FLOW: Map<String, Spec> = mapOf(
         TILE_FOCUS to Spec(38.0f, 0.65f, 26.0f, 1.0f),
-        GRID to Spec.both(10.5f, 1.0f),
-        GRID_SCROLL to Spec.both(10.5f, 1.0f),
-        DOCK_PAGE to Spec.both(12.0f, 1.0f),
-        FOLDER_PAGE to Spec.both(10.5f, 1.0f),
-        TILE_MOVE to Spec.both(18.0f, 1.0f),
-        SHEET_OPEN to Spec.both(22.0f, 1.0f),
-        SHEET_CLOSE to Spec.both(34.0f, 1.0f),
-        SHEET_GROW to Spec.both(14.0f, 1.0f),
-        SHEET_SHRINK to Spec.both(26.0f, 1.0f),
-        CLOCK_CARRY to Spec.both(22.0f, 1.0f),
-        CONTROLS_SHRINK to Spec.both(32.0f, 1.0f),
-        FOLDER_GROW to Spec.both(13.0f, 0.9f),
-        FOLDER_SHRINK to Spec.both(10.0f, 1.0f),
-        FOLDER_LAND to Spec.both(20.0f, 1.0f),
-        MENU_GROW to Spec.both(26.0f, 1.0f),
-        MENU_SHRINK to Spec.both(38.0f, 1.0f),
-        RECENTS_IN to Spec.both(24.0f, 1.0f),
-        RECENTS_STEP to Spec.both(10.0f, 1.0f),
-        RECENTS_OUT to Spec.both(20.0f, 1.0f),
-        RECENTS_FADE to Spec.both(20.0f, 1.0f),
-        RECENTS_DISMISS to Spec.both(14.0f, 1.0f),
-        RECENTS_HOME to Spec.both(16.0f, 1.0f),
-        RECENTS_HANDOVER to Spec.both(20.0f, 1.0f),
-        CARD_SOFTEN to Spec.both(16.0f, 1.0f),
-        CLOCK_RETURN to Spec.both(20.0f, 1.0f),
-        CLOCK_REVEAL to Spec(28.0f, 1.0f, 18.0f, 1.0f),
-        LABEL_IN to Spec.both(20.0f, 1.0f),
-        LIST_PAGE to Spec.both(15.0f, 1.0f),
-        LIST_FOCUS to Spec.both(80.0f, 1.0f),
-        LIST_PRESS to Spec(80.0f, 1.0f, 45.0f, 1.0f),
-        LIST_LAND to Spec.both(36.0f, 1.0f),
-        LIST_LEAVE to Spec.both(66.0f, 1.0f),
-        LIST_SCROLL to Spec.both(10.0f, 1.0f),
-        PICKER_FADE to Spec(45.0f, 1.0f, 61.0f, 1.0f),
-        PICKER_LIFT to Spec.both(56.0f, 1.0f),
         ROW_GLIDE to Spec.both(17.0f, 1.0f),
-        ROWS_LIFT to Spec.both(16.5f, 1.0f),
-        PICTURE_FADE to Spec.both(12.7f, 1.0f),
-        TILE_GLOSS to Spec(28.0f, 1.0f, 40.0f, 1.0f),
         SHELF_SWAP to Spec.both(19.5f, 1.0f),
-        SHEET_TAB to Spec.both(30.0f, 1.0f),
-        SHEET_TAB_OUT to Spec.both(45.0f, 1.0f),
-        KEY_GLIDE to Spec.both(30.0f, 1.0f),
-        KEY_PULSE to Spec.both(22.0f, 0.55f),
-        KEYBOARD_IN to Spec.both(16.0f, 1.0f),
-        GLASS_FOCUS to Spec(80.0f, 1.0f, 30.0f, 1.0f),
-        FOCUS_POP to Spec(70.0f, 1.0f, 24.0f, 1.0f),
-        DIALOG_IN to Spec.both(27.0f, 1.0f),
-        DIALOG_GROW to Spec.both(33.0f, 1.0f),
-        DIALOG_FOCUS to Spec.both(56.0f, 1.0f),
-        TOAST_IN to Spec.both(25.0f, 1.0f),
-        TOAST_DIP to Spec(30.0f, 1.0f, 54.0f, 1.0f),
-        TOAST_OUT to Spec.both(16.0f, 1.0f),
-        APP_OPEN to Spec.both(24.0f, 1.0f),
-        APP_RETURN to Spec.both(26.0f, 1.0f),
-        APP_SETTLE to Spec.both(8.0f, 1.0f),
-        APP_GROW to Spec.both(12.0f, 1.0f),
-        APP_RECEDE to Spec.both(12.0f, 1.0f),
-        APP_LAND to Spec.both(12.0f, 1.0f),
-        HEADER_FADE to Spec.both(10.0f, 1.0f),
-        BACKDROP_DIP to Spec.both(9.0f, 1.0f),
-        BACKDROP_DARK to Spec.both(60.0f, 1.0f),
-        BACKDROP_RISE to Spec.both(7.0f, 1.0f),
-        BACKDROP_LAND to Spec.both(12.0f, 1.0f),
-        BACKDROP_SHARPEN to Spec.both(16.0f, 1.0f),
-        BACKDROP_LIVE to Spec.both(9.0f, 1.0f),
-        FULL_SCREEN to Spec.both(12.0f, 1.0f),
-        FULL_HINT to Spec(13.0f, 1.0f, 10.0f, 1.0f),
     )
 
 
-    private val EASED: Set<String> = setOf(LIST_SCROLL)
+    private val EASED: Set<String> = setOf()
 
-    private val CUT_IN_PERFORMANCE: Set<String> = setOf(SHELF_SWAP, RECENTS_FADE, RECENTS_HANDOVER)
+    private val CUT_IN_PERFORMANCE: Set<String> = setOf(SHELF_SWAP)
 
     private val STEP_TRAVEL: Map<String, FloatArray> = mapOf(
         SHELF_SWAP to floatArrayOf(30.0f, 12.0f),
-        SHEET_TAB to floatArrayOf(48.0f, 0.0f),
     )
 
 
