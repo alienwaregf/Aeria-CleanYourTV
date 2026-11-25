@@ -20,12 +20,10 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
-import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.URLEncoder
 import java.time.LocalDate
 import java.util.Locale
-import javax.net.ssl.SSLException
 import kotlin.math.roundToInt
 
 enum class WeatherKind {
@@ -345,6 +343,7 @@ object Weather {
                 }
             }
         }
+        if (lat.isNaN() || lon.isNaN()) throw IOException("no coordinates available")
         val json = JSONObject(get("https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min&forecast_days=1&timezone=auto"))
         val current = json.getJSONObject("current")
         val daily = json.optJSONObject("daily")
@@ -434,9 +433,10 @@ object Weather {
     }
 
     fun useNetworkLocation() {
-        prefs.edit { putBoolean("chosen", false); remove("lat"); remove("lon"); remove("located_at") }
+        prefs.edit { putBoolean("chosen", false); remove("lat"); remove("lon"); remove("located_at"); remove("place") }
         if (::launcherPrefs.isInitialized) launcherPrefs.edit { remove("weather_city") }
         chosen = false
+        place = null
         refresh()
     }
 
@@ -446,18 +446,16 @@ object Weather {
         2 -> WeatherKind.PartlyCloudy
         3 -> WeatherKind.Cloudy
         45, 48 -> WeatherKind.Fog
+        in 51..55 -> WeatherKind.LightRain
+        56, 57, 66, 67 -> WeatherKind.Sleet
         in 71..77, 85, 86 -> WeatherKind.Snow
         in 80..82 -> WeatherKind.Shower
-        in 95..99 -> WeatherKind.Thunder
+        95, 97, 98 -> WeatherKind.Thunder
+        96, 99 -> WeatherKind.Hail
         else -> WeatherKind.Rain
     }
 
-    private fun get(url: String): String = try {
-        read(url)
-    } catch (e: IOException) {
-        if (e !is SSLException && e !is SocketTimeoutException) throw e
-        read(url.replaceFirst("https://", "http://"))
-    }
+    private fun get(url: String): String = read(url)
 
     private fun read(url: String): String {
         val c = URL(url).openConnection() as HttpURLConnection
