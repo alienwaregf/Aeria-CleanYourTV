@@ -28,7 +28,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import kotlin.math.roundToInt
 
-enum class Glyph { Folder, Pencil, Wifi, Ethernet, Offline, Gear, Input, Speaker, SpeakerMuted, Switches, EyeSlash, Move, Info, Trash, ChevronRight, ChevronLeft, Check, Hdmi, Antenna, Av, Sun, Photo, Play, Bag, CloudSun, Calendar, Cast, Shield, Globe, Moon, Cloud, CloudRain, CloudSnow, CloudFog, CloudBolt, Download, Power, Usb, Home, Kids }
+enum class Glyph { Folder, Pencil, Wifi, Ethernet, Offline, Gear, Input, Speaker, SpeakerMuted, Switches, EyeSlash, Move, Info, Trash, ChevronRight, ChevronLeft, Check, Hdmi, Antenna, Av, Sun, Photo, Play, Bag, CloudSun, Calendar, Cast, Shield, Globe, Moon, Cloud, CloudRain, CloudSnow, CloudFog, CloudBolt, Download, Power, Usb, Home, Kids, Mic }
 
 @Composable
 fun GlyphIcon(glyph: Glyph, color: Color, size: Dp, modifier: Modifier = Modifier, level: Float = 1f) {
@@ -94,6 +94,7 @@ private fun glyphPath(glyph: Glyph, level: Float): String? {
         Glyph.Usb -> GlyphPaths.USB
         Glyph.Home -> GlyphPaths.HOME
         Glyph.Kids -> GlyphPaths.KIDS
+        Glyph.Mic -> GlyphPaths.MIC
     }
 }
 
