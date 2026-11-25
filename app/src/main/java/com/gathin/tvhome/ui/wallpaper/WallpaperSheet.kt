@@ -338,7 +338,7 @@ fun WallpaperSheet(
                 }
                 Spacer(Modifier.height(22.dp))
                 SectionTitle(R.string.cc_about)
-                Group(stringResource(R.string.cc_about_version, Updates.current) + " · " + BuildConfig.FLAVOR) { note ->
+                Group(stringResource(R.string.cc_about_version, Updates.current) + if (BuildConfig.FLAVOR == "guard") " · NoHome" else "") { note ->
                     val latest = Updates.available
                     SettingRow(R.string.cc_about_update, null, note, first = true) {
                         Box(Modifier.onFocusChanged { if (it.hasFocus) scope.launch { scroll.animateScrollTo(scroll.maxValue) } }) {
