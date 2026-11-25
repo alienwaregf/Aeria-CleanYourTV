@@ -460,7 +460,7 @@ const $ = s => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 let state = null, stateJson = '';
 
-const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "g_live", "g_live_sub", "g_auto", "toast_wallpaper", "aria_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_haze", "wx_dust", "wx_sand", "wx_wind", "wx_hail", "wx_sleet", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "aria_rename", "toast_renamed", "toast_pinned", "toast_unpinned", "toast_folder_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "toast_tv_updated", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "ss_videos", "hint_videos", "ss_trending", "ss_system", "hint_trending", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "bg_url_ph", "bg_url_hint", "toast_bg_set", "toast_bg_bad", "this_tv", "folder_count", "folder_ph", "inputs_h", "inputs_hint", "rename_hint_app", "was_named", "arrange_hint", "arrange_unready", "hidden_h", "hidden_none", "hidden_locked", "show_app", "hide_app", "to_folder", "new_folder", "out_of_folder", "ungroup", "ungroup_confirm", "folder_hint", "toast_hidden", "toast_shown", "toast_in_folder", "toast_out_folder", "toast_ungrouped", "tab_looks", "looks_title", "show_on_home", "source_device", "source_plain", "source_device_hint", "tv_model", "sw_always", "sw_always_sub", "sw_weather", "sw_saver_time", "sw_saver_time_sub", "icon_h", "icon_library", "icon_own", "icon_custom", "toast_icon_picked", "drop_hint", "drop_sub", "drop_none", "toast_diag_paste", "tab_slimming", "slimming_h", "slimming_refresh", "slimming_daily_on", "slimming_daily_off", "slimming_no_list", "slimming_list_line", "wx_source", "wx_source_openmeteo", "slim_cmd_h", "slim_cmd_hint", "slim_cmd_mac", "slim_cmd_win", "slim_cmd_ip", "slim_cmd_mac_sub", "wx_source_qweather", "wx_qw_key_ph", "wx_qw_key_save", "wx_qw_key_saved", "wx_qw_host_ph", "wx_qw_host_save", "wx_qw_host_saved", "wx_qw_credit", "wx_qw_host_link", "tmdb_h", "tmdb_key_ph", "tmdb_key_save", "tmdb_key_saved", "tmdb_credit", "omdb_key_ph", "omdb_key_save", "omdb_key_saved", "trakt_key_ph", "trakt_key_save", "trakt_key_saved", "icon_more", "icon_more_hint", "icon_more_fail", "video_err_format", "video_err_room", "video_err_send", "icon_search_ph", "icon_search_none", "yt_subs_ph", "yt_subs_hint", "toast_yt_subs_set", "toast_yt_subs_bad", "yt_mode_subs", "yt_mode_keywords", "yt_kw_ph", "yt_kw_hint", "toast_yt_kw_set", "toast_yt_kw_bad"];
+const KEYS = ["screensaver", "screensaver_short", "ss_aerial", "focus", "focus_high", "focus_standard", "weather", "city_ph", "set", "feedback_h", "feedback_hint", "diag_show", "diag_copy", "diag_github", "hint_aerial", "g_live", "g_live_sub", "g_auto", "toast_wallpaper", "aria_delete", "wx_clear", "wx_partlycloudy", "wx_cloudy", "wx_fog", "wx_rain", "wx_snow", "wx_thunder", "wx_haze", "wx_dust", "wx_sand", "wx_wind", "wx_hail", "wx_sleet", "wx_chosen", "wx_auto_btn", "toast_auto", "wx_guessed", "wx_none", "tag_source", "aria_rename", "toast_renamed", "toast_pinned", "toast_unpinned", "toast_folder_renamed", "toast_name_reset", "toast_rename_fail", "aria_reset_icon", "toast_icon_reset", "focus_hint_standard", "focus_hint_high", "toast_tv_updated", "toast_send_fail", "toast_city_set", "toast_city_nf", "toast_set_fail", "toast_sending_icon", "toast_icon_set", "toast_icon_bad", "diag_collecting", "toast_diag_fail", "toast_copied", "toast_copy_manual", "language", "ss_videos", "hint_videos", "ss_trending", "ss_system", "hint_trending", "videos_h", "videos_upload", "videos_hint", "videos_empty", "confirm_video_delete", "toast_videos_added", "toast_video_bad", "sending_video", "hint_system", "tab_home", "tab_more", "current_wp", "cancel", "save", "name_ph", "rename_hint", "change_icon", "bg_url_ph", "bg_url_hint", "toast_bg_set", "toast_bg_bad", "this_tv", "folder_count", "folder_ph", "inputs_h", "inputs_hint", "rename_hint_app", "was_named", "arrange_hint", "arrange_unready", "hidden_h", "hidden_none", "hidden_locked", "show_app", "hide_app", "to_folder", "new_folder", "out_of_folder", "ungroup", "ungroup_confirm", "folder_hint", "toast_hidden", "toast_shown", "toast_in_folder", "toast_out_folder", "toast_ungrouped", "tab_looks", "looks_title", "show_on_home", "source_device", "source_plain", "source_device_hint", "tv_model", "sw_always", "sw_always_sub", "sw_weather", "sw_saver_time", "sw_saver_time_sub", "icon_h", "icon_library", "icon_own", "icon_custom", "toast_icon_picked", "drop_hint", "drop_sub", "drop_none", "toast_diag_paste", "tab_slimming", "slimming_h", "slimming_refresh", "slimming_daily_on", "slimming_daily_off", "slimming_no_list", "slimming_list_line", "wx_source", "wx_source_openmeteo", "slim_cmd_h", "slim_cmd_hint", "slim_cmd_mac", "slim_cmd_win", "slim_cmd_ip", "slim_cmd_mac_sub", "wx_source_qweather", "wx_qw_key_ph", "wx_qw_key_save", "wx_qw_key_saved", "wx_qw_host_ph", "wx_qw_host_save", "wx_qw_host_saved", "wx_qw_credit", "wx_qw_host_link", "tmdb_h", "tmdb_key_ph", "tmdb_key_save", "tmdb_key_saved", "tmdb_credit", "omdb_key_ph", "omdb_key_save", "omdb_key_saved", "trakt_key_ph", "trakt_key_save", "trakt_key_saved", "icon_more", "icon_more_hint", "icon_more_fail", "video_err_format", "video_err_room", "video_err_send", "icon_search_ph", "icon_search_none", "yt_subs_ph", "yt_subs_hint", "toast_yt_subs_set", "toast_yt_subs_bad", "yt_mode_subs", "yt_mode_keywords", "yt_kw_ph", "yt_kw_hint", "toast_yt_kw_set", "toast_yt_kw_bad", "toast_yt_subs_bad_input", "toast_yt_kw_bad_input"];
 const TEXTS = {
  "zh": [
   "屏幕保护程序",
@@ -650,7 +650,9 @@ const TEXTS = {
   "输入关键词",
   "输入完按回车变成标签；最多 10 个，Top Shelf 按时间显示最新 30 条视频",
   "关键词已保存",
-  "关键词保存失败"
+  "关键词保存失败",
+  "订阅没加上：格式不对，请用 @频道名或频道链接",
+  "关键词没加上：不能带空格"
 ],
  "en": [
   "Screensaver",
@@ -840,7 +842,9 @@ const TEXTS = {
   "Type a keyword",
   "Press Enter to turn a word into a tag. Up to 10 keywords; Top Shelf shows the newest 30 videos by time",
   "Keywords saved",
-  "Could not save keywords"
+  "Could not save keywords",
+  "Subscription not added: use @handle or a channel link",
+  "Keyword not added: no spaces allowed"
 ]
 };
 const LANGS = Object.keys(TEXTS);
@@ -1275,7 +1279,7 @@ $('#diagGithub').onclick = (e) => {
   const text = $('#diag').textContent, q = new URLSearchParams({ template: 'device.yml' });
   const model = (text.match(/^Device +(.+?) \(device /m) || [])[1]?.split(' / ').pop();
   const version = (text.match(/^Aerial +(\S+) \(/m) || [])[1];
-  const profile = (text.match(/\*\*Device profile\*\* \(ThisTv\)\n```json\n(.+)\n```/) || [])[1];
+  const profile = (text.match(/\*\*Device profile\*\* \([^)]*\)\n```json\n(.+)\n```/) || [])[1];
   if (model) { q.set('title', '[机型] ' + model); q.set('model', model); }
   if (version) q.set('version', 'Aerial ' + version);
   if (profile) q.set('profile', profile);
@@ -1405,6 +1409,7 @@ function placeShelves() {
   document.querySelectorAll('#homeBody .agrid').forEach(g => {
     const shelf = g.querySelector('.shelf'); if (!shelf) return;
     const first = [...g.querySelectorAll('.atile')].slice(0, homeCols());
+    if (!first.length) return;
     const bottom = Math.max(...first.map(t => t.offsetTop + t.offsetHeight));
     shelf.style.height = (bottom + 6 - 4) + 'px';
   });
@@ -1528,6 +1533,12 @@ function tileSheet(e, inFolder, hidden) {
           const s = raw.trim().split('?')[0].split('#')[0];
           if (!s) return null;
           const dec = h => { try { return decodeURIComponent(h); } catch (e) { return null; } };
+          const ci = s.indexOf('/channel/');
+          if (ci >= 0) {
+            const id = s.slice(ci + 9).split('/')[0];
+            if (/^UC[0-9A-Za-z_-]{22}$/.test(id)) return 'https://www.youtube.com/channel/' + id;
+            return null;
+          }
           const at = s.indexOf('@');
           if (at < 0) { const h = dec(s); if (!h || /[\s\/]/.test(h)) return null; return 'https://www.youtube.com/@' + h; }
           let h = s.slice(at + 1).split('/')[0];
@@ -1536,7 +1547,7 @@ function tileSheet(e, inFolder, hidden) {
           if (!h || /[\s\/]/.test(h)) return null;
           return 'https://www.youtube.com/@' + h;
         };
-        const labelOf = u => titles[u] || ('@' + u.slice(u.indexOf('@') + 1));
+        const labelOf = u => titles[u] || (u.indexOf('@') >= 0 ? '@' + u.slice(u.indexOf('@') + 1) : u.slice(u.indexOf('/channel/') + 9));
         const render = () => {
           box.querySelectorAll('.chip').forEach(c => c.remove());
           for (const u of chips) {
@@ -1553,10 +1564,11 @@ function tileSheet(e, inFolder, hidden) {
         };
         const add = raw => {
           const u = norm(raw);
-          if (!u || chips.includes(u) || chips.length >= 30) return;
+          if (!u || chips.includes(u) || chips.length >= 30) return false;
           chips.push(u);
+          return true;
         };
-        const commit = () => { const v = sinput.value.trim(); if (!v) return; add(v); sinput.value = ''; render(); ssync(); };
+        const commit = () => { const v = sinput.value.trim(); if (!v) return; if (!norm(v)) { toast(t('toast_yt_subs_bad_input')); return; } if (!add(v)) return; sinput.value = ''; render(); ssync(); };
         sinput.addEventListener('keydown', ev => {
           if (ev.isComposing || ev.keyCode === 229) return;
           if (ev.key === 'Enter') { ev.preventDefault(); commit(); }
@@ -1602,8 +1614,8 @@ function tileSheet(e, inFolder, hidden) {
             chip.append(x); kbox.insertBefore(chip, kinput);
           }
         };
-        const kadd = raw => { const w = knorm(raw); if (!w || kchips.includes(w) || kchips.length >= 10) return; kchips.push(w); };
-        const kcommit = () => { const v = kinput.value.trim(); if (!v) return; kadd(v); kinput.value = ''; krender(); ksync(); };
+        const kadd = raw => { const w = knorm(raw); if (!w || kchips.includes(w) || kchips.length >= 10) return false; kchips.push(w); return true; };
+        const kcommit = () => { const v = kinput.value.trim(); if (!v) return; if (!knorm(v)) { toast(t('toast_yt_kw_bad_input')); return; } if (!kadd(v)) return; kinput.value = ''; krender(); ksync(); };
         kinput.addEventListener('keydown', ev => {
           if (ev.isComposing || ev.keyCode === 229) return;
           if (ev.key === 'Enter') { ev.preventDefault(); kcommit(); }
