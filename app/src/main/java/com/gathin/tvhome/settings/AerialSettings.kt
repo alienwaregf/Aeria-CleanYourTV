@@ -1,6 +1,7 @@
 package com.gathin.tvhome.settings
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +48,7 @@ enum class ClockHours(val key: String) {
 
 object AerialSettings {
     private const val PREFS = "settings"
+    @Volatile
     private var started = false
     private lateinit var app: Context
 
@@ -122,63 +124,73 @@ object AerialSettings {
     val HOME_COLUMNS = 4..6
     private const val DEFAULT_HOME_COLUMNS = 5
 
+    @Synchronized
     fun init(context: Context) {
         if (started) return
-        started = true
         app = context.applicationContext
         val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        chosenFocusStyle = FocusStyle.of(prefs.getString("focus_style", null))
-        pinnedSources = prefs.getStringSet("pinned_sources", null)?.toSet() ?: emptySet()
-        bootSource = prefs.getString("boot_source", null)
-        cecSwitch = prefs.getBoolean("cec_switch", false)
-        sourceSound = prefs.getBoolean("source_sound", false)
-        bootApp = prefs.getString("boot_app", null)
-        pinHash = prefs.getString("pin_hash", null)
+        val str: (String) -> String? = { key -> runCatching { prefs.getString(key, null) }.getOrNull() }
+        val bool: (String, Boolean) -> Boolean = { key, def -> runCatching { prefs.getBoolean(key, def) }.getOrDefault(def) }
+        val int: (String, Int) -> Int = { key, def -> runCatching { prefs.getInt(key, def) }.getOrDefault(def) }
+        val strSet: (String) -> Set<String>? = { key -> runCatching { prefs.getStringSet(key, null)?.toSet() }.getOrNull() }
+        chosenFocusStyle = FocusStyle.of(str("focus_style"))
+        pinnedSources = strSet("pinned_sources") ?: emptySet()
+        bootSource = str("boot_source")
+        cecSwitch = bool("cec_switch", false)
+        sourceSound = bool("source_sound", false)
+        bootApp = str("boot_app")
+        pinHash = str("pin_hash")
         pinSet = pinHash != null
-        pinArrows = prefs.getBoolean("pin_arrows", false)
-        oneRowHome = prefs.getBoolean("one_row_home", true)
-        peekNextRow = prefs.getBoolean("peek_next_row", true)
-        chosenColumns = prefs.getInt("home_columns", DEFAULT_HOME_COLUMNS).takeIf { it in HOME_COLUMNS } ?: DEFAULT_HOME_COLUMNS
-        clockRight = prefs.getBoolean("clock_right", false)
-        largeClock = prefs.getBoolean("large_clock", false)
-        clockHours = ClockHours.of(prefs.getString("clock_hours", null))
-        homePlate = prefs.getBoolean("home_plate", true)
-        chosenAllNames = prefs.getBoolean("show_all_names", false)
-        wallpaperAlwaysMoves = prefs.getBoolean("wallpaper_always_moves", false)
-        showWeather = prefs.getBoolean("show_weather", true)
-        screensaverClock = prefs.getBoolean("screensaver_clock", true)
-        uiSounds = UiSounds.of(prefs.getString("ui_sounds_kind", null)) ?: when {
-            !prefs.getBoolean("ui_sounds", true) -> UiSounds.Off
+        pinArrows = bool("pin_arrows", false)
+        oneRowHome = bool("one_row_home", true)
+        peekNextRow = bool("peek_next_row", true)
+        chosenColumns = int("home_columns", DEFAULT_HOME_COLUMNS).takeIf { it in HOME_COLUMNS } ?: DEFAULT_HOME_COLUMNS
+        clockRight = bool("clock_right", false)
+        largeClock = bool("large_clock", false)
+        clockHours = ClockHours.of(str("clock_hours"))
+        homePlate = bool("home_plate", true)
+        chosenAllNames = bool("show_all_names", false)
+        wallpaperAlwaysMoves = bool("wallpaper_always_moves", false)
+        showWeather = bool("show_weather", true)
+        screensaverClock = bool("screensaver_clock", true)
+        uiSounds = UiSounds.of(str("ui_sounds_kind")) ?: when {
+            !bool("ui_sounds", true) -> UiSounds.Off
             Settings.System.getInt(app.contentResolver, Settings.System.SOUND_EFFECTS_ENABLED, 1) == 1 -> UiSounds.Tv
             else -> UiSounds.Aerial
         }
-        backStartsScreensaver = prefs.getBoolean("back_starts_screensaver", true)
-        screensaverMinutes = prefs.getInt("screensaver_minutes", DEFAULT_SCREENSAVER_MINUTES)
-        aerialQuality = AerialQuality.of(prefs.getString("aerial_quality", null))
-        effects = Effects.of(prefs.getString("effects", null))
+        backStartsScreensaver = bool("back_starts_screensaver", true)
+        screensaverMinutes = int("screensaver_minutes", DEFAULT_SCREENSAVER_MINUTES).takeIf { it in screensaverChoices } ?: DEFAULT_SCREENSAVER_MINUTES
+        aerialQuality = AerialQuality.of(str("aerial_quality"))
+        effects = Effects.of(str("effects"))
         lowEnd = DeviceClass.lowEnd(app)
+        started = true
+    }
+
+    private fun save(block: SharedPreferences.Editor.() -> Unit) {
+        if (!::app.isInitialized) return
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().apply(block).apply()
     }
 
     fun chooseBootSource(id: String?) {
         bootSource = id
         bootApp = null
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putString("boot_source", id).remove("boot_app") }
+        save { putString("boot_source", id).remove("boot_app") }
     }
 
     fun chooseCecSwitch(on: Boolean) {
         cecSwitch = on
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("cec_switch", on) }
+        save { putBoolean("cec_switch", on) }
     }
 
     fun chooseSourceSound(on: Boolean) {
         sourceSound = on
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("source_sound", on) }
+        save { putBoolean("source_sound", on) }
     }
 
     fun chooseBootApp(pkg: String?) {
         bootApp = pkg
         bootSource = null
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putString("boot_app", pkg).remove("boot_source") }
+        save { putString("boot_app", pkg).remove("boot_source") }
     }
 
     val hasBootTarget: Boolean get() = bootSource != null || bootApp != null
@@ -198,7 +210,7 @@ object AerialSettings {
         pinSet = pinHash != null
         pinArrows = pin != null && arrows
         unlockedUntil = 0L
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putString("pin_hash", pinHash); putBoolean("pin_arrows", pinArrows) }
+        save { putString("pin_hash", pinHash); putBoolean("pin_arrows", pinArrows) }
     }
 
     private fun hash(pin: String): String =
@@ -206,95 +218,96 @@ object AerialSettings {
 
     fun chooseOneRowHome(on: Boolean) {
         oneRowHome = on
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("one_row_home", on) }
+        save { putBoolean("one_row_home", on) }
     }
 
     fun chooseHomeColumns(columns: Int) {
         if (columns !in HOME_COLUMNS) return
         chosenColumns = columns
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putInt("home_columns", columns) }
+        save { putInt("home_columns", columns) }
     }
 
     fun choosePeekNextRow(on: Boolean) {
         peekNextRow = on
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("peek_next_row", on) }
+        save { putBoolean("peek_next_row", on) }
     }
 
     fun chooseUiSounds(kind: UiSounds) {
         uiSounds = kind
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putString("ui_sounds_kind", kind.key) }
+        save { putString("ui_sounds_kind", kind.key) }
     }
 
     fun chooseHomePlate(on: Boolean) {
         homePlate = on
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("home_plate", on) }
+        save { putBoolean("home_plate", on) }
     }
 
     fun chooseClockRight(on: Boolean) {
         clockRight = on
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("clock_right", on) }
+        save { putBoolean("clock_right", on) }
     }
 
     fun chooseLargeClock(on: Boolean) {
         largeClock = on
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("large_clock", on) }
+        save { putBoolean("large_clock", on) }
     }
 
     fun chooseClockHours(hours: ClockHours) {
         clockHours = hours
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putString("clock_hours", hours.key) }
+        save { putString("clock_hours", hours.key) }
     }
 
     fun chooseShowAllNames(on: Boolean) {
         chosenAllNames = on
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("show_all_names", on) }
+        save { putBoolean("show_all_names", on) }
     }
 
     fun chooseWallpaperAlwaysMoves(on: Boolean) {
         wallpaperAlwaysMoves = on
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("wallpaper_always_moves", on) }
+        save { putBoolean("wallpaper_always_moves", on) }
     }
 
     fun chooseShowWeather(on: Boolean) {
         showWeather = on
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("show_weather", on) }
+        save { putBoolean("show_weather", on) }
     }
 
     fun chooseScreensaverClock(on: Boolean) {
         screensaverClock = on
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("screensaver_clock", on) }
+        save { putBoolean("screensaver_clock", on) }
     }
 
     fun chooseBackStartsScreensaver(on: Boolean) {
         backStartsScreensaver = on
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putBoolean("back_starts_screensaver", on) }
+        save { putBoolean("back_starts_screensaver", on) }
     }
 
     fun chooseAerialQuality(quality: AerialQuality) {
         aerialQuality = quality
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putString("aerial_quality", quality.key) }
+        save { putString("aerial_quality", quality.key) }
     }
 
     fun chooseScreensaverMinutes(minutes: Int) {
+        if (minutes !in screensaverChoices) return
         screensaverMinutes = minutes
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putInt("screensaver_minutes", minutes) }
-        GuardSetup.setSystemScreensaverOff(app, minutes == NEVER)
+        save { putInt("screensaver_minutes", minutes) }
+        if (::app.isInitialized) GuardSetup.setSystemScreensaverOff(app, minutes == NEVER)
     }
 
     fun setPinned(inputId: String, pinned: Boolean) {
         pinnedSources = if (pinned) pinnedSources + inputId else pinnedSources - inputId
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putStringSet("pinned_sources", pinnedSources) }
+        save { putStringSet("pinned_sources", pinnedSources) }
     }
 
 
     fun chooseEffects(choice: Effects) {
         effects = choice
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putString("effects", choice.key) }
+        save { putString("effects", choice.key) }
     }
 
     fun chooseFocusStyle(style: FocusStyle) {
         chosenFocusStyle = style
-        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit { putString("focus_style", style.key) }
+        save { putString("focus_style", style.key) }
     }
 
 }
