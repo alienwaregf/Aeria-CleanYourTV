@@ -4,12 +4,8 @@ import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.pm.PackageManager
-import android.os.Build
 import android.util.Log
 import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import java.io.File
 
 
 internal object LegacyUpdateStorage {
@@ -19,14 +15,7 @@ internal object LegacyUpdateStorage {
         Manifest.permission.WRITE_EXTERNAL_STORAGE,
     )
 
-    fun needsPermission(context: Context): Boolean {
-        if (Build.VERSION.SDK_INT != Build.VERSION_CODES.M ||
-            permissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
-        ) return false
-        val cache = context.externalCacheDir ?: return true
-        val directory = File(cache, "updates")
-        return !(directory.isDirectory || directory.mkdirs()) || !directory.canWrite()
-    }
+    fun needsPermission(context: Context): Boolean = false
 
     fun requestPermission(context: Context) {
         var current = context

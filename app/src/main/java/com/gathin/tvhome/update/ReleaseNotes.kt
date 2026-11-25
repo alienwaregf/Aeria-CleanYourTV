@@ -12,7 +12,7 @@ internal object ReleaseNotesParser {
         val releases = JSONObject(json).optJSONArray("releases") ?: return emptyList()
         return (0 until releases.length()).mapNotNull { i ->
             val r = releases.optJSONObject(i) ?: return@mapNotNull null
-            val v = r.optString("v").takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val v = r.optString("v").removePrefix("v").substringBefore('-').takeIf { it.isNotEmpty() } ?: return@mapNotNull null
             if (!Updates.newer(v, current) || Updates.newer(v, latest)) return@mapNotNull null
             val changes = lines(r, if (zh) "zh" else "en").ifEmpty { lines(r, if (zh) "en" else "zh") }
             changes.takeIf { it.isNotEmpty() }?.let { ReleaseNotes(v, it) }

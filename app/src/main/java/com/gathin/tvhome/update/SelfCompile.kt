@@ -1,6 +1,7 @@
 package com.gathin.tvhome.update
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -12,6 +13,7 @@ import androidx.core.content.edit
 import com.gathin.tvhome.BuildConfig
 import com.gathin.tvhome.system.DiagLog
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 object SelfCompile {
     private const val TAG = "AerialUpdates"
@@ -30,6 +32,7 @@ object SelfCompile {
     private var inFront = false
     private var checkedThisRun = false
     private var app: Context? = null
+    private val askingSystem = AtomicBoolean(false)
 
     fun odexBytes(context: Context): Long? = runCatching {
         val dir = File(File(context.applicationInfo.sourceDir).parentFile, "oat")
@@ -42,18 +45,23 @@ object SelfCompile {
     private fun triedThisVersion(context: Context) = prefs(context).getLong(KEY_TRIED, 0) == BuildConfig.VERSION_CODE.toLong()
 
     private fun installedAt(context: Context): Long =
-        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime }.getOrDefault(0L)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= 33) context.packageManager.getPackageInfo(
+                context.packageName, PackageManager.PackageInfoFlags.of(0)
+            ).lastUpdateTime
+            else @Suppress("DEPRECATION") context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
+        }.getOrDefault(0L)
 
     private fun askedSystemThisInstall(context: Context) = prefs(context).getLong(KEY_ASKED_SYSTEM, -1) == installedAt(context)
 
-    private fun uncompiled(context: Context) = odexBytes(context)?.let { it < COMPILED_BYTES } == true
+    private fun uncompiled(context: Context) = odexBytes(context)?.let { it < COMPILED_BYTES } ?: true
 
     private fun systemWorthIt(context: Context) =
         Build.VERSION.SDK_INT in 24..30 && !askedSystemThisInstall(context) && uncompiled(context)
 
     private fun worthIt(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < 28 || !Updates.canInstall(context) || triedThisVersion(context)) return false
-        val odex = odexBytes(context) ?: return false
+        val odex = odexBytes(context) ?: 0L
         return odex < COMPILED_BYTES && Updates.ownDexMetadata(context) != null
     }
 
@@ -116,6 +124,8 @@ object SelfCompile {
     }
 
     private fun askSystem(context: Context) {
+        if (!askingSystem.compareAndSet(false, true)) return
+        try {
         val app = context.applicationContext
         prefs(app).edit { putLong(KEY_ASKED_SYSTEM, installedAt(app)) }
         val before = odexBytes(app)
@@ -132,6 +142,9 @@ object SelfCompile {
         Log.i(TAG, "self compile: package manager asked, odex $before -> $after bytes in $took ms: $said")
         DiagLog.i("self compile: package manager: $result")
         if (!done) main.post { offered = worthIt(app) }
+        } finally {
+            askingSystem.set(false)
+        }
     }
 
     fun run(context: Context, auto: Boolean) {
