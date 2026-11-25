@@ -14,6 +14,7 @@ import java.net.URL
 object AppBackgrounds {
     private const val MAX_W = 3840
     private const val MAX_H = 2160
+    private const val MAX_BYTES = 16L * 1024 * 1024
 
     var version by mutableIntStateOf(0); private set
 
@@ -66,10 +67,7 @@ object AppBackgrounds {
             }
             cache[pkg] = Cached(stamp, bmp, frosted)
             while (cache.size > CACHE_MAX) {
-                cache.remove(cache.entries.first().key)?.let { evicted ->
-                    evicted.bitmap.recycle()
-                    evicted.frosted.recycle()
-                }
+                cache.remove(cache.entries.first().key)
             }
             return bmp to frosted
         }
@@ -85,10 +83,7 @@ object AppBackgrounds {
 
     fun dropCached(pkg: String) {
         synchronized(cache) {
-            cache.remove(pkg)?.let { evicted ->
-                evicted.bitmap.recycle()
-                evicted.frosted.recycle()
-            }
+            cache.remove(pkg)
         }
     }
 
@@ -107,7 +102,17 @@ object AppBackgrounds {
             c.readTimeout = 30_000
             try {
                 if (c.responseCode !in 200..299) return false
-                tmp.outputStream().use { c.inputStream.copyTo(it) }
+                tmp.outputStream().use { out ->
+                    val buf = ByteArray(8192)
+                    var total = 0L
+                    while (true) {
+                        val n = c.inputStream.read(buf)
+                        if (n < 0) break
+                        total += n
+                        if (total > MAX_BYTES) return false
+                        out.write(buf, 0, n)
+                    }
+                }
             } finally {
                 c.disconnect()
             }

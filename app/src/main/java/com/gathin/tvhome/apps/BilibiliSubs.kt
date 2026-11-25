@@ -1,10 +1,12 @@
 package com.gathin.tvhome.apps
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.edit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -14,6 +16,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -38,11 +41,14 @@ object BilibiliSubs {
     private const val POPULAR_URL = "https://api.bilibili.com/x/web-interface/popular?ps=30"
     private const val MAX_PAGES = 5
     private const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+    private const val LAUNCHER_PREFS = "launcher_settings"
+    private const val KEY_CARDS = "bili_cards"
 
     var version by mutableIntStateOf(0)
         private set
 
     private lateinit var app: Context
+    private lateinit var prefs: SharedPreferences
     private var started = false
     private var lastAttempt = 0L
     private var failed = false
@@ -55,6 +61,42 @@ object BilibiliSubs {
         if (started) return
         started = true
         app = context.applicationContext
+        prefs = app.getSharedPreferences(LAUNCHER_PREFS, Context.MODE_PRIVATE)
+        val cached = readVideos()
+        if (cached.isNotEmpty()) {
+            synchronized(lock) { videos = cached }
+        }
+    }
+
+    private fun saveVideos(list: List<BiliVideo>) {
+        if (!::prefs.isInitialized) return
+        val arr = JSONArray()
+        for (video in list) {
+            arr.put(JSONObject().apply {
+                put("bvid", video.bvid)
+                put("aid", video.aid)
+                put("title", video.title)
+                put("up", video.up)
+                put("published", video.publishedAt)
+                put("cover", video.cover)
+                put("logo", video.logo ?: "")
+            })
+        }
+        prefs.edit { putString(KEY_CARDS, arr.toString()) }
+    }
+
+    private fun readVideos(): List<BiliVideo> {
+        if (!::prefs.isInitialized) return emptyList()
+        val arr = runCatching { JSONArray(prefs.getString(KEY_CARDS, "") ?: "") }.getOrNull() ?: return emptyList()
+        val out = ArrayList<BiliVideo>()
+        for (i in 0 until arr.length()) {
+            if (out.size >= MAX_ITEMS) break
+            val obj = arr.optJSONObject(i) ?: continue
+            val bvid = obj.optString("bvid", "")
+            if (bvid.isBlank()) continue
+            out += BiliVideo(bvid, obj.optLong("aid", 0L), obj.optString("title", ""), obj.optString("up", ""), obj.optLong("published", 0L), obj.optString("cover", ""), obj.optString("logo", "").ifBlank { null })
+        }
+        return out
     }
 
     fun isBilibili(pkg: String): Boolean = pkg in BILI_PKGS
@@ -123,6 +165,7 @@ object BilibiliSubs {
         }
         failed = false
         synchronized(lock) { videos = fetched }
+        saveVideos(fetched)
         changed()
     }
 

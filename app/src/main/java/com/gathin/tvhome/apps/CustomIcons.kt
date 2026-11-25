@@ -42,7 +42,7 @@ object CustomIcons {
 
     fun save(pkg: String, input: InputStream, cacheDir: File): Boolean {
         if (!::dir.isInitialized) return false
-        val tmp = File.createTempFile("icon", ".bin", cacheDir)
+        val tmp = runCatching { File.createTempFile("icon", ".bin", cacheDir) }.getOrNull() ?: return false
         return try {
             tmp.outputStream().use { input.copyTo(it) }
             val bmp = Images.decodeCover(tmp, W, H) ?: return false
