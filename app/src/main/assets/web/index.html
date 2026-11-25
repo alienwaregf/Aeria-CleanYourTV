@@ -1121,7 +1121,8 @@ function renderMore() {
 
 function renderSlimming() {
   const sl = state.slimming || {};
-  const count = sl.list ? sl.list.split('\n').filter(x => x.trim()).length : 0;
+  // Same count as the TV's parseDebloat: distinct package names; '#' lines count as optional.
+  const count = sl.list ? (() => { const seen = new Set(); for (const line of sl.list.split('\n')) { let s = line.trim(); if (!s) continue; if (s.startsWith('#')) s = s.substring(1).trim(); const tok = s.split(/[ \t]+/)[0]; if (tok && tok.indexOf('.') >= 0 && /^[A-Za-z0-9._]+$/.test(tok)) seen.add(tok); } return seen.size; })() : 0;
   $('#slimLine').textContent = sl.label ? t('slimming_list_line', { label: sl.label, count, date: sl.date || '—' }) : t('slimming_no_list');
   $('#slimDaily').textContent = t(sl.daily === false ? 'slimming_daily_off' : 'slimming_daily_on');
   $('#slimNotes').textContent = sl.notes || '';
@@ -1511,7 +1512,7 @@ function tileSheet(e, inFolder, hidden) {
         } catch (err) { toast(t('toast_bg_bad')); }
       };
       body.appendChild(el('p', 'foot', t('bg_url_hint'))).style.marginBottom = '12px';
-      if (['com.google.android.youtube.tv', 'com.google.android.youtube.tvmusic'].includes(a.key)) {
+      if (['com.google.android.youtube.tv', 'com.google.android.youtube.tvmusic', 'com.amazon.firetv.youtube', 'org.smarttube.stable', 'org.smarttube.beta'].includes(a.key)) {
         let ytMode = a.ytMode === 'keywords' ? 'keywords' : 'subs';
         const ml = el('div', 'list'); ml.setAttribute('role', 'radiogroup'); ml.setAttribute('aria-label', 'YouTube'); body.appendChild(ml);
         const modeBtns = {};
