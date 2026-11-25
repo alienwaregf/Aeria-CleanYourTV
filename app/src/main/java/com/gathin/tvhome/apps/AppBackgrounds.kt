@@ -95,28 +95,43 @@ object AppBackgrounds {
         }
         val u = runCatching { URL(url) }.getOrNull() ?: return false
         if (u.protocol != "http" && u.protocol != "https") return false
-        val tmp = File.createTempFile("appbg", ".bin", context.cacheDir)
+        // User-entered http address: try https first, fall back to the address as entered.
+        val candidates = if (u.protocol == "http") listOf("https://" + url.substring(7), url) else listOf(url)
+        var tmp: File? = null
         return try {
-            val c = u.openConnection() as HttpURLConnection
-            c.connectTimeout = 10_000
-            c.readTimeout = 30_000
-            try {
-                if (c.responseCode !in 200..299) return false
-                tmp.outputStream().use { out ->
-                    val buf = ByteArray(8192)
-                    var total = 0L
-                    while (true) {
-                        val n = c.inputStream.read(buf)
-                        if (n < 0) break
-                        total += n
-                        if (total > MAX_BYTES) return false
-                        out.write(buf, 0, n)
+            tmp = File.createTempFile("appbg", ".bin", context.cacheDir)
+            val tmpFile = tmp ?: return false
+            var downloaded = false
+            for (candidate in candidates) {
+                val ok = runCatching {
+                    val c = URL(candidate).openConnection() as HttpURLConnection
+                    c.connectTimeout = 10_000
+                    c.readTimeout = 30_000
+                    try {
+                        if (c.responseCode !in 200..299) return@runCatching false
+                        tmpFile.outputStream().use { out ->
+                            val buf = ByteArray(8192)
+                            var total = 0L
+                            while (true) {
+                                val n = c.inputStream.read(buf)
+                                if (n < 0) break
+                                total += n
+                                if (total > MAX_BYTES) return false
+                                out.write(buf, 0, n)
+                            }
+                        }
+                        true
+                    } finally {
+                        c.disconnect()
                     }
+                }.getOrDefault(false)
+                if (ok) {
+                    downloaded = true
+                    break
                 }
-            } finally {
-                c.disconnect()
             }
-            val bmp = Images.decodeCover(tmp, MAX_W, MAX_H) ?: return false
+            if (!downloaded) return false
+            val bmp = Images.decodeCover(tmpFile, MAX_W, MAX_H) ?: return false
             try {
                 fileFor(pkg).outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
             } finally {
@@ -128,7 +143,7 @@ object AppBackgrounds {
         } catch (_: Exception) {
             false
         } finally {
-            tmp.delete()
+            tmp?.delete()
         }
     }
 

@@ -24,7 +24,6 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
     private var artAt: Int = 0
     private var artFor: String? = null
     private var cardsFor: String? = null
-    private var sceneChanged: (() -> Unit)? = null
 
     private val view: FrameLayout = object : FrameLayout(context) {
         override fun hasOverlappingRendering(): Boolean = false
@@ -57,10 +56,6 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
     }
 
 
-    fun onSceneChanged(runnable: (() -> Unit)?) {
-        sceneChanged = runnable
-    }
-
     fun onCardsExitUp(cb: (() -> Unit)?) {
         cards.onExitUp = cb
     }
@@ -82,26 +77,6 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
         }
         return cards.entry()
     }
-
-    fun scene(): Bitmap? {
-        if (away || top.visibility != View.VISIBLE) {
-            return null
-        }
-        return top.colourPicture()
-    }
-
-    fun stageCovers(): Boolean {
-        for (imageView in art) {
-            if (imageView.visibility == View.VISIBLE && imageView.alpha >= 0.999f) {
-                return true
-            }
-        }
-        return !(away ||
-            (under.visibility != View.VISIBLE &&
-                (top.visibility != View.VISIBLE || top.alpha < 0.999f)))
-    }
-
-
 
     fun content(map: Map<String, List<ShelfCard>>) {
         if (context.getSharedPreferences("topshelf", Context.MODE_PRIVATE)
@@ -228,7 +203,6 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
             Motion.change(Motion.SHELF_SWAP, oldTop, { oldTop.alpha = 0.0f }) {
                 if (oldTop.alpha < 0.01f) {
                     oldTop.visibility = View.INVISIBLE
-                    sceneChanged?.invoke()
                 }
             }
             under.visibility = View.INVISIBLE
@@ -242,12 +216,10 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
         newTop.set(app)
         newTop.alpha = 0.0f
         newTop.visibility = View.VISIBLE
-        sceneChanged?.invoke()
         Motion.change(Motion.SHELF_SWAP, newTop, { newTop.alpha = 1.0f }) {
             if (top === newTop && newTop.alpha > 0.99f) {
                 oldUnder.visibility = View.INVISIBLE
             }
-            sceneChanged?.invoke()
         }
         val dir = if (oldUnder.visibility == View.VISIBLE) step else 0
         Motion.step(
@@ -277,6 +249,8 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
             val bitmap = TopShelfContent.appArtBackdrop(context, pkgNonnull, list, widthPx, heightPx)
             view.post {
                 if (bitmap == null) {
+                    // Load failed: clear the marker so the next focus retries (Flow clears artFor in clearArtCaption).
+                    artFor = null
                     return@post
                 }
                 if (pkgNonnull == artFor) {
@@ -292,10 +266,7 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
         val current = art[artAt]
         if (current.visibility == View.VISIBLE) {
             Motion.progress(Motion.SHELF_SWAP, current, current.alpha, 0.0f,
-                { f ->
-                    current.alpha = f
-                    sceneChanged?.invoke()
-                },
+                { f -> current.alpha = f },
                 {
                     if (current.alpha < 0.01f) {
                         current.visibility = View.INVISIBLE
@@ -319,10 +290,7 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
         top.bringToFront()
         cards.bringToFront()
         Motion.progress(Motion.SHELF_SWAP, next, 0.0f, 1.0f,
-            { f ->
-                next.alpha = f
-                sceneChanged?.invoke()
-            }, null)
+            { f -> next.alpha = f }, null)
     }
 
     class Stage(context: Context) : View(context) {
@@ -330,8 +298,6 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
         private val fill = Paint()
         private val picture = Paint(Paint.FILTER_BITMAP_FLAG)
         private var color: Int = 0
-        private var colourFor: Int = 0
-        private var colourPicture: Bitmap? = null
         private var mark: Bitmap? = null
         private var markPkg: String? = null
 
@@ -389,27 +355,6 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
             }
         }
 
-        fun colourPicture(): Bitmap {
-            val cached = colourPicture
-            if (cached != null && colourFor == color) {
-                return cached
-            }
-            val bitmap = Bitmap.createBitmap(96, 54, Bitmap.Config.ARGB_8888)
-            val paint = Paint()
-            paint.shader = LinearGradient(
-                0.0f, 0.0f, 96.0f, 54.0f,
-                TopShelfContent.shade(color, 1.18f),
-                TopShelfContent.shade(color, 0.72f),
-                Shader.TileMode.CLAMP,
-            )
-            Canvas(bitmap).drawRect(0.0f, 0.0f, 96.0f, 54.0f, paint)
-            bitmap.setHasAlpha(false)
-            val old = colourPicture
-            if (old != null && !old.isRecycled) old.recycle()
-            colourPicture = bitmap
-            colourFor = color
-            return bitmap
-        }
     }
 }
 

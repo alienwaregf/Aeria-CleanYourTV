@@ -18,14 +18,42 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
+/**
+ * Ready-made 16:9 tile pictures for popular apps, from the website (issues #575 #429 #307: tiles
+ * drawn from an app's own icon read rougher than other launchers' hand-made ones). The site keeps
+ * an index of package → pictures; Aerial reads it at most twice a day and downloads only the
+ * pictures of apps installed on this TV, into files/library. A picture the owner chose on the
+ * phone page (CustomIcons) still wins. Every app with a picture here uses it, unless the phone page
+ * picked the app's own art for it. (Personalize had a switch for all apps at once until 1.55; with most apps picked one by one it seemed to do nothing, and it was dropped.)
+ *
+ * An app can have several pictures (index v2, #706), each credited to where it came from (a
+ * contributor, the app's tvOS version, Aerial itself). The first is the default; the phone page
+ * lists them all and can pick another. Index v1 had one picture per app, which v2 still carries
+ * in "icons" for older versions of Aerial.
+ *
+ * Only this object writes files/library, and it removes a file only when the index names a newer
+ * picture or drops it, or the app is gone.
+ *
+ * The phone page can also give an app a picture of another app in the library (issue #1486: an
+ * international or modified build under another package name, as Tencent Video's
+ * com.tencent.qqlivei18n). Kept as "borrow:<package>" = "<other package>/<id>", and fetched when
+ * picked and on each refresh like the app's own.
+ *
+ */
 object IconLibrary {
     private const val TAG = "AerialIcons"
     private const val BASE = "https://aerial.qust.me/icons/"
     private const val CHECK_EVERY_MS = 12 * 60 * 60 * 1000L
     private const val RETRY_MS = 10 * 60 * 1000L
 
+    /** Bumped when pictures arrive or a pick changes, so Home redraws its tiles. */
     var version by mutableIntStateOf(0); private set
 
+    /**
+     * One picture of an app: [id] stays the same when the picture is redrawn (the phone page's
+     * pick is kept by it), [path] is where it is on the site ("p/<package>-<hash>.png"), [by] the
+     * key of its source in [credits].
+     */
     class Choice(val id: String, val path: String, val by: String) {
         val fileName: String get() = path.substringAfterLast('/')
     }
@@ -33,12 +61,15 @@ object IconLibrary {
     private lateinit var dir: File
     private lateinit var prefs: SharedPreferences
 
+    /** Package → its pictures, the default first, from the last index read. */
     @Volatile private var index: Map<String, List<Choice>> = emptyMap()
+    /** Source key → {"name": …, "<language>": …}, from the last index read. */
     @Volatile var credits: JSONObject = JSONObject(); private set
+    /** Package → its names, for the phone page's picker to show and search apps not on this TV. */
     @Volatile var names: JSONObject = JSONObject(); private set
     private val refreshing = Mutex()
-    private val downloadLock = Any()
     @Volatile private var lastAttempt = 0L
+    /** Pictures that failed to download (by file name), and when: not tried on every reload. */
     private val failedAt = HashMap<String, Long>()
 
     fun init(context: Context) {
@@ -51,19 +82,24 @@ object IconLibrary {
 
     private fun here(c: Choice): File? = File(dir, c.fileName).takeIf { it.exists() }
 
+    /** Every app the library has pictures of, for the phone page's whole-library picker. */
     fun catalog(): Map<String, List<Choice>> = index
 
+    /** The site's address of the pictures, which the phone page shows the whole library from. */
     const val PICTURES = BASE
 
+    /** Another app's picture given to [pkg] on the phone page, as the index names it: (its app, it). */
     fun borrowed(pkg: String): Pair<String, Choice>? {
         if (!::prefs.isInitialized) return null
         val (from, id) = prefs.getString("borrow:$pkg", null)?.split('/', limit = 2)?.takeIf { it.size == 2 } ?: return null
         return index[from]?.firstOrNull { it.id == id }?.let { from to it }
     }
 
+    /** The pictures of [pkg] that are on this TV, the default first. */
     fun choices(pkg: String): List<Choice> =
         if (::dir.isInitialized) index[pkg].orEmpty().filter { here(it) != null } else emptyList()
 
+    /** The picture [pkg]'s tile uses from the library: the phone page's pick, else the default. */
     fun chosen(pkg: String): Choice? {
         borrowed(pkg)?.second?.takeIf { here(it) != null }?.let { return it }
         val here = choices(pkg)
@@ -71,14 +107,17 @@ object IconLibrary {
         return here.firstOrNull { it.id == id } ?: here.firstOrNull()
     }
 
+    /** The library has a picture of [pkg] on this TV (whether or not its tile uses it). */
     fun has(pkg: String): Boolean = chosen(pkg) != null
 
+    /** The library's picture of [pkg] as stored, for the phone page: [id]'s, or the chosen one. */
     fun file(pkg: String, id: String? = null): File? {
         val c = if (id == null) chosen(pkg) else choices(pkg).firstOrNull { it.id == id }
             ?: borrowed(pkg)?.second?.takeIf { it.id == id }
         return c?.let(::here)
     }
 
+    /** Whether [pkg]'s tile uses the library: unless the phone page picked the app's own art. */
     fun uses(pkg: String): Boolean = when (pick(pkg)) {
         Pick.Library -> true
         Pick.Own -> false
@@ -89,6 +128,7 @@ object IconLibrary {
 
     enum class Pick { Library, Own }
 
+    /** What the phone page picked for [pkg]; null for the library. */
     fun pick(pkg: String): Pick? = when {
         !::prefs.isInitialized -> null
         pkg in prefs.getStringSet("use_library", emptySet())!! -> Pick.Library
@@ -96,14 +136,18 @@ object IconLibrary {
         else -> null
     }
 
+    /**
+     * From the phone page; the caller calls [changed] on the main thread after. [choice] is the
+     * library picture picked with [Pick.Library] (null: the default).
+     */
     fun choose(pkg: String, pick: Pick?, choice: String? = null, from: String? = null) {
-        if (!::prefs.isInitialized) return
         val library = prefs.getStringSet("use_library", emptySet())!! - pkg
         val own = prefs.getStringSet("use_own", emptySet())!! - pkg
         val default = index[pkg]?.firstOrNull()?.id
         prefs.edit {
             putStringSet("use_library", if (pick == Pick.Library) library + pkg else library)
             putStringSet("use_own", if (pick == Pick.Own) own + pkg else own)
+            // Any other pick takes back a picture borrowed from another app.
             if (pick == Pick.Library && from != null && from != pkg && choice != null) {
                 putString("borrow:$pkg", "$from/$choice")
                 return@edit
@@ -114,9 +158,17 @@ object IconLibrary {
         }
     }
 
+    /**
+     * Changes when the tile's picture or the pick does (a firmware app drawn as Aerial's own tile
+     * takes the same picture only once picked). Part of the tile cache's key.
+     */
     fun stamp(pkg: String): Long = (usable(pkg)?.let { it.lastModified() + it.name.hashCode() } ?: 0L) +
         when (pick(pkg)) { Pick.Own -> 1L; Pick.Library -> 2L; null -> 0L }
 
+    /**
+     * Fetches [c] now, if it is not here: the phone page waits for a picture borrowed from
+     * another app, so the tile changes at once. True when it is here. Off the main thread.
+     */
     fun fetch(c: Choice): Boolean {
         if (!::dir.isInitialized) return false
         val file = File(dir, c.fileName)
@@ -126,18 +178,29 @@ object IconLibrary {
             .isSuccess
     }
 
+    /** The app's picture, or null. Off the main thread. */
     fun load(pkg: String): Bitmap? = usable(pkg)?.let { BitmapFactory.decodeFile(it.path) }
 
+    /** Called on the main thread when a pick changed or [refresh] brought something new. */
     fun changed() {
         version++
     }
 
+    /**
+     * Reads the index when it is due and fetches the pictures of [installed] apps that are not
+     * here yet (every one of an app's pictures, so the phone page can show them). True when a
+     * tile's picture may have changed. Off the main thread; a failure is only logged and tried
+     * again on a later reload.
+     */
     suspend fun refresh(installed: Set<String>): Boolean = withContext(Dispatchers.IO) {
         if (!::dir.isInitialized) return@withContext false
         if (!refreshing.tryLock()) return@withContext false
         try {
             val now = System.currentTimeMillis()
             var changed = false
+            // Read again right after an update too: an index read by an older version (index v1,
+            // one picture an app) would otherwise stand for up to 12 hours, and the phone page
+            // showed no choices after updating to 1.91 (#706).
             val due = now - prefs.getLong("checked_at", 0) > CHECK_EVERY_MS ||
                 prefs.getInt("checked_by", 0) != BuildConfig.VERSION_CODE
             if (due && now - lastAttempt > RETRY_MS) {
@@ -168,6 +231,7 @@ object IconLibrary {
                         .onFailure { failedAt[file.name] = now; Log.w(TAG, "could not fetch ${c.path}", it) }
                 }
             }
+            // Pictures replaced by newer ones, or of apps no longer installed.
             dir.listFiles()?.forEach { if (it.name != "index.json" && it.name !in keep) it.delete() }
             changed
         } finally {
@@ -175,14 +239,16 @@ object IconLibrary {
         }
     }
 
+    /** The apps' names in the index ({"<package>": {"zh": …, "en": …, "also": …}}), empty when it has none. */
     internal fun names(text: String?): JSONObject =
         runCatching { JSONObject(text ?: return JSONObject()).optJSONObject("names") }.getOrNull() ?: JSONObject()
 
-    private fun read(text: String?): Pair<Map<String, List<Choice>>, JSONObject>? = runCatching {
+    /** The index's pictures and credits; null when [text] is not an index. */
+    @androidx.annotation.VisibleForTesting
+    internal fun read(text: String?): Pair<Map<String, List<Choice>>, JSONObject>? = runCatching {
         val root = JSONObject(text ?: return null)
         val sets = root.optJSONObject("choices")
-        val icons = root.optJSONObject("icons")
-        if (sets == null && icons == null) return null
+        val icons = root.getJSONObject("icons")
         val map = buildMap {
             if (sets != null) {
                 sets.keys().forEach { pkg ->
@@ -196,7 +262,7 @@ object IconLibrary {
                     if (choices.isNotEmpty()) put(pkg, choices)
                 }
             } else {
-                icons!!.keys().forEach { pkg ->
+                icons.keys().forEach { pkg ->
                     val path = icons.getString(pkg)
                     if (CustomIcons.isValidKey(pkg) && safe(path)) put(pkg, listOf(Choice("default", path, "")))
                 }
@@ -205,6 +271,7 @@ object IconLibrary {
         map to (root.optJSONObject("credits") ?: JSONObject())
     }.getOrNull()
 
+    /** A path on the site under p/, with a plain file name. */
     private fun safe(path: String): Boolean = path.startsWith("p/") && path.removePrefix("p/").let { n ->
         n.isNotEmpty() && n.none { it == '/' || it == '\\' } && !n.startsWith(".")
     }
@@ -223,20 +290,19 @@ object IconLibrary {
         }
     }
 
+    /** Into a temporary file first, so a broken download never stands as the picture. */
     private fun download(url: String, to: File) {
-        synchronized(downloadLock) {
-            val tmp = File(dir, to.name + ".part")
-            val c = connect(url)
-            try {
-                c.inputStream.use { input -> tmp.outputStream().use { input.copyTo(it) } }
-            } finally {
-                c.disconnect()
-            }
-            val ok = BitmapFactory.Options().apply { inJustDecodeBounds = true }.also { BitmapFactory.decodeFile(tmp.path, it) }.outWidth > 0
-            if (!ok || !tmp.renameTo(to)) {
-                tmp.delete()
-                error("not a picture")
-            }
+        val tmp = File(dir, to.name + ".part")
+        val c = connect(url)
+        try {
+            c.inputStream.use { input -> tmp.outputStream().use { input.copyTo(it) } }
+        } finally {
+            c.disconnect()
+        }
+        val ok = BitmapFactory.Options().apply { inJustDecodeBounds = true }.also { BitmapFactory.decodeFile(tmp.path, it) }.outWidth > 0
+        if (!ok || !tmp.renameTo(to)) {
+            tmp.delete()
+            error("not a picture")
         }
     }
 }

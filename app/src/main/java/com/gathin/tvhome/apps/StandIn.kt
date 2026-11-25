@@ -20,6 +20,6 @@ object StandIn {
         return pick(blocked.className, entries)?.let { ComponentName(blocked.packageName, it) }
     }
 
-    private fun pick(blocked: String, open: List<String>): String? =
+    fun pick(blocked: String, open: List<String>): String? =
         open.filter { it != blocked && blocked.startsWith(it) }.maxByOrNull { it.length }
 }

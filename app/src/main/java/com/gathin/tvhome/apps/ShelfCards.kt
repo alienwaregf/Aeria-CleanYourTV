@@ -180,8 +180,9 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
     fun set(label: String, list: List<ShelfCard>) {
         val focused = findFocus()
         val oldIndex = if (focused == null || !cards.contains(focused)) -1 else at
-        val oldPosters = HashMap<String, Bitmap>()
-        val oldLogos = HashMap<String, Bitmap>()
+        // Same URI can sit on two cards; keep every old bitmap so none leaks unrecycled.
+        val oldPosters = HashMap<String, MutableList<Bitmap>>()
+        val oldLogos = HashMap<String, MutableList<Bitmap>>()
         val reused = HashSet<Bitmap>()
         for (view in cards) {
             val card = view as FrameLayout
@@ -189,13 +190,13 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
             val uri = imageView.tag as? String
             val bitmap = (imageView.drawable as? BitmapDrawable)?.bitmap
             if (uri != null && bitmap != null && !bitmap.isRecycled) {
-                oldPosters[uri] = bitmap
+                oldPosters.getOrPut(uri) { ArrayList() }.add(bitmap)
             }
             val logoView = (card.getChildAt(2) as LinearLayout).getChildAt(0) as ImageView
             val logoUri = logoView.tag as? String
             val logoBitmap = (logoView.drawable as? BitmapDrawable)?.bitmap
             if (logoUri != null && logoBitmap != null && !logoBitmap.isRecycled) {
-                oldLogos[logoUri] = logoBitmap
+                oldLogos.getOrPut(logoUri) { ArrayList() }.add(logoBitmap)
             }
         }
         for (view in cards) {
@@ -225,7 +226,7 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
                 scaleType = ImageView.ScaleType.CENTER_CROP
             }
             val posterUri = picture(show)
-            val reusedPoster = if (posterUri != null) oldPosters[posterUri] else null
+            val reusedPoster = if (posterUri != null) oldPosters[posterUri]?.firstOrNull() else null
             if (reusedPoster != null && reusedPoster.width == w && reusedPoster.height == h) {
                 reused += reusedPoster
                 imageView.setImageBitmap(reusedPoster)
@@ -242,7 +243,7 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
                 clipToOutline = true
                 visibility = View.GONE
             }
-            val reusedLogo = if (show.logoUri != null) oldLogos[show.logoUri] else null
+            val reusedLogo = if (show.logoUri != null) oldLogos[show.logoUri]?.firstOrNull() else null
             if (reusedLogo != null) {
                 reused += reusedLogo
                 logoView.setImageBitmap(reusedLogo)
@@ -317,7 +318,7 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
             strip.addView(card, LayoutParams(w, h))
             cards.add(card)
         }
-        for (bitmap in oldPosters.values + oldLogos.values) {
+        for (bitmap in oldPosters.values.flatten() + oldLogos.values.flatten()) {
             if (bitmap !in reused && !bitmap.isRecycled) bitmap.recycle()
         }
         want(0)

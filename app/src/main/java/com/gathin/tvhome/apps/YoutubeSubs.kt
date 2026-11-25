@@ -106,8 +106,6 @@ object YoutubeSubs {
         return prefs.getString("yt_subs_$pkg", "").orEmpty().split("\n").map { it.trim() }.filter { it.isNotEmpty() }
     }
 
-    fun hasSubs(pkg: String): Boolean = subs(pkg).isNotEmpty()
-
     fun mode(pkg: String): String {
         if (!::prefs.isInitialized) return "subs"
         return prefs.getString("yt_mode_$pkg", "subs").orEmpty().takeIf { it == "keywords" } ?: "subs"
@@ -294,7 +292,10 @@ object YoutubeSubs {
         }
         failed = false
         val final = ensureMinPerKeyword(checked, perKeyword)
-        saveVideos(pkg, final, "yt_kw_cards")
+        diffMutex.withLock {
+            if (keywords(pkg) != words) return
+            saveVideos(pkg, final, "yt_kw_cards")
+        }
         changed()
     }
 
@@ -407,14 +408,16 @@ object YoutubeSubs {
     private suspend fun fetchByRss(handles: List<String>): List<List<YtVideo>> {
         val out = ArrayList<List<YtVideo>>()
         val refreshLogos = logosDue(System.currentTimeMillis())
+        var fetchedLogo = false
         for ((index, handle) in handles.withIndex()) {
             currentCoroutineContext().ensureActive()
             if (index > 0) delay(1500)
             val resolved = runCatching { resolveChannelIdByPage(handle, refreshLogos) }.getOrNull() ?: continue
+            if (resolved.third) fetchedLogo = true
             val videos = runCatching { fetchRss(handle, resolved.first) }.getOrNull() ?: continue
             out += videos.map { it.copy(logo = resolved.second, handle = handle) }
         }
-        if (refreshLogos) prefs.edit().putLong("yt_logos_at_", System.currentTimeMillis()).apply()
+        if (refreshLogos && fetchedLogo) prefs.edit().putLong("yt_logos_at_", System.currentTimeMillis()).apply()
         return out
     }
 
@@ -688,30 +691,30 @@ object YoutubeSubs {
         return out.toString()
     }
 
-    private fun resolveChannelIdByPage(handle: String, refreshLogos: Boolean): Pair<String, String?>? {
+    private fun resolveChannelIdByPage(handle: String, refreshLogos: Boolean): Triple<String, String?, Boolean>? {
         val directId = extractChannelId(handle)
         if (directId != null) {
             val cachedLogo = readHandleLogos()[handle]?.ifBlank { null }
-            if (!refreshLogos && cachedLogo != null) return directId to cachedLogo
-            val body = fetchHandlePage(handle) ?: return directId to cachedLogo
+            if (!refreshLogos && cachedLogo != null) return Triple(directId, cachedLogo, false)
+            val body = fetchHandlePage(handle) ?: return Triple(directId, cachedLogo, false)
             saveTitleFromBody(handle, body)
             val logo = findLogo(body)
             if (!logo.isNullOrBlank()) saveHandleLogo(handle, logo)
             if (directId != readHandleIds()[handle]) saveHandleId(handle, directId)
             markCheckedId(handle)
-            return directId to (logo ?: cachedLogo)
+            return Triple(directId, logo ?: cachedLogo, !logo.isNullOrBlank())
         }
         val cachedId = readHandleIds()[handle]
         if (cachedId != null && readCheckedIds().contains(handle)) {
             val cachedLogo = readHandleLogos()[handle]?.ifBlank { null }
-            if (!refreshLogos && cachedLogo != null) return cachedId to cachedLogo
-            val body = fetchHandlePage(handle) ?: return cachedId to cachedLogo
+            if (!refreshLogos && cachedLogo != null) return Triple(cachedId, cachedLogo, false)
+            val body = fetchHandlePage(handle) ?: return Triple(cachedId, cachedLogo, false)
             saveTitleFromBody(handle, body)
             val logo = findLogo(body)
             if (!logo.isNullOrBlank()) saveHandleLogo(handle, logo)
-            return cachedId to (logo ?: cachedLogo)
+            return Triple(cachedId, logo ?: cachedLogo, !logo.isNullOrBlank())
         }
-        val body = fetchHandlePage(handle) ?: return cachedId?.let { it to readHandleLogos()[handle]?.ifBlank { null } }
+        val body = fetchHandlePage(handle) ?: return cachedId?.let { Triple(it, readHandleLogos()[handle]?.ifBlank { null }, false) }
         saveTitleFromBody(handle, body)
         val id = findChannelId(body)
         if (id != null) {
@@ -721,7 +724,7 @@ object YoutubeSubs {
         val logo = findLogo(body)
         if (!logo.isNullOrBlank()) saveHandleLogo(handle, logo)
         val finalId = id ?: cachedId ?: return null
-        return finalId to (logo ?: readHandleLogos()[handle]?.ifBlank { null })
+        return Triple(finalId, logo ?: readHandleLogos()[handle]?.ifBlank { null }, !logo.isNullOrBlank())
     }
 
     private fun fetchHandlePage(handle: String): String? {

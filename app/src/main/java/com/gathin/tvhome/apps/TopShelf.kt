@@ -293,10 +293,19 @@ object TopShelfContent {
         val out = Images.cover(decoded, w, h).also { if (it !== decoded) decoded.recycle() }
         runCatching {
             file.parentFile?.mkdirs()
-            java.io.FileOutputStream(file).use { fos ->
-                out.compress(Bitmap.CompressFormat.JPEG, 92, fos)
+            val tmp = File(file.parentFile, file.name + "." + System.nanoTime() + ".tmp")
+            try {
+                java.io.FileOutputStream(tmp).use { fos ->
+                    out.compress(Bitmap.CompressFormat.JPEG, 92, fos)
+                }
+                synchronized(lock) {
+                    if (!tmp.renameTo(file)) tmp.delete()
+                }
+            } catch (_: Exception) {
+                tmp.delete()
             }
-        }.onFailure { file.delete() }
+        }
+        trimStillCache(file.parentFile)
         artCache.put(key, out)
         return out
     }
@@ -403,6 +412,17 @@ object TopShelfContent {
         }
     }
 
+    // Dock holds at most 6 apps, one backdrop each.
+    private const val STILL_KEEP_FILES = 6
+
+    private fun trimStillCache(dir: File?) {
+        if (dir == null) return
+        val files = dir.listFiles()?.filter { it.name.endsWith(".jpg") }?.sortedBy { it.lastModified() } ?: return
+        for (i in 0 until files.size - STILL_KEEP_FILES) {
+            files[i].delete()
+        }
+    }
+
     private fun decodePoster(context: Context, uri: String, w: Int, h: Int): Bitmap? {
         return runCatching {
             val bytes = readBytes(context, uri) ?: return null
@@ -447,10 +467,7 @@ object TopShelfContent {
     private fun readBytes(context: Context, uri: String): ByteArray? {
         return runCatching {
             when {
-                uri.startsWith("http://") -> {
-                    fetchHttp("https://" + uri.substring(7))
-                        ?: fetchHttp(uri)
-                }
+                uri.startsWith("http://") -> fetchHttp("https://" + uri.substring(7))
                 uri.startsWith("https://") -> fetchHttp(uri)
                 else -> context.contentResolver.openInputStream(android.net.Uri.parse(uri))?.use {
                     readCapped(it, MAX_IMAGE_BYTES)
