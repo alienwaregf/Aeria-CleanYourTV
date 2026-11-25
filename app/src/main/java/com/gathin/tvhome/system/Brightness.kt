@@ -106,13 +106,16 @@ object Brightness {
         val r = context.contentResolver
         val changhong = ChanghongPicture.usable(context)
         if (!changhong && !isTcl(context) && !usesXiaomiBacklight(context) && MitvPanel.usable(context)) {
-            runCatching {
+            val ok = runCatching {
                 val from = mitvLevel ?: MitvPanel.level(context) ?: storedLevel(context) ?: percent
                 MitvPanel.setBacklight(context, from, next)
+                MitvPanel.readBacklight(context)?.let { if (it != next) return@runCatching false }
                 mitvLevel = next
                 context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                     .edit().putInt(KEY_MITV_LEVEL, next).apply()
-            }
+                true
+            }.getOrDefault(false)
+            if (!ok) return percent / 100f
             return next / 100f
         }
         runCatching {

@@ -18,7 +18,7 @@ object MitvPanel {
     private const val TX_GET_BACKLIGHT_VALUE = 43
     private const val TX_SET_BACKLIGHT_VALUE = 42
 
-    private const val PROBE_STEP = 1
+    private const val PROBE_STEP = 5
 
     private const val PROBE_TOLERANCE = 2
 

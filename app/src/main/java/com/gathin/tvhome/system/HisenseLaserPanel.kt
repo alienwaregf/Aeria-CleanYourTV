@@ -30,10 +30,18 @@ internal object HisenseLaserPanel {
     private fun method(on: Any, name: String, vararg args: Class<*>): java.lang.reflect.Method? =
         runCatching { on.javaClass.getMethod(name, *args) }.getOrNull()
 
+    private fun invokeLevel(pm: Any): Int? =
+        method(pm, "getCustomBacklight")?.invoke(pm) as? Int
+
     private fun rawLevel(context: Context): Int? {
         val pm = pictureManager(context) ?: return null
         if (method(pm, "getLaserOverLapOrCL0Mode") == null) return null
-        val level = runCatching { method(pm, "getCustomBacklight")?.invoke(pm) as? Int }.getOrNull()
+        val level = try {
+            invokeLevel(pm)
+        } catch (_: Exception) {
+            cached = null
+            runCatching { (pictureManager(context) ?: return null).let { invokeLevel(it) } }.getOrNull()
+        }
         return level?.takeIf { it in 0..LEVEL_MAX }
     }
 
@@ -48,12 +56,18 @@ internal object HisenseLaserPanel {
     }
 
     fun setLevel(context: Context, level: Float) {
-        val pm = pictureManager(context) ?: return
         val target = Math.round(level.coerceIn(0f, 1f) * LEVEL_MAX)
         val int = Int::class.javaPrimitiveType ?: return
-        runCatching {
+        fun applyTo(pm: Any) {
             method(pm, "setBacklightMode", int)?.invoke(pm, BACKLIGHT_MODE_CUSTOM)
             method(pm, "setCustomBacklight", int)?.invoke(pm, target)
+        }
+        val pm = pictureManager(context) ?: return
+        try {
+            applyTo(pm)
+        } catch (_: Exception) {
+            cached = null
+            runCatching { pictureManager(context)?.let { applyTo(it) } }
         }
     }
 

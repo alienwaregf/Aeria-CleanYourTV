@@ -68,6 +68,13 @@ internal object HisenseSources {
         if (VidaaSiloSources.open(context, intent)) return true
         if (intent.action != SWITCH_ACTION || intent.`package` != TRANSITION_PACKAGE ||
             intent.getIntExtra(SOURCE_EXTRA, 0) <= 0) return false
+        val service = runCatching {
+            context.packageManager.getServiceInfo(ComponentName(TRANSITION_PACKAGE, "$TRANSITION_PACKAGE.TileTransitionService"), 0)
+        }.getOrNull()
+        if (service == null || !service.exported || !service.enabled || !service.applicationInfo.enabled) {
+            Log.w(TAG, "TileTransitionService is not available; not claiming the source switch worked")
+            return false
+        }
         context.sendBroadcast(Intent(intent))
         return true
     }
