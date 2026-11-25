@@ -86,7 +86,6 @@ object TmdbTrending {
     const val KEY_TMDB_KEY = "tmdb_key"
     private const val KEY_FETCHED_AT = "fetched_at"
     private const val KEY_ITEMS_JSON = "items_json"
-    private const val KEY_LAST_ERROR = "last_error"
     private const val TTL_MS = 10 * 60_000L
     private const val RETRY_MS = 3 * 60 * 1000L
     private const val MAX_ITEMS = 20
@@ -284,7 +283,6 @@ object TmdbTrending {
             result.onFailure { e ->
                 failed = true
                 Log.w(TAG, "trending fetch failed", e)
-                tmdbPrefs.edit { putString(KEY_LAST_ERROR, (e.message ?: e.toString()).take(256)) }
             }
             result.onSuccess { fetched ->
                 failed = false
@@ -313,7 +311,6 @@ object TmdbTrending {
                 tmdbPrefs.edit {
                     putLong(KEY_FETCHED_AT, System.currentTimeMillis())
                     putString(KEY_ITEMS_JSON, itemsToJson(merged))
-                    remove(KEY_LAST_ERROR)
                 }
                 prefetch(merged)
                 refreshRatingsStale(allowOmdb = fromTick)
@@ -350,10 +347,10 @@ object TmdbTrending {
                 if (details.backdrop.isNotBlank()) customBackdrop++
                 if (details.logo.isNotBlank()) withLogo++
                 item.copy(
-                    logoUrl = details.logo,
+                    logoUrl = details.logo.ifBlank { item.logoUrl },
                     backdropUrl = details.backdrop.ifBlank { item.backdropUrl },
-                    providerUrls = details.providers ?: emptyList(),
-                    providersFetched = details.providers != null,
+                    providerUrls = details.providers ?: item.providerUrls,
+                    providersFetched = details.providers != null || item.providersFetched,
                     trailerKey = details.trailerKey,
                     trailerChecked = details.fetched,
                 )
@@ -440,10 +437,8 @@ object TmdbTrending {
             tiers[tier].add(key)
             if (obj.optString("iso_639_1", "") == "zh") zhTiers[tier].add(key)
         }
-        for (t in 0..2) {
-            zhTiers[t].firstOrNull()?.let { return it }
-            tiers[t].firstOrNull()?.let { return it }
-        }
+        for (t in 0..2) zhTiers[t].firstOrNull()?.let { return it }
+        for (t in 0..2) tiers[t].firstOrNull()?.let { return it }
         return null
     }
 
