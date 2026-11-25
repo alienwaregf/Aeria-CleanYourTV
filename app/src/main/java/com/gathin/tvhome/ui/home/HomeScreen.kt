@@ -686,6 +686,8 @@ fun HomeScreen(
                             }
                             NativeKeyEvent.KEYCODE_DPAD_CENTER, NativeKeyEvent.KEYCODE_ENTER,
                             NativeKeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                heroTimerReset++
+                                TmdbTrending.playCurrentTrailer(appContext)
                                 return@onPreviewKeyEvent true
                             }
                             else -> return@onPreviewKeyEvent false
@@ -826,7 +828,7 @@ fun HomeScreen(
                     .offset { IntOffset(0, (-scroll.value + dockSlide).roundToInt()) },
             ) {
                 val clockRight = AerialSettings.clockRight
-                if (AerialSettings.largeClock && !shelfUp && !heroVisible && !Wallpapers.isTrending() && !inGrid) {
+                if (AerialSettings.largeClock && !shelfUp && !heroVisible && !Wallpapers.isTrending() && !inGrid && !previewActive) {
                     ShelfClock(
                         now = now,
                         alignEnd = clockRight,
@@ -843,7 +845,7 @@ fun HomeScreen(
                         saving = vm.screensaverVisible,
                         away = carrying,
                     )
-                } else if (!clockRight && !shelfUp && !heroVisible && !Wallpapers.isTrending() && !inGrid) {
+                } else if (!clockRight && !shelfUp && !heroVisible && !Wallpapers.isTrending() && !inGrid && !previewActive) {
                     CornerClock(
                         now = now,
                         modifier = Modifier
@@ -940,7 +942,7 @@ fun HomeScreen(
                 .graphicsLayer { alpha = if (overlay is Overlay.ControlCenter) 0f else 1f },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (!AerialSettings.largeClock && AerialSettings.clockRight && !shelfUp && !heroVisible && !Wallpapers.isTrending() && !inGrid) {
+            if (!AerialSettings.largeClock && AerialSettings.clockRight && !shelfUp && !heroVisible && !Wallpapers.isTrending() && !inGrid && !previewActive) {
                 CornerClock(
                     now = now,
                     modifier = Modifier
@@ -957,7 +959,7 @@ fun HomeScreen(
             StatusPill(
                 now = now,
                 network = vm.network,
-                showTime = shelfHasCards || heroVisible || (if (dragged) pastShelf else inGrid),
+                showTime = shelfHasCards || heroVisible || previewActive || (if (dragged) pastShelf else inGrid),
                 enabled = gridEnabled && moving == null,
                 focusRequester = pillRequester,
                 modifier = Modifier

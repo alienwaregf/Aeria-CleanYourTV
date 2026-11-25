@@ -153,12 +153,16 @@ fun LiveWallpaper(
         p?.release()
     }
 
-    suspend fun open(): ExoPlayer {
+    suspend fun open(): ExoPlayer? {
         SourcePreview.awaitDecoderFree()
         val quality = AerialFormats.forWallpaper(context)
         val overHttp = Build.VERSION.SDK_INT < Build.VERSION_CODES.N
         val spot = Wallpapers.liveSpot()
         val films = AerialSet.playlist(context, spot?.first)
+        if (films.isEmpty()) {
+            DiagLog.i("wallpaper has no aerial films")
+            return null
+        }
         val resume = films.first().takeIf { it.id == spot?.first }
         var failures = 0
         var rendered = false
@@ -341,12 +345,19 @@ fun LiveWallpaper(
             if (player == null) goOnFromPicture()
             val left = if (player == null) Wallpapers.leftLiveSpot() else null
             if (player == null) FilmAfterInput.await()
-            val p = player ?: open().also { player = it }
+            val p = player ?: open()?.also { player = it } ?: return@LaunchedEffect
             DiagLog.i("wallpaper film starts (state ${p.playbackState}, ${p.currentMediaItem?.mediaId} at ${p.currentPosition} ms)")
             Wallpapers.dropFilmFrost()
             if (p.playbackState == Player.STATE_IDLE) p.prepare()
             p.playWhenReady = true
-            snapshotFlow { showing }.first { it }
+            while (withTimeoutOrNull(FRESH_WAIT_MS) { snapshotFlow { showing }.first { it } } == null) {
+                val p = player
+                if (p == null || p.playbackState == Player.STATE_IDLE) {
+                    DiagLog.i("wallpaper film never showed a frame; staying on the picture")
+                    return@LaunchedEffect
+                }
+                DiagLog.i("wallpaper film still waiting for its first frame")
+            }
             DiagLog.i("wallpaper film moving")
             cover.animateTo(1f, tween(1200, easing = Motion.EaseOut))
             if (left != null) {

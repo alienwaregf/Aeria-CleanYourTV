@@ -27,6 +27,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -72,7 +73,7 @@ fun PinPad(visible: Boolean, mode: PinMode?, onDone: () -> Unit, onCancel: () ->
         exit = fadeOut(tween(150, easing = Motion.EaseOut)) + scaleOut(tween(150, easing = Motion.EaseOut), targetScale = 0.97f),
         modifier = Modifier.fillMaxSize(),
     ) {
-        shown?.let { PinPanel(it, onDone, onCancel) }
+        shown?.let { key(it) { PinPanel(it, onDone, onCancel) } }
     }
 }
 

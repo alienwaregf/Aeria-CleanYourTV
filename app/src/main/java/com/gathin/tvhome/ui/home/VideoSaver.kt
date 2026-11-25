@@ -160,9 +160,26 @@ private fun LocalFilms(
     LaunchedEffect(steps) { steps.collect { skip(it) } }
     LaunchedEffect(attempt, playing, films != null) {
         if (films == null || playing) return@LaunchedEffect
-        delay(8_000)
-        if (player.currentMediaItem?.mediaId in shown) DiagLog.i("local screensaver: no new frame for 8 s from a film that played; kept")
-        else failed()
+        var lastPos = player.currentPosition
+        var stuck = 0
+        while (true) {
+            delay(8_000)
+            if (playing) return@LaunchedEffect
+            val id = player.currentMediaItem?.mediaId
+            if (id !in shown) { failed(); return@LaunchedEffect }
+            val pos = player.currentPosition
+            if (pos == lastPos) {
+                if (++stuck >= 2) {
+                    DiagLog.i("local screensaver: no new frame for 16 s from a film that played; skipping it")
+                    failed()
+                    return@LaunchedEffect
+                }
+            } else {
+                stuck = 0
+                lastPos = pos
+            }
+            DiagLog.i("local screensaver: no new frame for 8 s from a film that played; kept")
+        }
     }
     Box(Modifier.fillMaxSize()) {
         AndroidView(

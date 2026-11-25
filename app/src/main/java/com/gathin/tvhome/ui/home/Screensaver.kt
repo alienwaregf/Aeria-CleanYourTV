@@ -138,7 +138,7 @@ fun Screensaver(visible: Boolean, apps: List<AppEntry>, now: LocalDateTime, skip
                         Labels(caption = null, now = now, shade = false)
                     }
                 }
-                ScreensaverMode.Trending -> TrendingSaver(now, skips.steps)
+                ScreensaverMode.Trending -> TrendingSaver(now, skips)
             }
         }
     }
@@ -147,15 +147,22 @@ fun Screensaver(visible: Boolean, apps: List<AppEntry>, now: LocalDateTime, skip
 class ScreensaverSkips {
     private val flow = MutableSharedFlow<Int>(extraBufferCapacity = 8)
     val steps: SharedFlow<Int> get() = flow
+    private val trailerFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val trailerRequests: SharedFlow<Unit> get() = trailerFlow
 
     fun onKey(event: KeyEvent): Boolean {
-        val step = when (event.keyCode) {
-            KeyEvent.KEYCODE_DPAD_LEFT -> -1
-            KeyEvent.KEYCODE_DPAD_RIGHT -> 1
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                val step = if (event.keyCode == KeyEvent.KEYCODE_DPAD_LEFT) -1 else 1
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) flow.tryEmit(step)
+                return true
+            }
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) trailerFlow.tryEmit(Unit)
+                return true
+            }
             else -> return false
         }
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) flow.tryEmit(step)
-        return true
     }
 }
 
@@ -175,7 +182,7 @@ fun saverCarriesWallpaper(context: android.content.Context): Boolean = when {
 
 object AerialStart {
     fun start(context: android.content.Context): Pair<String, Long>? {
-        AerialSet.takeDaily(context)?.let { film ->
+        runCatching { AerialSet.takeDaily(context) }.getOrNull()?.let { film ->
             DiagLog.i("today's new film ${film.id}")
             Wallpapers.leaveLiveFilm(film.id, 0L)
             return film.id to 0L
@@ -189,7 +196,7 @@ object AerialStart {
             aerialQualityCap?.takeIf { it.ordinal < q.ordinal } ?: q
         }
         val live = LiveFilm.onHome
-        val (id, at) = if (AerialSet.due(context)) AerialSet.nextNew(context).id to 0L
+        val (id, at) = if (AerialSet.due(context)) (runCatching { AerialSet.nextNew(context) }.getOrNull() ?: return).id to 0L
             else live?.spot()?.let { (id, at) -> id to at + if (live.moving) leadMs else 0L } ?: Wallpapers.liveSpot() ?: return
         val film = Aerials.all(context).firstOrNull { it.id == id } ?: return
         AerialStream.prepareStart(context, film, quality, aerialsOverHttp, at)
@@ -335,6 +342,10 @@ private fun AerialSaver(
         }
     }
     val films = remember { mutableStateListOf<Aerial>().apply { addAll(AerialSet.playlist(context, startAt?.first)) } }
+    if (films.isEmpty()) {
+        LaunchedEffect(Unit) { onUnavailable() }
+        return
+    }
     val firstAtMs = remember { startAt?.takeIf { (id, _) -> films.first().id == id }?.second ?: 0L }
     val player = remember { AerialStream.player(context, quality, decodeOnScreen = true) }
     var index by remember { mutableIntStateOf(0) }
@@ -546,8 +557,9 @@ private fun SaverRatingIcon(res: Int) {
 }
 
 @Composable
-private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
+private fun TrendingSaver(now: LocalDateTime, skips: ScreensaverSkips) {
     val context = LocalContext.current
+    val steps = skips.steps
     val items = TmdbTrending.items
     val density = LocalDensity.current
     val infoSlidePx = with(density) { 28.dp.toPx() }
@@ -572,6 +584,11 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
                 saverDir = if (step >= 0) 1 else -1
                 TmdbTrending.currentIndex = (TmdbTrending.currentIndex + step).mod(count)
             }
+        }
+    }
+    LaunchedEffect(skips) {
+        skips.trailerRequests.collect {
+            TmdbTrending.playCurrentTrailer(context)
         }
     }
     if (items.isEmpty()) {
@@ -692,13 +709,17 @@ private fun TrendingSaver(now: LocalDateTime, steps: SharedFlow<Int>) {
                     Spacer(Modifier.width(8.dp))
                     BasicText("·", style = Type.Callout)
                     Spacer(Modifier.width(8.dp))
-                    BasicText("RT " + displayedItem.rtPercent.toString() + "%", style = Type.Callout)
+                    SaverRatingIcon(Ratings.rtCriticIcon(displayedItem.rtState, displayedItem.rtPercent))
+                    Spacer(Modifier.width(4.dp))
+                    BasicText(displayedItem.rtPercent.toString() + "%", style = Type.Callout)
                 }
                 if (displayedItem.rtAudiencePercent >= 0) {
                     Spacer(Modifier.width(8.dp))
                     BasicText("·", style = Type.Callout)
                     Spacer(Modifier.width(8.dp))
-                    BasicText("观众 " + displayedItem.rtAudiencePercent.toString() + "%", style = Type.Callout)
+                    SaverRatingIcon(Ratings.rtAudienceIcon(displayedItem.rtAudienceState, displayedItem.rtAudiencePercent))
+                    Spacer(Modifier.width(4.dp))
+                    BasicText(displayedItem.rtAudiencePercent.toString() + "%", style = Type.Callout)
                 }
                 if (displayedItem.traktRating >= 0.0) {
                     Spacer(Modifier.width(8.dp))

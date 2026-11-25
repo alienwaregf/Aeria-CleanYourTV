@@ -97,6 +97,7 @@ class SlimmingUiState {
     var statusText by mutableStateOf("")
     var dailyText by mutableStateOf("")
     var busy by mutableStateOf(false)
+    var adbAuthorized by mutableStateOf<Boolean?>(null)
     var showPick by mutableStateOf(false)
     var showRetry by mutableStateOf(false)
     var showPicker by mutableStateOf(false)
@@ -187,7 +188,7 @@ fun SlimmingScreen(ui: SlimmingUiState, cb: SlimmingCallbacks) {
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         Column(
-            Modifier.fillMaxSize().padding(start = 72.dp, end = 72.dp, top = 38.dp, bottom = 38.dp).verticalScroll(scroll).latestBringIntoView(scroll),
+            Modifier.fillMaxSize().padding(start = 72.dp, end = 72.dp, top = 38.dp, bottom = 0.dp).verticalScroll(scroll).latestBringIntoView(scroll),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Column {
@@ -213,7 +214,13 @@ fun SlimmingScreen(ui: SlimmingUiState, cb: SlimmingCallbacks) {
                         BasicText(ui.statusText, style = Type.Body, modifier = Modifier.padding(top = 10.dp))
                     }
                     BasicText(
-                        stringResource(R.string.slimming_note),
+                        stringResource(
+                            when (ui.adbAuthorized) {
+                                true -> R.string.slimming_adb_authorized
+                                false -> R.string.slimming_adb_unauthorized
+                                null -> R.string.slimming_note
+                            }
+                        ),
                         style = Type.Body.copy(color = Palette.SecondaryLabel),
                         modifier = Modifier.padding(top = 10.dp),
                     )
@@ -231,7 +238,7 @@ fun SlimmingScreen(ui: SlimmingUiState, cb: SlimmingCallbacks) {
                             onClick = { ui.confirm = SlimmingConfirm.DISABLE },
                             modifier = Modifier.weight(1f),
                             onKey = scrollTop,
-                            enabled = !ui.busy,
+                            enabled = !ui.busy && ui.adbAuthorized == true,
                         )
                     }
                     if (ui.showPick) {
@@ -241,7 +248,7 @@ fun SlimmingScreen(ui: SlimmingUiState, cb: SlimmingCallbacks) {
                             onClick = { cb.onPick() },
                             modifier = Modifier.weight(1f),
                             onKey = scrollTop,
-                            enabled = !ui.busy,
+                            enabled = !ui.busy && ui.adbAuthorized == true,
                         )
                     }
                     if (ui.recommended.isNotEmpty() || ui.optional.isNotEmpty()) {
@@ -251,10 +258,10 @@ fun SlimmingScreen(ui: SlimmingUiState, cb: SlimmingCallbacks) {
                             onClick = { ui.confirm = SlimmingConfirm.RESTORE },
                             modifier = Modifier.weight(1f),
                             onKey = scrollTop,
-                            enabled = !ui.busy,
+                            enabled = !ui.busy && ui.adbAuthorized == true,
                         )
                     }
-                    SlimmingChoice(ui.dailyText, onClick = { cb.onDailyToggle() }, modifier = Modifier.weight(1f), onKey = scrollTop, enabled = !ui.busy)
+                    SlimmingChoice(ui.dailyText, onClick = { cb.onDailyToggle() }, modifier = Modifier.weight(1f), onKey = scrollTop, enabled = !ui.busy && ui.adbAuthorized == true)
                 }
             if (ui.showRetry) {
                 SlimmingChoice(stringResource(R.string.slimming_retry), onClick = { cb.onRetry() }, modifier = Modifier.suppressBringIntoView())
@@ -284,12 +291,12 @@ fun SlimmingScreen(ui: SlimmingUiState, cb: SlimmingCallbacks) {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         Box(Modifier.weight(1f)) {
                             ui.recommended.getOrNull(i)?.let { row ->
-                                SlimmingRow(row, if (row === firstRow) firstRequester else null, onClick = { cb.onRow(row.pkg) }, enabled = !ui.busy)
+                                SlimmingRow(row, if (row === firstRow) firstRequester else null, onClick = { cb.onRow(row.pkg) }, enabled = !ui.busy && ui.adbAuthorized == true)
                             }
                         }
                         Box(Modifier.weight(1f)) {
                             ui.optional.getOrNull(i)?.let { row ->
-                                SlimmingRow(row, if (row === firstRow) firstRequester else null, onClick = { cb.onRow(row.pkg) }, enabled = !ui.busy)
+                                SlimmingRow(row, if (row === firstRow) firstRequester else null, onClick = { cb.onRow(row.pkg) }, enabled = !ui.busy && ui.adbAuthorized == true)
                             }
                         }
                     }

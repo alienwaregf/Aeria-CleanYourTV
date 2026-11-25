@@ -441,18 +441,17 @@ private fun plateTinted(src: ImageBitmap): ImageBitmap {
 }
 
 private fun bakePlate(glass: ImageBitmap, screen: Size, plate: Rect, radius: Float, rim: Float, edge: Boolean = true): ImageBitmap {
-    val s = 1f
-    val w = (plate.width * s).roundToInt().coerceAtLeast(1)
-    val h = (plate.height * s).roundToInt().coerceAtLeast(1)
+    val w = plate.width.roundToInt().coerceAtLeast(1)
+    val h = plate.height.roundToInt().coerceAtLeast(1)
     val out = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
     val canvas = android.graphics.Canvas(out)
     canvas.drawBitmap(
         glass.asAndroidBitmap(),
-        Matrix().apply { setScale(screen.width * s / glass.width, screen.height * s / glass.height); postTranslate(-plate.left * s, -plate.top * s) },
+        Matrix().apply { setScale(screen.width / glass.width, screen.height / glass.height); postTranslate(-plate.left, -plate.top) },
         android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG),
     )
-    canvas.drawBitmap(smoothMask(w, h, radius * s), 0f, 0f, android.graphics.Paint().apply { xfermode = android.graphics.PorterDuffXfermode(PorterDuff.Mode.DST_IN) })
-    if (edge) canvas.drawBitmap(glassEdge(w, h, radius * s, rim * s).asAndroidBitmap(), 0f, 0f, null)
+    canvas.drawBitmap(smoothMask(w, h, radius), 0f, 0f, android.graphics.Paint().apply { xfermode = android.graphics.PorterDuffXfermode(PorterDuff.Mode.DST_IN) })
+    if (edge) canvas.drawBitmap(glassEdge(w, h, radius, rim).asAndroidBitmap(), 0f, 0f, null)
     return out.frozen().asImageBitmap()
 }
 

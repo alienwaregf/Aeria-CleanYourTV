@@ -381,13 +381,17 @@ fun HeroRow(
                     Spacer(Modifier.width(8.dp))
                     BasicText("·", style = Type.Callout)
                     Spacer(Modifier.width(8.dp))
-                    BasicText("RT " + displayedItem.rtPercent.toString() + "%", style = Type.Callout)
+                    RatingIcon(Ratings.rtCriticIcon(displayedItem.rtState, displayedItem.rtPercent))
+                    Spacer(Modifier.width(4.dp))
+                    BasicText(displayedItem.rtPercent.toString() + "%", style = Type.Callout)
                 }
                 if (displayedItem.rtAudiencePercent >= 0) {
                     Spacer(Modifier.width(8.dp))
                     BasicText("·", style = Type.Callout)
                     Spacer(Modifier.width(8.dp))
-                    BasicText("观众 " + displayedItem.rtAudiencePercent.toString() + "%", style = Type.Callout)
+                    RatingIcon(Ratings.rtAudienceIcon(displayedItem.rtAudienceState, displayedItem.rtAudiencePercent))
+                    Spacer(Modifier.width(4.dp))
+                    BasicText(displayedItem.rtAudiencePercent.toString() + "%", style = Type.Callout)
                 }
                 if (displayedItem.traktRating >= 0.0) {
                     Spacer(Modifier.width(8.dp))
