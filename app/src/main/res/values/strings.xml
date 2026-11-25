@@ -27,7 +27,6 @@
     <string name="cc_update_downloading">Downloading… %d%%</string>
     <string name="cc_update_opened">The installer is open: confirm the update there. When it is done, choose Done to come back to Aerial, with every setting kept.</string>
     <string name="cc_update_permission">Allow Aerial to install apps in the settings that just opened, then come back and choose Download and Install again.</string>
-    <string name="cc_update_storage_permission">This TV needs storage access to save the update. Allow the file permission request, then choose Download and Install again.</string>
     <string name="cc_update_failed_download">The download did not finish. Check the network and try again.</string>
     <string name="cc_update_failed_blocked">This TV does not let apps install other apps. Use the QR code below to get the APK another way.</string>
     <string name="cc_update_failed_signature">The Aerial on this TV is signed differently from the official one, so it cannot be updated over.</string>
