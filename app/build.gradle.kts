@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.time.Duration
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -16,6 +17,11 @@ plugins {
 val buildVersionName = "1." + ZonedDateTime.now(ZoneId.of("Asia/Shanghai"))
     .format(DateTimeFormatter.ofPattern("yyyyMMddHHmm"))
 
+val buildVersionCode = Duration.between(
+    ZonedDateTime.of(2026, 1, 1, 0, 0, 0, 0, ZoneId.of("Asia/Shanghai")),
+    ZonedDateTime.now(ZoneId.of("Asia/Shanghai"))
+).toMinutes().toInt()
+
 android {
     namespace = "com.gathin.tvhome"
     compileSdk = 36
@@ -25,7 +31,7 @@ android {
         // Android 5.0. Compose 1.10 and later need 6.0, so the Compose BOM below stays on 1.9.
         minSdk = 21
         targetSdk = 34
-        versionCode = 128
+        versionCode = buildVersionCode
         versionName = buildVersionName
         // `./gradlew -Pdiag ...`: a build for one reporter's TV whose logcat shows no app lines;
         // see system/DiagLog.kt.
@@ -74,7 +80,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.findByName("aerial") ?: signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("aerial")
+                ?: error("缺少正式签名：local/signing.properties 不存在")
         }
     }
 
