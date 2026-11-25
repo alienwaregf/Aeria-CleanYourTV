@@ -10,6 +10,7 @@ import com.gathin.tvhome.system.DeviceProfile
 import com.gathin.tvhome.system.DiagLog
 import com.gathin.tvhome.system.HisenseSources
 import com.gathin.tvhome.system.SystemProbe
+import com.gathin.tvhome.update.Updates
 import com.gathin.tvhome.ui.components.DiagLayers
 import com.gathin.tvhome.ui.components.UhdCanvas
 import com.gathin.tvhome.wallpaper.AerialQuality
@@ -17,6 +18,29 @@ import com.gathin.tvhome.wallpaper.ScreensaverMode
 import com.gathin.tvhome.wallpaper.Wallpapers
 import kotlinx.coroutines.launch
 
+/**
+ * Options set from a computer over ADB, e.g.
+ *   adb shell am broadcast -a com.gathin.tvhome.CONFIG -n com.gathin.tvhome/.guard.ConfigReceiver --ez keep_adb true
+ *   ... --ez own_screensaver true   (keep Aerial as the system screensaver; see GuardSetup)
+ *   ... --ez guard_off_in_standby true  (Home Guard leaves at screen off, back at screen on;
+ *                                   for TVs that do not wake with it enabled, issue #371)
+ *   ... --ez clear_pin true         (turn the parental PIN off, for an owner who forgot it)
+ *   ... --ez large_clock true --ez clock_right false --ez one_row_home true
+ *       --ez peek_next_row false --ez home_plate true --ez show_all_names false --ei home_columns 6
+ *                                   (Home's layout, as in Personalize; for screenshots of each)
+ *   ... --ez screensaver_clock false
+ *                                   (the time over the aerial and photo
+ *                                   screensavers, as in Personalize; past the parental PIN, as ADB is)
+ *   ... --ei preview_apps 3         (Home shows only its first 3 tiles until Aerial restarts, or 0;
+ *                                   nothing is saved, for trying a nearly empty Home)
+ *   ... --ez check_update true      (look for a new version now, not within three hours)
+ *   ... --ez update_test true       ("Download and Install" takes files/update-test.apk instead,
+ *                                   until Aerial restarts; for trying an update before a release)
+ *   ... --ez update_test_self true  (the same with the APK Aerial runs from: a reinstall, for TVs whose
+ *                                   shell cannot write Android/data, as TCL MT5879's)
+ * The manifest requires the sender to hold WRITE_SECURE_SETTINGS, which the ADB shell has and
+ * ordinary apps cannot get, so no other app on the TV can flip these.
+ */
 class ConfigReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != "com.gathin.slimtv.CONFIG") return
@@ -27,6 +51,8 @@ class ConfigReceiver : BroadcastReceiver() {
     }
 
     private fun handle(context: Context, intent: Intent) {
+        // ... --es export_tiles <name>   (every tile on one picture; see TileSheet)
+        // Runs on past the broadcast's time limit; Home keeps the process alive. Look for the file.
         intent.getStringExtra("export_tiles")?.takeIf { Regex("^[A-Za-z0-9_-]+$").matches(it) }?.let { name ->
             val app = context.applicationContext
             @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
@@ -36,12 +62,18 @@ class ConfigReceiver : BroadcastReceiver() {
             resultData = "exporting $name"
             return
         }
+        // ... --es device_profile '{"hidden":[8],"labels":{"6":"HDMI 2"},"xiaomiSources":{"6":24}}'
+        //                                 (this TV's own corrections, see DeviceProfile; replaces
+        //                                 the built-in entry; "default" goes back to it. Home
+        //                                 lists the inputs again the next time it comes to front)
         intent.getStringExtra("device_profile")?.let { json ->
             val ok = DeviceProfile.setOwn(context, json.takeUnless { it.trim() == "default" })
             val profile = DeviceProfile.current(context).toJson()
             resultData = if (ok) "device_profile=$profile (${DeviceProfile.origin(context)})" else "device_profile not valid JSON; kept $profile"
             return
         }
+        // ... --ez list_sources true      (the inputs as JSON: what Home shows, and the hidden ones
+        //                                 the profile can bring back, with the Xiaomi source ids)
         if (intent.getBooleanExtra("list_sources", false)) {
             val allSources = SystemProbe.sources(context)
             val shown = allSources.map { it.id }.toSet()
@@ -56,13 +88,20 @@ class ConfigReceiver : BroadcastReceiver() {
             }).toString()
             return
         }
+        // ... --es open_source <input id>  (open an input the way its tile does, with this TV's
+        //                                 profile; ids are in the diagnostics' Inputs. For
+        //                                 tools/selftest.sh and agents checking a profile)
         intent.getStringExtra("open_source")?.let { id ->
             val source = (SystemProbe.inputsToCheck(context) + SystemProbe.sources(context)).firstOrNull { it.id == id }
             resultData = if (source == null) "open_source: no input $id" else runCatching {
+                // Hisense's inputs switch by broadcast (HisenseSources.open), the rest by activity.
                 if (!HisenseSources.open(context, source.intent)) context.startActivity(source.intent)
                 "open_source: ${source.label} -> ${source.intent.component?.flattenToShortString() ?: source.intent.data}" +
                     (source.xiaomiInput?.let { " input=$it" } ?: "")
             }.getOrElse {
+                // As the tile does when nothing answers the passthrough intent: the TV's own picker
+                // (XGIMI DOHKO, Android 14: the tile switched, this said ActivityNotFoundException;
+                // issue #1483, the reporter's selftest).
                 if (it is android.content.ActivityNotFoundException && source.intent.data?.host == "android.media.tv" &&
                     SystemProbe.openInputPicker(context)
                 ) "open_source: ${source.label} -> the TV's input picker (nothing answers ${source.intent.data})"
@@ -92,33 +131,55 @@ class ConfigReceiver : BroadcastReceiver() {
             AerialSettings.init(context)
             AerialSettings.chooseHomeColumns(intent.getIntExtra("home_columns", 5))
         }
+        // ... --ez diag true / --ez mode_switch false / --ez soft_layer true   (see DiagLog;
+        //                                 the last two apply the next time Home starts)
         if (intent.hasExtra("diag")) DiagLog.setEnabled(context, intent.getBooleanExtra("diag", false))
-        for (key in listOf("mode_switch", "soft_layer", "saver_fade_offscreen")) {
+        // ... --ez saver_fade_offscreen true   (issue #654, see DiagLog.saverFadeOffscreen)
+        // ... --ez soft_clock true|false   (issue #1658, see DiagLog.softClock; --es soft_clock auto
+        //                                 goes back to deciding by the GPU)
+        if (intent.extras?.get("soft_clock") is String) DiagLog.clearOption(context, "soft_clock")
+        // ... --ez film_in_app true|false   (issue #1759, see FilmFrames.inAppOnly; --es film_in_app
+        //                                 auto goes back to deciding by the video decoder; applies
+        //                                 the next time Aerial starts)
+        if (intent.extras?.get("film_in_app") is String) DiagLog.clearOption(context, "film_in_app")
+        for (key in listOf("mode_switch", "soft_layer", "saver_fade_offscreen", "soft_clock", "film_in_app")) {
+            if (intent.extras?.get(key) is String) continue
             if (intent.hasExtra(key)) DiagLog.setOption(context, key, intent.getBooleanExtra(key, false))
         }
+        // ... --ez uhd_canvas true|false / --es uhd_canvas auto   (Home at the panel's resolution,
+        //                                 see UhdCanvas; applies the next time Home starts)
         if (intent.hasExtra("uhd_canvas")) {
             UhdCanvas.choose(context, intent.extras?.get("uhd_canvas") as? Boolean)
         }
-        if (intent.hasExtra("keep_adb")) GuardSetup.setKeepAdb(context, intent.getBooleanExtra("keep_adb", false))
-        if (intent.hasExtra("adb_probe_port")) GuardSetup.adbProbePort = intent.getIntExtra("adb_probe_port", 5555)
-        if (intent.hasExtra("guard_off_in_standby")) GuardSetup.setOffInStandby(context, intent.getBooleanExtra("guard_off_in_standby", false))
         if (intent.hasExtra("update_test")) {
-            com.gathin.tvhome.update.Updates.testApk = if (intent.getBooleanExtra("update_test", false)) {
+            Updates.testApk = if (intent.getBooleanExtra("update_test", false)) {
                 java.io.File(context.getExternalFilesDir(null) ?: context.filesDir, "update-test.apk")
             } else null
         }
-        if (intent.getBooleanExtra("update_test_self", false)) com.gathin.tvhome.update.Updates.testApk = java.io.File(context.applicationInfo.sourceDir)
+        if (intent.getBooleanExtra("update_test_self", false)) Updates.testApk = java.io.File(context.applicationInfo.sourceDir)
+        // ... --ez self_compile true   (reinstall the running APK with its dex metadata now, SelfCompile)
         if (intent.getBooleanExtra("self_compile", false)) com.gathin.tvhome.update.SelfCompile.runNow(context)
+        // ... --ez system_compile true   (Android 7-11: have the package manager compile Aerial now, SelfCompile)
         if (intent.getBooleanExtra("system_compile", false)) com.gathin.tvhome.update.SelfCompile.askSystemNow(context)
         if (intent.getBooleanExtra("check_update", false)) {
-            com.gathin.tvhome.update.Updates.init(context)
-            com.gathin.tvhome.update.Updates.checkIfStale(force = true)
+            Updates.init(context)
+            Updates.checkIfStale(force = true)
         }
+        if (intent.hasExtra("keep_adb")) GuardSetup.setKeepAdb(context, intent.getBooleanExtra("keep_adb", false))
+        // ... --ei adb_probe_port <port>   (verify the keep_adb toggle without closing a working
+        //                                 link, until Aerial restarts; issue #454)
+        if (intent.hasExtra("adb_probe_port")) GuardSetup.adbProbePort = intent.getIntExtra("adb_probe_port", 5555)
+        if (intent.hasExtra("guard_off_in_standby")) GuardSetup.setOffInStandby(context, intent.getBooleanExtra("guard_off_in_standby", false))
         if (intent.hasExtra("own_screensaver")) GuardSetup.setOwnScreensaver(context, intent.getBooleanExtra("own_screensaver", false))
+        // aerial, photos, clock, videos or system.
         intent.getStringExtra("screensaver")?.let { key ->
             Wallpapers.init(context)
             ScreensaverMode.entries.firstOrNull { it.key == key }?.let { Wallpapers.chooseScreensaver(it) }
         }
+        // ... --es wallpaper aerial:live   (choose a wallpaper by id, as the phone page does, for
+        //                                 measuring with a film; the reply names the one before
+        //                                 and the aerial quality, to put the owner's back. ""
+        //                                 only reports them.)
         intent.getStringExtra("wallpaper")?.let { id ->
             Wallpapers.init(context)
             AerialSettings.init(context)
@@ -127,10 +188,14 @@ class ConfigReceiver : BroadcastReceiver() {
             resultData = "wallpaper_before=$before aerial_quality=${AerialSettings.aerialQuality.key}"
             return
         }
+        // ... --es skip_layers picture,plate   (parts of Home left undrawn until Aerial restarts, to
+        //                                 find what a slow TV's frames cost; see DiagLayers)
         intent.getStringExtra("skip_layers")?.let { list ->
             resultData = "skip_layers=" + DiagLayers.skip(list).joinToString(",")
             return
         }
+        // ... --es effects auto|full|lite / --es aerial_quality auto|1080p|4k|dolby_vision
+        //                                 (as in Personalize; for comparing frame times of each)
         intent.getStringExtra("effects")?.let { key ->
             AerialSettings.init(context)
             Effects.entries.firstOrNull { it.key == key }?.let(AerialSettings::chooseEffects)
@@ -139,6 +204,8 @@ class ConfigReceiver : BroadcastReceiver() {
             AerialSettings.init(context)
             AerialQuality.entries.firstOrNull { it.key == key }?.let(AerialSettings::chooseAerialQuality)
         }
+        // Opt-in for an input ("*" = any recognized Apple TV input). Empty input disables.
+        // Optional player and current-input setting key allow testing other firmware routes.
         val cecKeys = listOf("cec_home_input", "cec_home_player", "cec_home_input_setting").filter { intent.hasExtra(it) }
         if (cecKeys.isNotEmpty()) {
             val edit = context.getSharedPreferences("system", Context.MODE_PRIVATE).edit()
