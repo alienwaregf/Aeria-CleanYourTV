@@ -74,6 +74,15 @@ object GuardSetup {
     private const val KEY_SCREENSAVER_ENABLED = "screensaver_enabled"
     private const val KEY_OFF_IN_STANDBY = "guard_off_in_standby"
 
+    private const val KEY_GUARD_REBIND_PENDING = "guard_rebind_pending"
+
+    private fun setRebindPending(context: Context, pending: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_GUARD_REBIND_PENDING, pending).apply()
+    }
+
+    private fun rebindPending(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_GUARD_REBIND_PENDING, false)
+
     fun offInStandby(context: Context): Boolean = isUserUnlocked(context) &&
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_OFF_IN_STANDBY, false)
 
@@ -369,12 +378,14 @@ object GuardSetup {
         if (others.size == entries.size) return
         runCatching {
             lastRevivedAt = SystemClock.elapsedRealtime()
+            setRebindPending(context, true)
             Settings.Secure.putString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, others.joinToString(":"))
             Handler(Looper.getMainLooper()).postDelayed({
                 runCatching {
                     val now = Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
                         .split(':').filter { it.isNotBlank() && ComponentName.unflattenFromString(it)?.flattenToString() != me }
                     Settings.Secure.putString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, (now + me).joinToString(":"))
+                    setRebindPending(context, false)
                 }
             }, 1500)
             Log.i(TAG, "Home Guard was enabled but not running; asked Android to bind it again")
@@ -389,19 +400,25 @@ object GuardSetup {
             fun others() = Settings.Secure.getString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
                 .split(':').filter { it.isNotBlank() && ComponentName.unflattenFromString(it)?.flattenToString() != me }
             runCatching {
+                setRebindPending(context, true)
                 Settings.Secure.putString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, others().joinToString(":"))
                 Handler(Looper.getMainLooper()).postDelayed({
-                    runCatching { Settings.Secure.putString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, (others() + me).joinToString(":")) }
-                        .onFailure { Log.w(TAG, "could not put Home Guard back", it) }
+                    runCatching {
+                        Settings.Secure.putString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, (others() + me).joinToString(":"))
+                        setRebindPending(context, false)
+                    }.onFailure { Log.w(TAG, "could not put Home Guard back", it) }
                 }, 1500)
             }.onFailure { Log.w(TAG, "could not take Home Guard out", it) }
             return
         }
         runCatching {
+            setRebindPending(context, true)
             Settings.Secure.putInt(resolver, Settings.Secure.ACCESSIBILITY_ENABLED, 0)
             Handler(Looper.getMainLooper()).postDelayed({
-                runCatching { Settings.Secure.putInt(resolver, Settings.Secure.ACCESSIBILITY_ENABLED, 1) }
-                    .onFailure { Log.w(TAG, "could not switch accessibility back on", it) }
+                runCatching {
+                    Settings.Secure.putInt(resolver, Settings.Secure.ACCESSIBILITY_ENABLED, 1)
+                    setRebindPending(context, false)
+                }.onFailure { Log.w(TAG, "could not switch accessibility back on", it) }
             }, 1500)
         }.onFailure { Log.w(TAG, "could not switch accessibility off", it) }
     }
@@ -598,6 +615,10 @@ object GuardSetup {
         val entries = current.split(':').filter { it.isNotBlank() }
         val alreadyOn = entries.any { ComponentName.unflattenFromString(it)?.flattenToString() == me }
         return runCatching {
+            if (rebindPending(context)) {
+                setRebindPending(context, false)
+                Log.i(TAG, "Home Guard rebind was interrupted; putting it back")
+            }
             if (!alreadyOn) {
                 lastRevivedAt = SystemClock.elapsedRealtime()
                 Settings.Secure.putString(resolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, (entries + me).joinToString(":"))

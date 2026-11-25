@@ -1159,6 +1159,7 @@ class HomeGuardService : AccessibilityService() {
 
     private val packageChanges = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            activityCache.clear()
             handler.removeCallbacks(refreshHomesAfterPackageChange)
             handler.postDelayed(refreshHomesAfterPackageChange, PACKAGE_SETTLE_MS)
         }
@@ -1519,8 +1520,8 @@ class HomeGuardService : AccessibilityService() {
         fun isStockHome(packageName: String): Boolean =
             instance?.stockHomes?.containsKey(packageName) == true || knownStockHomes.containsKey(packageName)
 
-        fun openStockLauncher(pkg: String, startDirectly: () -> Boolean): Boolean {
-            allowStockLauncher()
+        fun openStockLauncher(pkg: String, context: Context? = null, startDirectly: () -> Boolean): Boolean {
+            allowStockLauncher(context)
             val s = instance ?: return startDirectly()
             if (s.resolvedHome() == pkg && s.pressHomeForStock()) return true
             return startDirectly() || s.pressHomeForStock()

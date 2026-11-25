@@ -19,6 +19,14 @@ import kotlinx.coroutines.launch
 
 class ConfigReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != "com.gathin.slimtv.CONFIG") return
+        val pending = goAsync()
+        Thread {
+            try { handle(context, intent) } finally { pending.finish() }
+        }.start()
+    }
+
+    private fun handle(context: Context, intent: Intent) {
         intent.getStringExtra("export_tiles")?.takeIf { Regex("^[A-Za-z0-9_-]+$").matches(it) }?.let { name ->
             val app = context.applicationContext
             @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
