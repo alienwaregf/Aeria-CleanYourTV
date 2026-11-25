@@ -93,8 +93,11 @@ fun Pressable(
                 detectTapGestures(
                     onPress = {
                         state.pressed = true
-                        tryAwaitRelease()
-                        if (!state.byKey) state.pressed = false
+                        try {
+                            tryAwaitRelease()
+                        } finally {
+                            if (!state.byKey) state.pressed = false
+                        }
                     },
                     onTap = {
                         runCatching { requester.requestFocus() }

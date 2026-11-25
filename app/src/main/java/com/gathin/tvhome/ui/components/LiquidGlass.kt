@@ -52,7 +52,7 @@ fun Modifier.liquidGlass(corner: Dp, bottomCorners: Boolean = true, seeThroughFi
     val solid = Wallpapers.moves() && Wallpapers.filmGlassless && Wallpapers.frosted == null
     val latest = (if (Wallpapers.moves() && Wallpapers.filmGlassless) Wallpapers.filmFrost ?: Wallpapers.frosted else Wallpapers.frosted)
         .takeIf { Wallpapers.backdrop != null }
-    val held = remember(Wallpapers.selectedId, latest == null) { latest }
+    val held = remember(Wallpapers.selectedId, latest) { latest }
     val (frost, under, swap) = rememberFrostSwap(held)
     var at by remember { mutableStateOf(Offset.Zero) }
     var root by remember { mutableStateOf(IntSize.Zero) }
