@@ -93,8 +93,10 @@ import com.gathin.tvhome.system.SystemProbe
 import com.gathin.tvhome.system.HisenseSources
 import com.gathin.tvhome.system.KonkaSources
 import com.gathin.tvhome.system.WhaleyBoot
+import com.gathin.tvhome.system.WhaleyCecSwitch
 import com.gathin.tvhome.system.HomeReopen
 import com.gathin.tvhome.system.LaunchFallback
+import com.gathin.tvhome.system.MissingClipboard
 import com.gathin.tvhome.system.settingsLaunchIntent
 import com.gathin.tvhome.ratings.Ratings
 import com.gathin.tvhome.tmdb.TmdbTrending
@@ -129,6 +131,10 @@ class MainActivity : ComponentActivity() {
         override fun onLost(network: Network) = runOnUiThread { vm.refreshNetwork() }
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = runOnUiThread { vm.refreshNetwork() }
     }
+
+    // See MissingClipboard.
+    override fun getSystemService(name: String): Any? =
+        super.getSystemService(name) ?: if (name == CLIPBOARD_SERVICE) MissingClipboard.standIn else null
 
     private var locked = false
 
@@ -268,7 +274,7 @@ class MainActivity : ComponentActivity() {
                     onOpen = ::open,
                     onAppInfo = { open(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", it, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
                     onUninstall = { open(Intent(Intent.ACTION_DELETE, Uri.fromParts("package", it, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) },
-                    onStartScreensaver = { idleHandler.postDelayed({ startScreensaver() }, 150) },
+                    onStartScreensaver = { idleHandler.postDelayed({ startScreensaver(asked = true) }, 150) },
                 )
             }
         }
@@ -283,6 +289,19 @@ class MainActivity : ComponentActivity() {
             IntentFilter(Intent.ACTION_SCREEN_ON).apply { addAction(Intent.ACTION_SCREEN_OFF) },
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
+        // Whaley: a device switched on over HDMI-CEC takes the TV while Home is in front and the
+        // owner turned it on (WhaleyCecSwitch); the setting changes in Control Center take effect at once.
+        if (WhaleyBoot.isWhaley(this)) lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                try {
+                    snapshotFlow { AerialSettings.cecSwitch }.collect { on ->
+                        if (on) WhaleyCecSwitch.start(this@MainActivity) else WhaleyCecSwitch.stop()
+                    }
+                } finally {
+                    WhaleyCecSwitch.stop()
+                }
+            }
+        }
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 snapshotFlow { vm.overlay is Overlay.ControlCenter }.collectLatest { open ->
@@ -544,7 +563,7 @@ class MainActivity : ComponentActivity() {
 
 
     private val idleHandler = Handler(Looper.getMainLooper())
-    private val showScreensaver = Runnable { if (vm.resumed) startScreensaver() }
+    private val showScreensaver = Runnable { if (vm.resumed) startScreensaver(asked = false) }
 
     private val prepareScreensaver = Runnable {
         if (vm.resumed && !vm.screensaverVisible) lifecycleScope.launch { AerialStart.prepareAhead(this@MainActivity, SAVER_AHEAD_MS) }
@@ -555,10 +574,14 @@ class MainActivity : ComponentActivity() {
         vm.homeBounce = false
     }
 
-    private fun startScreensaver() {
+    private fun startScreensaver(asked: Boolean) {
         AerialSettings.relock()
+        if (Wallpapers.screensaver == ScreensaverMode.System) {
+            if (asked && !SystemScreensaver.startFirmware(this)) DiagLog.i("no system screensaver to start")
+            return
+        }
         val carry = saverCarriesWallpaper(this)
-        if (!carry && Wallpapers.screensaver != ScreensaverMode.System && !dreamFails(this) && SystemScreensaver.isAerials(this)) {
+        if (!carry && !dreamFails(this) && SystemScreensaver.isAerials(this)) {
             LiveFilm.onHome?.letDecoderGo()
             if (SystemScreensaver.startDream(this)) {
                 DiagLog.i("screensaver starts as the system's dream")
@@ -583,7 +606,7 @@ class MainActivity : ComponentActivity() {
         noteDreamFails(this)
         DiagLog.i("the system's dream did not show; Aerial's own screensaver instead")
         LiveFilm.onHome?.goOn()
-        startScreensaver()
+        startScreensaver(asked = false)
     }
     private var swallowKeyUp = -1
 
@@ -710,7 +733,7 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra(EXTRA_WOKE, false)) openBootSource("brought back on wake")
         if (intent.getBooleanExtra(EXTRA_REOPEN_BOOT, false)) openBootSource("covered by the stock launcher", again = true)
         if (intent.action == ACTION_PREVIEW_SCREENSAVER) {
-            idleHandler.post { startScreensaver() }
+            idleHandler.post { startScreensaver(asked = true) }
             return
         }
         if (intent.hasCategory(Intent.CATEGORY_HOME) || intent.action == Intent.ACTION_MAIN) {
