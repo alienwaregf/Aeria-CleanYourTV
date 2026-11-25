@@ -165,6 +165,8 @@
     <string name="st_hero">Trending</string>
     <string name="hero_movie">Movie</string>
     <string name="hero_tv">TV Series</string>
+    <string name="trailer_none">No trailer for this title</string>
+    <string name="trailer_no_youtube">YouTube is not installed</string>
 
     <string name="st_plate">Top Row</string>
     <string name="st_plate_hint">A plate of frosted glass under the top row, as on Apple TV, or the apps straight on the wallpaper.</string>
@@ -317,6 +319,8 @@
     <string name="slimming_state_disabled">✓ Deactivated</string>
     <string name="slimming_state_not_installed">Not installed</string>
     <string name="slimming_note">Turn on USB debugging or wireless debugging first — cleanup pops an authorization prompt, tap Allow, and you can restore it any time.</string>
+    <string name="slimming_adb_unauthorized">❌ USB debugging / wireless debugging / ADB debugging is not authorized. Please turn on the feature switch in Developer options first.</string>
+    <string name="slimming_adb_authorized">✅ Authorized. Cleanup pops an authorization prompt — tap Allow, and you can restore it any time.</string>
     <string name="slimming_empty">This list is empty.</string>
     <string name="slimming_daily_state">♻️ Auto-update list: %1$s</string>
     <string name="slimming_disable_recommended">⚙️ Deactivate all recommended</string>
@@ -337,6 +341,5 @@
     <string name="slimming_disable_no_adb">Could not reach the TV\'s ADB — turn on USB debugging in Developer options first.</string>
     <string name="slimming_disable_not_accepted">Debugging permission wasn\'t accepted on the TV.</string>
     <string name="slimming_disable_failed">Deactivate failed: %1$s</string>
-    <string name="slimming_adb_disconnected">⚠️ ADB disconnected, please retry</string>
     <string name="slimming_toast_not_installed">Not installed %1$s, skipped</string>
 </resources>
