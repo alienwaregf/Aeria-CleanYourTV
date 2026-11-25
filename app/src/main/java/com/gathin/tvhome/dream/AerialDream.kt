@@ -14,7 +14,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.gathin.tvhome.MainActivity
 import com.gathin.tvhome.system.DiagLog
-import com.gathin.tvhome.system.MissingClipboard
 import com.gathin.tvhome.ui.theme.canvasDensity
 import com.gathin.tvhome.weather.Weather
 import androidx.lifecycle.Lifecycle
@@ -38,9 +37,6 @@ class AerialDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
 
     override val lifecycle: Lifecycle get() = registry
     override val savedStateRegistry: SavedStateRegistry get() = savedState.savedStateRegistry
-
-    override fun getSystemService(name: String): Any? =
-        super.getSystemService(name) ?: if (name == CLIPBOARD_SERVICE) MissingClipboard.standIn else null
 
     override fun onCreate() {
         super.onCreate()
@@ -116,6 +112,7 @@ class AerialDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
 
     override fun onDetachedFromWindow() {
         if (running === this) running = null
+        runCatching { unregisterReceiver(screenOff) }
         registry.currentState = Lifecycle.State.DESTROYED
         super.onDetachedFromWindow()
     }
