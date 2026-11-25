@@ -10,6 +10,8 @@ import com.gathin.tvhome.wallpaper.ScreensaverMode
 import com.gathin.tvhome.wallpaper.Wallpapers
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 object Ratings {
@@ -21,6 +23,7 @@ object Ratings {
 
     private val inFlight = HashSet<String>()
     private val failedAt = HashMap<String, Long>()
+    private val refreshMutex = Mutex()
 
     private var diagOmdbDue = 0
     private var diagOmdbFound = 0
@@ -99,7 +102,15 @@ object Ratings {
         }
     }
 
-    suspend fun refreshAll(items: List<TmdbItem>, allowOmdb: Boolean = false) {
+    suspend fun refreshAll(items: List<TmdbItem>, allowOmdb: Boolean = false) = refreshMutex.withLock {
+        // Drop retry entries too old to matter: recentlyFailed already ignores them.
+        val now = System.currentTimeMillis()
+        synchronized(failedAt) {
+            val entryIt = failedAt.entries.iterator()
+            while (entryIt.hasNext()) {
+                if (now - entryIt.next().value >= RETRY_MS) entryIt.remove()
+            }
+        }
         diagOmdbDue = 0
         diagOmdbFound = 0
         diagOmdbFoundBlank = 0
@@ -196,10 +207,10 @@ object Ratings {
                     imdbId = imdbId,
                     traktRating = result.rating,
                     traktVotes = result.votes,
-                    rtPercent = result.rtPercent,
-                    rtState = result.rtState,
-                    rtAudiencePercent = result.rtAudiencePercent,
-                    rtAudienceState = result.rtAudienceState,
+                    rtPercent = if (result.rtPercent >= 0) result.rtPercent else item.rtPercent,
+                    rtState = result.rtState.ifBlank { item.rtState },
+                    rtAudiencePercent = if (result.rtAudiencePercent >= 0) result.rtAudiencePercent else item.rtAudiencePercent,
+                    rtAudienceState = result.rtAudienceState.ifBlank { item.rtAudienceState },
                     traktFetchedAt = System.currentTimeMillis(),
                 )
             }
