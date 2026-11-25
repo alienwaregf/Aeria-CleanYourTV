@@ -220,7 +220,7 @@ class PhoneServer private constructor(private val context: Context, private val 
         .replace("{{DEVICE}}", Build.MODEL.replace("_", " "))
 
     private fun youtubeIcon(): Response {
-        val bytes = context.assets.open("web/youtube.png").readBytes()
+        val bytes = context.assets.open("web/youtube.png").use { it.readBytes() }
         return newFixedLengthResponse(Response.Status.OK, "image/png", ByteArrayInputStream(bytes), bytes.size.toLong())
     }
 
@@ -519,8 +519,8 @@ class PhoneServer private constructor(private val context: Context, private val 
 
         @Synchronized
         fun start(context: Context): String? {
+            val ip = lanAddress(context) ?: return null
             val server = listen(context) ?: return null
-            val ip = lanAddress(context) ?: "0.0.0.0"
             return "http://$ip:$PORT/${server.token}/"
         }
 

@@ -95,6 +95,7 @@ object ScreensaverVideos {
     @Synchronized
     private fun add(context: Context, upload: File, name: String): ReceiveResult {
         val root = directory(context)
+        // Only abandoned imports, never a film that has been published or one being copied now.
         root.listFiles()?.filter { it.name.startsWith("import-") && it.lastModified() < System.currentTimeMillis() - 3_600_000 }
             ?.forEach { it.deleteRecursively() }
         val size = upload.length()

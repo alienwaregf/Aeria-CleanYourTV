@@ -65,7 +65,6 @@ object Wallpapers {
 
     private lateinit var app: Context
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private val frameWrites = Dispatchers.IO.limitedParallelism(1)
     private val prefs by lazy { app.getSharedPreferences("wallpaper", Context.MODE_PRIVATE) }
     private val liveFrame by lazy { File(app.filesDir, "live-frame.jpg") }
     private val videoFrame by lazy { File(app.filesDir, "video-frame.jpg") }
@@ -207,14 +206,11 @@ object Wallpapers {
     private fun keepPoster(film: ScreensaverVideo, frame: Bitmap) {
         val poster = posterOf(film)
         if (poster.exists()) return
+
         val part = File(poster.path + ".part")
+
         runCatching {
-            val covered = Images.cover(frame, POSTER_W, POSTER_H)
-            try {
-                part.outputStream().use { covered.compress(Bitmap.CompressFormat.JPEG, 85, it) }
-            } finally {
-                if (covered !== frame) covered.recycle()
-            }
+            part.outputStream().use { Images.cover(frame, POSTER_W, POSTER_H).compress(Bitmap.CompressFormat.JPEG, 85, it) }
             check(part.renameTo(poster))
         }.onFailure { part.delete(); Log.w(TAG, "could not keep a video's poster", it) }
     }
@@ -238,6 +234,7 @@ object Wallpapers {
         } finally { runCatching { mmr.release() } }
     }
 
+    /** Drops the thumbnails (about 330 KB each); the picker makes them again when it opens. */
     fun trimMemory() = synchronized(thumbs) { thumbs.clear() }
 
     fun thumbnail(id: String): Bitmap? {
@@ -311,36 +308,32 @@ object Wallpapers {
         return "${wp.id}|$stamp|${screenW}x$screenH|${BuildConfig.VERSION_CODE}$film"
     }
 
-    private suspend fun loadBaked() {
+    /**
+     * Puts the last baked backdrop up at once, on the main thread, so Home's first frame has it. Even
+     * one that is out of date (a new day's photo): it is the picture Home last showed, and the fresh
+     * one crossfades in once baked. Not in "Follow App", which has no backdrop.
+     *
+     */
+    private fun loadBaked() {
         if (selectedId == AUTO) return
-        val id = selectedId
-        val loaded = withContext(Dispatchers.IO) {
-            runCatching {
-                val key = File(bakedDir, "key").takeIf { it.exists() }?.readText() ?: return@runCatching null
-                val home = BitmapFactory.decodeFile(File(bakedDir, "home.jpg").path) ?: return@runCatching null
-                val frost = BitmapFactory.decodeFile(File(bakedDir, "frost.png").path) ?: run { home.recycle(); return@runCatching null }
-                if (home.width != screenW || home.height != screenH || frost.width != 320 || frost.height != 180) {
-                    home.recycle()
-                    frost.recycle()
-                    return@runCatching null
-                }
-                Triple(key, home, frost)
-            }.onFailure { Log.w(TAG, "could not read the baked backdrop", it) }.getOrNull()
-        } ?: return
-        if (selectedId != id) {
-            loaded.second.recycle()
-            loaded.third.recycle()
-            return
-        }
-        backdrop = loaded.second.asImageBitmap()
-        frosted = loaded.third.asImageBitmap()
-        bakedKey = loaded.first
+
+        runCatching {
+            val key = File(bakedDir, "key").takeIf { it.exists() }?.readText() ?: return
+            val home = BitmapFactory.decodeFile(File(bakedDir, "home.jpg").path) ?: return
+            val frost = BitmapFactory.decodeFile(File(bakedDir, "frost.png").path) ?: return
+            if (home.width != screenW || home.height != screenH) return
+
+            backdrop = home.asImageBitmap()
+            frosted = frost.asImageBitmap()
+            bakedKey = key
+        }.onFailure { Log.w(TAG, "could not read the baked backdrop", it) }
     }
 
     private suspend fun saveBaked(key: String, home: Bitmap, frost: Bitmap) {
         bakedKey = key
         withContext(Dispatchers.IO) {
             runCatching {
+                // The key last, so a write cut short is never taken for a good one.
                 File(bakedDir, "key").delete()
                 File(bakedDir, "home.jpg").outputStream().use { home.compress(Bitmap.CompressFormat.JPEG, 95, it) }
                 File(bakedDir, "frost.png").outputStream().use { frost.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -365,48 +358,69 @@ object Wallpapers {
         }.onFailure { Log.w(TAG, "could not keep the backdrop for a locked boot", it) }
     }
 
+    /**
+     * [frame] shows as the picture at once, before [useLiveFrame] has kept and frosted it: the
+     * aerial film let go into an app shows its last frame rather than black (LiveWallpaper).
+     */
+    fun showLiveFrame(frame: Bitmap) {
+        if (!moves()) return
+        backdropJob?.cancel()
+        backdrop = frame.asImageBitmap()
+    }
+
     class PreparedFrame(val frame: Bitmap, val frost: Bitmap)
 
     suspend fun prepareLiveFrame(frame: Bitmap): PreparedFrame =
         withContext(Dispatchers.Default) { PreparedFrame(frame, Images.frost(frame)) }
 
+    /**
+     * [prepared] becomes the moving wallpaper's picture at once, as film [film] at [atMs]; its file
+     * and the baked Home are written after, apart, so Home coming back on it does not wait for them
+     * (the screensaver's pictures: LiveWallpaper.SaverFrames for the aerials, VideoSaverFrames for
+     * the owner's videos). Not a film the wallpaper does not play (another video than the one chosen).
+     *
+     */
     fun applyLiveFrame(prepared: PreparedFrame, film: String, atMs: Long): Boolean {
-        if (!ready()) {
-            prepared.frame.recycle()
-            prepared.frost.recycle()
-            return false
-        }
         val id = selectedId
-        if (!moves()) {
-            prepared.frame.recycle()
-            prepared.frost.recycle()
-            return false
-        }
+
+        if (!moves()) return false
+
         val video = isVideo(id)
-        if (id.startsWith(VIDEO_PREFIX) && film != id.removePrefix(VIDEO_PREFIX)) {
-            prepared.frame.recycle()
-            prepared.frost.recycle()
-            return false
-        }
+
+        if (id.startsWith(VIDEO_PREFIX) && film != id.removePrefix(VIDEO_PREFIX)) return false
+
         backdropJob?.cancel()
+
         if (video) videoLeftHere = null else leftHere = null
+
         val key = if (video) "video" else "live"
+
         prefs.edit { putString("${key}_film", film).putLong("${key}_at", atMs).remove("${key}_left_film").remove("${key}_left_at") }
+
+        // The frame is both the film's own card and the card that plays them all in turn (useLiveFrame).
         synchronized(thumbs) { thumbs.remove(id); if (video) { thumbs.remove(VIDEOS); thumbs.remove(VIDEO_PREFIX + film) } }
+
         backdrop = prepared.frame.asImageBitmap()
+
         frosted = prepared.frost.asImageBitmap()
+
         pictureVersion++
+
         val target = if (video) videoFrame else liveFrame
-        scope.launch(frameWrites) {
+
+        scope.launch(Dispatchers.IO) {
             val part = File(target.path + ".part")
-            val kept = runCatching { part.outputStream().use { prepared.frame.compress(Bitmap.CompressFormat.JPEG, 90, it) } }
+
+            runCatching { part.outputStream().use { prepared.frame.compress(Bitmap.CompressFormat.JPEG, 90, it) } }
                 .onFailure { Log.w(TAG, "could not keep the film's frame", it) }
-                .getOrDefault(false)
-            if (!kept) part.delete()
-            else if (part.exists() && !part.renameTo(target)) part.delete()
+
+            if (part.exists() && !part.renameTo(target)) part.delete()
+
             if (video) videoFilms(VIDEOS).firstOrNull { it.id == film }?.let { keepPoster(it, prepared.frame) }
+
             if (selectedId == id) resolve(id)?.let { saveBaked(bakedKey(it), prepared.frame, prepared.frost) }
         }
+
         return true
     }
 
@@ -526,16 +540,25 @@ object Wallpapers {
         filmFrostOf = frame
     }
 
+    /**
+     * Where no frame can be taken while the film moves (LiveWallpaper.sampleGlass): the glass of the
+     * frame it started from ([frosted]), blurred down to its broad colours, so the shapes that move
+     * on behind the plate do not show twice through it.
+     *
+     */
     suspend fun useStillFilmFrost() {
         val start = frosted ?: return
+
         if (!moves()) return
+
         filmFrostOf = null
+
         filmFrost = withContext(Dispatchers.Default) {
             val src = start.asAndroidBitmap()
-            val quarter = Bitmap.createScaledBitmap(src, maxOf(1, src.width / 4), maxOf(1, src.height / 4), true)
-            val tiny = Bitmap.createScaledBitmap(quarter, 16, 9, true)
-            quarter.recycle()
-            Images.frost(tiny).also { tiny.recycle() }
+
+            val quarter = Bitmap.createScaledBitmap(src, src.width / 4, src.height / 4, true)
+
+            Images.frost(Bitmap.createScaledBitmap(quarter, 16, 9, true))
         }.asImageBitmap()
     }
 

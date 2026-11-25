@@ -62,17 +62,22 @@ object AerialStream {
     private var cache: SimpleCache? = null
     private val evictor = AerialEvictor { keepBytes }
 
+    /** One instance per process: SimpleCache locks its folder, and Home and the system screensaver share it. */
     private fun cache(context: Context): SimpleCache {
-        val created = cache ?: synchronized(this) {
+        return cache ?: synchronized(this) {
             cache ?: run {
                 val dir = File(context.applicationContext.cacheDir, "aerials")
+
+                // The limit before the cache opens: it reads what is on disk on a thread of its own,
+                // and evicted down to 64 MB while the limit was still that (TCL MT5879, 320 MB to 172
+                // after a restart).
                 val kept = dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
+
                 keepBytes = ((context.applicationContext.cacheDir.usableSpace + kept) / 4).coerceIn(CACHE_BYTES, KEEP_MAX_BYTES)
+
                 SimpleCache(dir, evictor, StandaloneDatabaseProvider(context.applicationContext)).also { cache = it }
             }
         }
-        keepBytes = keepLimit(context)
-        return created
     }
 
     fun keepLimit(context: Context): Long =

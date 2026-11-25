@@ -19,12 +19,12 @@ object AerialSet {
         if (day != null) putString("day", day)
     }
 
+    /** The set, newest first; on the first use, the film the wallpaper last showed, else any one. */
     @Synchronized
     fun films(context: Context): List<Aerial> {
         val all = Aerials.all(context)
         val known = ids(context).mapNotNull { id -> all.firstOrNull { it.id == id } }
         if (known.isNotEmpty()) return known
-        if (all.isEmpty()) return emptyList()
         val first = runCatching { Wallpapers.liveSpot() }.getOrNull()?.first?.let { id -> all.firstOrNull { it.id == id } } ?: all.random()
         save(context, listOf(first.id), today())
         return listOf(first)
@@ -44,12 +44,13 @@ object AerialSet {
         return set.drop(at) + set.take(at)
     }
 
+    /** The film a new day brings in, chosen ahead so the screensaver's start can be fetched first. */
     @Synchronized
     fun nextNew(context: Context): Aerial {
         val all = Aerials.all(context)
         prefs(context).getString("next", null)?.let { id -> all.firstOrNull { it.id == id } }?.let { return it }
         val kept = ids(context).toSet()
-        val film = all.filter { it.id !in kept }.randomOrNull() ?: all.randomOrNull() ?: error("no aerial films")
+        val film = all.filter { it.id !in kept }.randomOrNull() ?: all.random()
         prefs(context).edit { putString("next", film.id) }
         return film
     }
