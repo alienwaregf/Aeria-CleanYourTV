@@ -42,7 +42,15 @@ data class YtVideo(
 )
 
 object YoutubeSubs {
-    val YOUTUBE_PKGS = setOf("com.google.android.youtube.tv", "com.google.android.youtube.tvmusic")
+    val YOUTUBE_LAUNCH_PKGS = listOf("com.google.android.youtube.tv", "com.amazon.firetv.youtube", "org.smarttube.stable", "org.smarttube.beta")
+    val YOUTUBE_PKGS = YOUTUBE_LAUNCH_PKGS.toSet() + "com.google.android.youtube.tvmusic"
+    fun firstInstalledLaunchPkg(context: Context): String? {
+        val pm = context.packageManager
+        for (pkg in YOUTUBE_LAUNCH_PKGS) {
+            if (runCatching { pm.getPackageInfo(pkg, 0) }.isSuccess) return pkg
+        }
+        return null
+    }
     private const val TAG = "YoutubeSubs"
     private const val LAUNCHER_PREFS = "launcher_settings"
     private const val TTL_MS = 30 * 60_000L
@@ -162,9 +170,19 @@ object YoutubeSubs {
         return true
     }
 
+    private fun extractChannelId(value: String): String? {
+        val start = value.indexOf("/channel/")
+        if (start < 0) return null
+        val id = value.substring(start + 9).takeWhile { it in '0'..'9' || it in 'A'..'Z' || it in 'a'..'z' || it == '_' || it == '-' }
+        if (id.length != 24 || !id.startsWith("UC")) return null
+        return id
+    }
+
     fun normalizeHandle(raw: String): String? {
         val s = raw.trim().substringBefore("?").substringBefore("#")
         if (s.isEmpty()) return null
+        val channelId = extractChannelId(s)
+        if (channelId != null) return "https://www.youtube.com/channel/$channelId"
         val at = s.indexOf("@")
         if (at < 0) {
             val handle = runCatching { URLDecoder.decode(s, "UTF-8") }.getOrNull() ?: return null
@@ -213,6 +231,7 @@ object YoutubeSubs {
         val now = System.currentTimeMillis()
         val cached = synchronized(lock) { videosByPkg[pkg] ?: emptyList() }
         if (now - fetchedAt(pkg) < TTL_MS && cached.isNotEmpty()) return
+        if (blocked()) return
         if (failed && now - lastAttempt < RETRY_MS) return
         lastAttempt = now
         val perChannel = runCatching {
@@ -233,7 +252,11 @@ object YoutubeSubs {
             return
         }
         failed = false
-        saveVideos(pkg, applyChineseTitles(checked))
+        val videos = applyChineseTitles(checked)
+        diffMutex.withLock {
+            if (subs(pkg) != handles) return
+            saveVideos(pkg, videos)
+        }
         changed()
     }
 
@@ -249,6 +272,7 @@ object YoutubeSubs {
         val now = System.currentTimeMillis()
         val cached = synchronized(lock) { kwVideosByPkg[pkg] ?: emptyList() }
         if (now - fetchedAt(pkg, "yt_kw_cards") < TTL_MS && cached.isNotEmpty()) return
+        if (blocked()) return
         if (failed && now - lastAttempt < RETRY_MS) return
         lastAttempt = now
         val perKeyword = runCatching {
@@ -269,7 +293,8 @@ object YoutubeSubs {
             return
         }
         failed = false
-        saveVideos(pkg, checked, "yt_kw_cards")
+        val final = ensureMinPerKeyword(checked, perKeyword)
+        saveVideos(pkg, final, "yt_kw_cards")
         changed()
     }
 
@@ -304,7 +329,7 @@ object YoutubeSubs {
                     return
                 }
             }
-            if (added.isNotEmpty() && added.size < newHandles.size) {
+            if (added.isNotEmpty() && fetched.size < added.size) {
                 prefs.edit().putLong("yt_logos_at_", logosAtBefore).apply()
             }
             val perChannel = groupKeptByHandle(kept) + fetched
@@ -451,16 +476,33 @@ object YoutubeSubs {
     }
 
     private fun parseRelativeTime(raw: String): Long {
-        val m = Regex("(\\d+)\\s*(mo|y|w|d|h|m|s)\\s*ago").find(raw) ?: return 0L
-        val n = m.groupValues[1].toLongOrNull() ?: return 0L
-        val unitMs = when (m.groupValues[2]) {
-            "s" -> 1_000L
-            "m" -> 60_000L
-            "h" -> 3_600_000L
-            "d" -> 86_400_000L
-            "w" -> 7 * 86_400_000L
-            "mo" -> 30 * 86_400_000L
-            "y" -> 365 * 86_400_000L
+        val s = raw.trim()
+        if (s.isEmpty()) return 0L
+        val zh = Regex("(\\d+)\\s*(年|个月|月|周|天|小时|分钟|秒)\\s*前").find(s)
+        if (zh != null) {
+            val n = zh.groupValues[1].toLongOrNull() ?: return 0L
+            val unitMs = when (zh.groupValues[2]) {
+                "秒" -> 1_000L
+                "分钟" -> 60_000L
+                "小时" -> 3_600_000L
+                "天" -> 86_400_000L
+                "周" -> 7 * 86_400_000L
+                "月", "个月" -> 30 * 86_400_000L
+                "年" -> 365 * 86_400_000L
+                else -> return 0L
+            }
+            return System.currentTimeMillis() - n * unitMs
+        }
+        val en = Regex("(\\d+)\\s*(seconds?|minutes?|hours?|days?|weeks?|months?|years?|sec|secs|min|mins|mo|mos|y|w|d|h|m|s)\\s*ago", RegexOption.IGNORE_CASE).find(s) ?: return 0L
+        val n = en.groupValues[1].toLongOrNull() ?: return 0L
+        val unitMs = when (en.groupValues[2].lowercase()) {
+            "s", "sec", "secs", "second", "seconds" -> 1_000L
+            "m", "min", "mins", "minute", "minutes" -> 60_000L
+            "h", "hour", "hours" -> 3_600_000L
+            "d", "day", "days" -> 86_400_000L
+            "w", "week", "weeks" -> 7 * 86_400_000L
+            "mo", "mos", "month", "months" -> 30 * 86_400_000L
+            "y", "year", "years" -> 365 * 86_400_000L
             else -> return 0L
         }
         return System.currentTimeMillis() - n * unitMs
@@ -498,20 +540,54 @@ object YoutubeSubs {
         val rest = perChannel.flatten().filter { it.id !in pooledIds }.distinctBy { it.id }.sortedByDescending { it.publishedAt }
         val kept = ArrayList<YtVideo>()
         val tried = HashSet<String>()
+        var shortSkipped = 0
+        var cachedSkipped = 0
         for (video in pooled + rest) {
             if (kept.size >= MAX_ITEMS) break
             if (!tried.add(video.id)) continue
             currentCoroutineContext().ensureActive()
             if (video.id in skipCheck) {
+                cachedSkipped++
                 kept += video
                 continue
             }
             delay(1500)
-            if (isShort(video.id)) continue
+            if (isShort(video.id)) {
+                shortSkipped++
+                continue
+            }
             val cover = if (maxresOk(video.id)) "https://i.ytimg.com/vi/${video.id}/maxresdefault.jpg" else "https://i.ytimg.com/vi/${video.id}/hqdefault.jpg"
             kept += video.copy(cover = cover)
         }
+        Log.i(TAG, "youtube checkMaxres: kept ${kept.size}, shorts skipped $shortSkipped, cached skipped $cachedSkipped")
         return kept.sortedByDescending { it.publishedAt }
+    }
+
+    private suspend fun ensureMinPerKeyword(checked: List<YtVideo>, perKeyword: List<List<YtVideo>>): List<YtVideo> {
+        val minPerKeyword = 3
+        val result = checked.toMutableList()
+        for (list in perKeyword) {
+            if (list.isEmpty()) continue
+            val kwHandle = list[0].handle
+            var have = result.count { it.handle == kwHandle }
+            if (have >= minPerKeyword) continue
+            val candidates = list.sortedByDescending { it.publishedAt }.filter { c -> result.none { it.id == c.id } }
+            for (candidate in candidates) {
+                if (have >= minPerKeyword) break
+                currentCoroutineContext().ensureActive()
+                delay(1500)
+                if (isShort(candidate.id)) continue
+                val cover = if (maxresOk(candidate.id)) "https://i.ytimg.com/vi/${candidate.id}/maxresdefault.jpg" else "https://i.ytimg.com/vi/${candidate.id}/hqdefault.jpg"
+                if (result.size >= MAX_ITEMS) {
+                    val counts = result.groupingBy { it.handle }.eachCount()
+                    val victim = result.filter { (counts[it.handle] ?: 0) > minPerKeyword }.minByOrNull { it.publishedAt } ?: break
+                    result.remove(victim)
+                }
+                result += candidate.copy(cover = cover)
+                have++
+            }
+        }
+        return result.sortedByDescending { it.publishedAt }
     }
 
     private fun needsChineseTitle(title: String): Boolean {
@@ -535,8 +611,9 @@ object YoutubeSubs {
 
     private fun fetchChineseTitles(handle: String): Map<String, String> {
         return try {
-            val name = handle.substringAfterLast("@")
-            val conn = openGet("https://www.youtube.com/@$name/videos?hl=zh-CN")
+            val channelId = extractChannelId(handle)
+            val url = if (channelId != null) "https://www.youtube.com/channel/$channelId/videos?hl=zh-CN" else "https://www.youtube.com/@${handle.substringAfterLast("@")}/videos?hl=zh-CN"
+            val conn = openGet(url)
             try {
                 val code = conn.responseCode
                 if (code == 429) {
@@ -612,6 +689,18 @@ object YoutubeSubs {
     }
 
     private fun resolveChannelIdByPage(handle: String, refreshLogos: Boolean): Pair<String, String?>? {
+        val directId = extractChannelId(handle)
+        if (directId != null) {
+            val cachedLogo = readHandleLogos()[handle]?.ifBlank { null }
+            if (!refreshLogos && cachedLogo != null) return directId to cachedLogo
+            val body = fetchHandlePage(handle) ?: return directId to cachedLogo
+            saveTitleFromBody(handle, body)
+            val logo = findLogo(body)
+            if (!logo.isNullOrBlank()) saveHandleLogo(handle, logo)
+            if (directId != readHandleIds()[handle]) saveHandleId(handle, directId)
+            markCheckedId(handle)
+            return directId to (logo ?: cachedLogo)
+        }
         val cachedId = readHandleIds()[handle]
         if (cachedId != null && readCheckedIds().contains(handle)) {
             val cachedLogo = readHandleLogos()[handle]?.ifBlank { null }
@@ -636,8 +725,9 @@ object YoutubeSubs {
     }
 
     private fun fetchHandlePage(handle: String): String? {
-        val name = handle.substringAfterLast("@")
-        val conn = openGet("https://www.youtube.com/@$name")
+        val channelId = extractChannelId(handle)
+        val url = if (channelId != null) "https://www.youtube.com/channel/$channelId" else "https://www.youtube.com/@${handle.substringAfterLast("@")}"
+        val conn = openGet(url)
         try {
             val code = conn.responseCode
             if (code == 429) {
@@ -773,18 +863,25 @@ object YoutubeSubs {
     }
 
     private fun isShort(id: String): Boolean {
-        return runCatching {
+        return try {
             val conn = URL("https://www.youtube.com/shorts/$id").openConnection() as HttpURLConnection
             conn.requestMethod = "HEAD"
             conn.connectTimeout = 5_000
             conn.readTimeout = 5_000
             conn.instanceFollowRedirects = false
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36")
             try {
-                conn.responseCode == 200
+                val code = conn.responseCode
+                val short = code == 200
+                if (short) Log.d(TAG, "youtube isShort $id code=$code SHORT") else Log.d(TAG, "youtube isShort $id code=$code not short")
+                short
             } finally {
                 conn.disconnect()
             }
-        }.getOrDefault(false)
+        } catch (t: Throwable) {
+            Log.w(TAG, "youtube isShort $id failed", t)
+            false
+        }
     }
 
     private fun maxresOk(id: String): Boolean {

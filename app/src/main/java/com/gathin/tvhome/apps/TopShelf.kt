@@ -13,11 +13,13 @@ import android.media.tv.TvContract
 import android.os.Build
 import android.view.View
 import com.gathin.tvhome.wallpaper.Images
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
-enum class ShelfSource { WATCH_NEXT, PREVIEW }
+enum class ShelfSource { WATCH_NEXT, PREVIEW, YOUTUBE_SUBS, BILIBILI_POPULAR, HUYA_POPULAR }
 
 data class ShelfCard(
     val pkg: String,
@@ -26,11 +28,33 @@ data class ShelfCard(
     val backdropUri: String?,
     val intentUri: String?,
     val source: ShelfSource,
+    val logoUri: String? = null,
 )
 
 object TopShelfContent {
     private val lock = Any()
+    private const val MAX_IMAGE_BYTES = 8 * 1024 * 1024
     private var showsByPkg: Map<String, List<ShelfCard>> = emptyMap()
+
+    private var legacyCacheCleaned = false
+
+    private fun cacheFile(dir: File, key: String): File {
+        val name = java.security.MessageDigest.getInstance("SHA-1")
+            .digest(key.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) } + ".jpg"
+        return File(dir, name)
+    }
+
+    private fun cleanLegacyCacheFiles(context: Context) {
+        synchronized(lock) {
+            if (legacyCacheCleaned) return
+            legacyCacheCleaned = true
+            for (dirName in listOf("appart", "posters")) {
+                File(context.filesDir, dirName).listFiles()?.forEach { f ->
+                    if (f.name.matches(Regex("-?\\d+\\.jpg"))) f.delete()
+                }
+            }
+        }
+    }
 
     private var appCache: Map<String, ShelfApp?> = emptyMap()
 
@@ -159,11 +183,21 @@ object TopShelfContent {
     }
 
     fun cardsFor(pkg: String): List<ShelfCard> {
-        val list = synchronized(lock) { showsByPkg[pkg] } ?: return emptyList()
-        return list
+        val subs = BilibiliSubs.cards(pkg) + YoutubeSubs.cards(pkg) + HuyaSubs.cards(pkg)
+        val list = synchronized(lock) { showsByPkg[pkg] } ?: return subs
+        return subs + list
     }
 
-    fun allShows(): Map<String, List<ShelfCard>> = synchronized(lock) { showsByPkg }
+    fun allShows(): Map<String, List<ShelfCard>> {
+        val subs = (YoutubeSubs.YOUTUBE_PKGS.associateWith { YoutubeSubs.cards(it) } +
+            BilibiliSubs.BILI_PKGS.associateWith { BilibiliSubs.cards(it) } +
+            HuyaSubs.HUYA_PKGS.associateWith { HuyaSubs.cards(it) }).filterValues { it.isNotEmpty() }
+        return synchronized(lock) {
+            val out = HashMap<String, List<ShelfCard>>(showsByPkg)
+            for ((pkg, cards) in subs) out[pkg] = cards + (out[pkg] ?: emptyList())
+            out
+        }
+    }
 
     fun shelfEnabled(context: Context): Boolean {
         val prefs = context.getSharedPreferences("topshelf", Context.MODE_PRIVATE)
@@ -176,8 +210,8 @@ object TopShelfContent {
             .getBoolean("shelf_app_art", false)
 
     private const val ART_KEEP_MS = 60_000L
-    private val artCache = object : android.util.LruCache<String, Bitmap>(3) {
-        override fun sizeOf(key: String, value: Bitmap): Int = 1
+    private val artCache = object : android.util.LruCache<String, Bitmap>(64 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
 
     fun isArtCached(bitmap: Bitmap): Boolean =
@@ -232,7 +266,8 @@ object TopShelfContent {
             if (!it.isRecycled) return it
             artCache.remove(key)
         }
-        val file = File(File(context.filesDir, "appart"), key.hashCode().toString() + ".jpg")
+        val file = cacheFile(File(context.filesDir, "appart"), key)
+        cleanLegacyCacheFiles(context)
         if (file.exists()) {
             runCatching {
                 BitmapFactory.decodeFile(file.absolutePath)?.let { bmp ->
@@ -323,16 +358,49 @@ object TopShelfContent {
             ?: runCatching { pm.getLaunchIntentForPackage(pkg) }.getOrNull()
     }
 
-    private val posterCache = object : android.util.LruCache<String, Bitmap>(16 * 1024 * 1024) {
-        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
-    }
-
     fun loadPoster(context: Context, uri: String, w: Int, h: Int): Bitmap? {
         val key = "${w}x${h}:$uri"
-        posterCache.get(key)?.let { return it }
+        val file = cacheFile(File(context.filesDir, "posters"), key)
+        cleanLegacyCacheFiles(context)
+        if (file.exists()) {
+            runCatching {
+                BitmapFactory.decodeFile(
+                    file.absolutePath,
+                    BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 },
+                )
+            }.getOrNull()?.let { return it }
+            file.delete()
+        }
         val out = decodePoster(context, uri, w, h) ?: return null
-        posterCache.put(key, out)
+        runCatching {
+            file.parentFile?.mkdirs()
+            val tmp = File(file.parentFile, file.name + "." + System.nanoTime() + ".tmp")
+            try {
+                java.io.FileOutputStream(tmp).use { fos ->
+                    out.compress(Bitmap.CompressFormat.JPEG, 92, fos)
+                }
+                synchronized(lock) {
+                    if (!tmp.renameTo(file)) tmp.delete()
+                }
+            } catch (_: Exception) {
+                tmp.delete()
+            }
+        }
+        trimPosterCache(file.parentFile)
         return out
+    }
+
+    private fun trimPosterCache(dir: File?) {
+        if (dir == null) return
+        val maxBytes = 50L * 1024 * 1024
+        val files = dir.listFiles() ?: return
+        var total = files.sumOf { it.length() }
+        if (total <= maxBytes) return
+        for (file in files.sortedBy { it.lastModified() }) {
+            if (total <= maxBytes) break
+            total -= file.length()
+            file.delete()
+        }
     }
 
     private fun decodePoster(context: Context, uri: String, w: Int, h: Int): Bitmap? {
@@ -385,7 +453,7 @@ object TopShelfContent {
                 }
                 uri.startsWith("https://") -> fetchHttp(uri)
                 else -> context.contentResolver.openInputStream(android.net.Uri.parse(uri))?.use {
-                    it.readBytes()
+                    readCapped(it, MAX_IMAGE_BYTES)
                 }
             }
         }.getOrNull()
@@ -400,11 +468,25 @@ object TopShelfContent {
                 conn.instanceFollowRedirects = true
                 conn.connect()
                 if (conn.responseCode !in 200..299) return null
-                conn.inputStream.use { it.readBytes() }
+                conn.inputStream.use { readCapped(it, MAX_IMAGE_BYTES) }
             } finally {
                 conn.disconnect()
             }
         }.getOrNull()
+    }
+
+    private fun readCapped(stream: InputStream, max: Int): ByteArray? {
+        val out = ByteArrayOutputStream()
+        val buf = ByteArray(8192)
+        var total = 0
+        while (total <= max) {
+            val n = stream.read(buf, 0, minOf(buf.size, max + 1 - total))
+            if (n < 0) break
+            out.write(buf, 0, n)
+            total += n
+        }
+        if (total > max) return null
+        return out.toByteArray()
     }
 
     data class AppArtInputs(

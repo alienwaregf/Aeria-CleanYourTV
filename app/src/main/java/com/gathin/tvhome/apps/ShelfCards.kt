@@ -1,9 +1,11 @@
 package com.gathin.tvhome.apps
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.Typeface
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
 import android.util.TypedValue
@@ -13,6 +15,7 @@ import android.view.View
 import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import com.gathin.tvhome.R
@@ -34,7 +37,7 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
         const val LAYOUT_PREF = "shelf_card_layout"
 
 
-        private val posterExecutor = Executors.newSingleThreadExecutor()
+        private val posterExecutor = Executors.newFixedThreadPool(maxOf(2, minOf(4, Runtime.getRuntime().availableProcessors())))
 
         private const val POSTER_RETRY_MS = 10 * 60 * 1000L
 
@@ -100,6 +103,16 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
 
     fun layoutChanged(): Boolean = layout != ShelfCards.layout(context)
 
+    fun contentChanged(list: List<ShelfCard>): Boolean {
+        if (shows.size != list.size) return true
+        for (i in shows.indices) {
+            val a = shows[i]
+            val b = list[i]
+            if (a.intentUri != b.intentUri || a.title != b.title || a.imageUri != b.imageUri || a.backdropUri != b.backdropUri || a.logoUri != b.logoUri) return true
+        }
+        return false
+    }
+
     fun entry(): View? {
         if (cards.isEmpty()) return null
         return cards[minOf(at, cards.size - 1)]
@@ -124,20 +137,40 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
         val w = px(cardW())
         val h = px(cardH())
         for (index in maxOf(0, i - 1) until minOf(cards.size, i + iCeil + 1)) {
-            val imageView = (cards[index] as FrameLayout).getChildAt(0) as ImageView
-            val uri = picture(shows[index]) ?: continue
-            if (System.currentTimeMillis() - (posterFailedAt[uri] ?: 0L) < POSTER_RETRY_MS) continue
-            if (!asked.add(imageView)) continue
-            imageView.tag = uri
-            posterExecutor.execute {
-                val bitmap = TopShelfContent.loadPoster(context, uri, w, h)
-                imageView.post {
-                    if (bitmap == null) {
-                        posterFailedAt[uri] = System.currentTimeMillis()
-                        asked.remove(imageView)
-                    } else if (imageView.tag == uri) {
-                        posterFailedAt -= uri
-                        imageView.setImageBitmap(bitmap)
+            val card = cards[index] as FrameLayout
+            val imageView = card.getChildAt(0) as ImageView
+            val uri = picture(shows[index])
+            if (uri != null && System.currentTimeMillis() - (posterFailedAt[uri] ?: 0L) >= POSTER_RETRY_MS && asked.add(imageView)) {
+                imageView.tag = uri
+                posterExecutor.execute {
+                    val bitmap = TopShelfContent.loadPoster(context, uri, w, h)
+                    imageView.post {
+                        if (bitmap == null) {
+                            posterFailedAt[uri] = System.currentTimeMillis()
+                            asked.remove(imageView)
+                        } else if (imageView.tag == uri) {
+                            posterFailedAt -= uri
+                            imageView.setImageBitmap(bitmap)
+                        }
+                    }
+                }
+            }
+            val logoView = (card.getChildAt(2) as LinearLayout).getChildAt(0) as ImageView
+            val logoUri = shows[index].logoUri
+            if (logoUri != null && logoView.tag != logoUri && System.currentTimeMillis() - (posterFailedAt[logoUri] ?: 0L) >= POSTER_RETRY_MS) {
+                logoView.tag = logoUri
+                posterExecutor.execute {
+                    val size = px(24f)
+                    val bitmap = TopShelfContent.loadPoster(context, logoUri, size, size)
+                    logoView.post {
+                        if (bitmap == null) {
+                            posterFailedAt[logoUri] = System.currentTimeMillis()
+                            logoView.tag = null
+                        } else if (logoView.tag == logoUri) {
+                            posterFailedAt -= logoUri
+                            logoView.setImageBitmap(bitmap)
+                            logoView.visibility = View.VISIBLE
+                        }
                     }
                 }
             }
@@ -147,6 +180,24 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
     fun set(label: String, list: List<ShelfCard>) {
         val focused = findFocus()
         val oldIndex = if (focused == null || !cards.contains(focused)) -1 else at
+        val oldPosters = HashMap<String, Bitmap>()
+        val oldLogos = HashMap<String, Bitmap>()
+        val reused = HashSet<Bitmap>()
+        for (view in cards) {
+            val card = view as FrameLayout
+            val imageView = card.getChildAt(0) as ImageView
+            val uri = imageView.tag as? String
+            val bitmap = (imageView.drawable as? BitmapDrawable)?.bitmap
+            if (uri != null && bitmap != null && !bitmap.isRecycled) {
+                oldPosters[uri] = bitmap
+            }
+            val logoView = (card.getChildAt(2) as LinearLayout).getChildAt(0) as ImageView
+            val logoUri = logoView.tag as? String
+            val logoBitmap = (logoView.drawable as? BitmapDrawable)?.bitmap
+            if (logoUri != null && logoBitmap != null && !logoBitmap.isRecycled) {
+                oldLogos[logoUri] = logoBitmap
+            }
+        }
         for (view in cards) {
             val imageView = (view as FrameLayout).getChildAt(0) as ImageView
             imageView.setImageBitmap(null)
@@ -173,6 +224,31 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
             val imageView = ImageView(context).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
             }
+            val posterUri = picture(show)
+            val reusedPoster = if (posterUri != null) oldPosters[posterUri] else null
+            if (reusedPoster != null && reusedPoster.width == w && reusedPoster.height == h) {
+                reused += reusedPoster
+                imageView.setImageBitmap(reusedPoster)
+                imageView.tag = posterUri
+                asked.add(imageView)
+            }
+            val logoView = ImageView(context).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                outlineProvider = object : ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: Outline) {
+                        outline.setOval(0, 0, view.width, view.height)
+                    }
+                }
+                clipToOutline = true
+                visibility = View.GONE
+            }
+            val reusedLogo = if (show.logoUri != null) oldLogos[show.logoUri] else null
+            if (reusedLogo != null) {
+                reused += reusedLogo
+                logoView.setImageBitmap(reusedLogo)
+                logoView.tag = show.logoUri
+                logoView.visibility = View.VISIBLE
+            }
             val titleView = TextView(context).apply {
                 text = show.title
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, titleSp)
@@ -180,6 +256,14 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
                 setTextColor(Color.WHITE)
                 setSingleLine(true)
                 ellipsize = TextUtils.TruncateAt.END
+            }
+            val titleRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(logoView, LinearLayout.LayoutParams(px(24f), px(24f)).apply {
+                    rightMargin = px(8f)
+                })
+                addView(titleView, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
             }
             val scrim = View(context).apply {
                 background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Color.TRANSPARENT, Color.argb(170, 0, 0, 0)))
@@ -201,7 +285,7 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
                 addView(scrim, LayoutParams(LayoutParams.MATCH_PARENT, px(72f)).apply {
                     gravity = Gravity.BOTTOM
                 })
-                addView(titleView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                addView(titleRow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                     gravity = Gravity.BOTTOM or Gravity.START
                     leftMargin = px(14f)
                     rightMargin = px(14f)
@@ -232,6 +316,9 @@ class ShelfCards(context: Context, private val actions: Actions) : FrameLayout(c
             }
             strip.addView(card, LayoutParams(w, h))
             cards.add(card)
+        }
+        for (bitmap in oldPosters.values + oldLogos.values) {
+            if (bitmap !in reused && !bitmap.isRecycled) bitmap.recycle()
         }
         want(0)
         glide.cancel()

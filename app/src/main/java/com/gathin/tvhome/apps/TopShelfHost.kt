@@ -5,7 +5,9 @@ import android.graphics.Bitmap
 import android.view.View
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -36,9 +38,12 @@ fun rememberShelfHost(
     val shelf = remember(context) {
         Shelf(context, object : ShelfCards.Actions {
             override fun open(show: ShelfCard, view: View): Boolean {
-                val detail = TopShelfContent.cardIntent(context, show, show.pkg)
+                val launchPkg = if (YoutubeSubs.isYoutube(show.pkg)) {
+                    YoutubeSubs.firstInstalledLaunchPkg(context) ?: return false
+                } else show.pkg
+                val detail = TopShelfContent.cardIntent(context, show, launchPkg)
                 if (detail != null && TopShelfContent.launchCard(context, detail, view)) return true
-                val app = TopShelfContent.appLaunchIntent(context, show.pkg) ?: return false
+                val app = TopShelfContent.appLaunchIntent(context, launchPkg) ?: return false
                 return TopShelfContent.launchCard(context, app, view)
             }
         }).also { s ->
@@ -50,13 +55,18 @@ fun rememberShelfHost(
             s.onCardsExitDown { exitDown.value() }
         }
     }
+    DisposableEffect(context) {
+        onDispose { shelf.close() }
+    }
     return ShelfHostState(shelf, scene, covers)
 }
 
 @Composable
 fun ShelfHostView(state: ShelfHostState, modifier: Modifier = Modifier) {
-    AndroidView(
-        factory = { state.shelf.view() },
-        modifier = modifier.fillMaxSize(),
-    )
+    key(state.shelf) {
+        AndroidView(
+            factory = { state.shelf.view() },
+            modifier = modifier.fillMaxSize(),
+        )
+    }
 }

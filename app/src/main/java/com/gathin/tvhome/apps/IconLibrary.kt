@@ -37,6 +37,7 @@ object IconLibrary {
     @Volatile var credits: JSONObject = JSONObject(); private set
     @Volatile var names: JSONObject = JSONObject(); private set
     private val refreshing = Mutex()
+    private val downloadLock = Any()
     @Volatile private var lastAttempt = 0L
     private val failedAt = HashMap<String, Long>()
 
@@ -180,7 +181,8 @@ object IconLibrary {
     private fun read(text: String?): Pair<Map<String, List<Choice>>, JSONObject>? = runCatching {
         val root = JSONObject(text ?: return null)
         val sets = root.optJSONObject("choices")
-        val icons = root.getJSONObject("icons")
+        val icons = root.optJSONObject("icons")
+        if (sets == null && icons == null) return null
         val map = buildMap {
             if (sets != null) {
                 sets.keys().forEach { pkg ->
@@ -194,7 +196,7 @@ object IconLibrary {
                     if (choices.isNotEmpty()) put(pkg, choices)
                 }
             } else {
-                icons.keys().forEach { pkg ->
+                icons!!.keys().forEach { pkg ->
                     val path = icons.getString(pkg)
                     if (CustomIcons.isValidKey(pkg) && safe(path)) put(pkg, listOf(Choice("default", path, "")))
                 }
@@ -222,17 +224,19 @@ object IconLibrary {
     }
 
     private fun download(url: String, to: File) {
-        val tmp = File(dir, to.name + ".part")
-        val c = connect(url)
-        try {
-            c.inputStream.use { input -> tmp.outputStream().use { input.copyTo(it) } }
-        } finally {
-            c.disconnect()
-        }
-        val ok = BitmapFactory.Options().apply { inJustDecodeBounds = true }.also { BitmapFactory.decodeFile(tmp.path, it) }.outWidth > 0
-        if (!ok || !tmp.renameTo(to)) {
-            tmp.delete()
-            error("not a picture")
+        synchronized(downloadLock) {
+            val tmp = File(dir, to.name + ".part")
+            val c = connect(url)
+            try {
+                c.inputStream.use { input -> tmp.outputStream().use { input.copyTo(it) } }
+            } finally {
+                c.disconnect()
+            }
+            val ok = BitmapFactory.Options().apply { inJustDecodeBounds = true }.also { BitmapFactory.decodeFile(tmp.path, it) }.outWidth > 0
+            if (!ok || !tmp.renameTo(to)) {
+                tmp.delete()
+                error("not a picture")
+            }
         }
     }
 }

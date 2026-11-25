@@ -14,6 +14,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -23,6 +25,7 @@ import java.util.Locale
 object TileDiskCache {
     private const val TAG = "AerialTiles"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val ioMutex = Mutex()
     private lateinit var dir: File
 
     fun init(context: Context) {
@@ -74,33 +77,37 @@ object TileDiskCache {
     fun write(pkg: String, key: String, label: String, art: TileArt) {
         if (!::dir.isInitialized) return
         scope.launch {
-            runCatching {
-                val tmp = File(dir, "$pkg.${System.nanoTime()}.tmp")
-                DataOutputStream(tmp.outputStream().buffered()).use { out ->
-                    out.writeUTF(key)
-                    out.writeUTF(label)
-                    out.writeInt(art.tint.toArgb())
-                    art.foreAt.run { out.writeFloat(left); out.writeFloat(top); out.writeFloat(right); out.writeFloat(bottom) }
-                    for (image in listOf(art.back, art.fore, art.backdrop)) {
-                        if (image == null) {
-                            out.writeInt(0)
-                            continue
+            ioMutex.withLock {
+                runCatching {
+                    val tmp = File(dir, "$pkg.${System.nanoTime()}.tmp")
+                    DataOutputStream(tmp.outputStream().buffered()).use { out ->
+                        out.writeUTF(key)
+                        out.writeUTF(label)
+                        out.writeInt(art.tint.toArgb())
+                        art.foreAt.run { out.writeFloat(left); out.writeFloat(top); out.writeFloat(right); out.writeFloat(bottom) }
+                        for (image in listOf(art.back, art.fore, art.backdrop)) {
+                            if (image == null) {
+                                out.writeInt(0)
+                                continue
+                            }
+                            val png = ByteArrayOutputStream().also { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+                            out.writeInt(png.size())
+                            png.writeTo(out)
                         }
-                        val png = ByteArrayOutputStream().also { image.asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
-                        out.writeInt(png.size())
-                        png.writeTo(out)
                     }
-                }
-                if (!tmp.renameTo(file(pkg))) tmp.delete()
-            }.onFailure { Log.w(TAG, "could not keep the tile of $pkg", it) }
+                    if (!tmp.renameTo(file(pkg))) tmp.delete()
+                }.onFailure { Log.w(TAG, "could not keep the tile of $pkg", it) }
+            }
         }
     }
 
     fun keepOnly(packages: Set<String>) {
         if (!::dir.isInitialized) return
         scope.launch {
-            dir.listFiles()?.forEach { f ->
-                if (f.name.removeSuffix(".tile").removeSuffix(".tmp") !in packages) f.delete()
+            ioMutex.withLock {
+                dir.listFiles()?.forEach { f ->
+                    if (f.name.removeSuffix(".tile").removeSuffix(".tmp") !in packages) f.delete()
+                }
             }
         }
     }

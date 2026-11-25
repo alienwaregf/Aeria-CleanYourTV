@@ -164,7 +164,9 @@ object TileArtFactory {
             drawText(shown, W / 2f, H * (if (two) 0.68f else 0.76f), title)
             if (sub != null) {
                 val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xCCFFFFFF.toInt(); textSize = H * 0.11f; textAlign = Paint.Align.CENTER }
-                drawText(sub, W / 2f, H * 0.85f, small)
+                var subShown: String = sub
+                while (small.measureText(subShown) > W * 0.88f && subShown.length > 1) subShown = subShown.dropLast(2) + "…"
+                drawText(subShown, W / 2f, H * 0.85f, small)
             }
         }
         return finish(back, null)
@@ -250,7 +252,7 @@ object TileArtFactory {
         val bgPx = bg?.let { raster(it, 32) }
         if (bgPx != null && !isFlat(bgPx)) return null
         val (fore, at) = placeLogo(icon.foreground, ::visible) ?: return null
-        val color = bgPx?.get(bgPx.size / 2)?.takeIf { it ushr 24 > 200 } ?: GRAPHITE_BOTTOM
+        val color = bgPx?.get(bgPx.size / 2 + 16)?.takeIf { it ushr 24 > 200 } ?: GRAPHITE_BOTTOM
         if (unified && !multiColor(fore, at, color)) return unify(fore, at, color, color)
         val back = layer {
             drawColor(GRAPHITE_BOTTOM)

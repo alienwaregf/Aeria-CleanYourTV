@@ -72,6 +72,10 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
 
     fun view(): View = view
 
+    fun close() {
+        artIo.shutdownNow()
+    }
+
     fun cardsEntry(): View? {
         if (cardsFor == null || cards.visibility != View.VISIBLE || away) {
             return null
@@ -147,11 +151,12 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
 
     fun refresh() {
         val list = cardsOf(app)
+        if (cards.layoutChanged() || (list != null && cards.contentChanged(list))) {
+            cardsFor = null
+            artFor = null
+        }
         if (!away) {
             art(if (list != null) app else null)
-        }
-        if (cards.layoutChanged()) {
-            cardsFor = null
         }
         val topVisible = top.visibility == View.VISIBLE
         if (away) {
@@ -399,6 +404,8 @@ class Shelf(private val context: Context, actions: ShelfCards.Actions) {
             )
             Canvas(bitmap).drawRect(0.0f, 0.0f, 96.0f, 54.0f, paint)
             bitmap.setHasAlpha(false)
+            val old = colourPicture
+            if (old != null && !old.isRecycled) old.recycle()
             colourPicture = bitmap
             colourFor = color
             return bitmap
