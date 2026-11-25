@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.net.Uri
 import android.util.Log
+import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -23,6 +24,12 @@ import androidx.media3.datasource.cache.CacheSpan
 import androidx.media3.datasource.cache.CacheWriter
 import androidx.media3.datasource.cache.ContentMetadata
 import androidx.media3.datasource.cache.SimpleCache
+import com.gathin.tvhome.R
+import com.gathin.tvhome.apps.ShelfCard
+import com.gathin.tvhome.apps.ShelfSource
+import com.gathin.tvhome.apps.TopShelfContent
+import com.gathin.tvhome.apps.YoutubeSubs
+import com.gathin.tvhome.ratings.OmdbRatings
 import com.gathin.tvhome.ratings.Ratings
 import com.gathin.tvhome.wallpaper.ScreensaverMode
 import com.gathin.tvhome.wallpaper.Wallpapers
@@ -42,6 +49,7 @@ import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -57,6 +65,8 @@ data class TmdbItem(
     val year: String,
     val providerUrls: List<String> = emptyList(),
     val providersFetched: Boolean = false,
+    val trailerKey: String = "",
+    val trailerChecked: Boolean = false,
     val imdbId: String = "",
     val imdbRating: String = "",
     val rtPercent: Int = -1,
@@ -104,6 +114,8 @@ object TmdbTrending {
     private var failed = false
     @Volatile
     private var tmdbBlockedUntil = 0L
+
+    fun tmdbBlockedRaw(): Boolean = System.currentTimeMillis() < tmdbBlockedUntil
     private var job: Job? = null
     private var ratingsFlushJob: Job? = null
 
@@ -120,7 +132,7 @@ object TmdbTrending {
         }
         if (keySet() && System.currentTimeMillis() - tmdbPrefs.getLong(KEY_FETCHED_AT, 0) >= TTL_MS) {
             refresh()
-        } else if (keySet() && items.any { it.logoUrl.isBlank() || !it.providersFetched }) {
+        } else if (keySet() && items.any { it.logoUrl.isBlank() || !it.providersFetched || !it.trailerChecked }) {
             scope.launch {
                 val original = items
                 val updated = withContext(Dispatchers.IO) { backfillDetails(original) }
@@ -140,6 +152,7 @@ object TmdbTrending {
         if (list.isEmpty()) return
         if (!trendingGateOpen()) return
         prefetchJob?.cancel()
+        TrendingImages.cancelPrefetch()
         prefetchJob = scope.launch {
             withContext(Dispatchers.IO) {
                 TrendingImages.prune(list.flatMapTo(HashSet()) { item ->
@@ -226,11 +239,42 @@ object TmdbTrending {
         }
     }
 
+    fun playCurrentTrailer(context: Context): Boolean {
+        val list = items
+        if (list.isEmpty()) return false
+        val item = list[currentIndex.coerceIn(list.indices)]
+        val key = item.trailerKey
+        if (key.isBlank()) {
+            Toast.makeText(context, context.getString(R.string.trailer_none), Toast.LENGTH_SHORT).show()
+            return false
+        }
+        val launchPkg = YoutubeSubs.firstInstalledLaunchPkg(context)
+        if (launchPkg == null) {
+            Toast.makeText(context, context.getString(R.string.trailer_no_youtube), Toast.LENGTH_SHORT).show()
+            return false
+        }
+        val card = ShelfCard(
+            pkg = launchPkg,
+            title = item.title,
+            imageUri = null,
+            backdropUri = null,
+            intentUri = "https://www.youtube.com/watch?v=$key",
+            source = ShelfSource.YOUTUBE_SUBS,
+        )
+        val intent = TopShelfContent.cardIntent(context, card, launchPkg)
+        if (intent == null) {
+            Toast.makeText(context, context.getString(R.string.trailer_no_youtube), Toast.LENGTH_SHORT).show()
+            return false
+        }
+        return TopShelfContent.launchCard(context, intent)
+    }
+
     private fun refresh(fromTick: Boolean = false) {
         if (!::launcherPrefs.isInitialized) return
         if (!trendingGateOpen()) return
         val key = launcherPrefs.getString(KEY_TMDB_KEY, "").orEmpty().trim()
         if (key.isEmpty()) return
+        if (tmdbBlocked()) return
         lastAttempt = System.currentTimeMillis()
         job?.cancel()
         job = scope.launch {
@@ -258,9 +302,14 @@ object TmdbTrending {
                         traktRating = o.traktRating,
                         traktVotes = o.traktVotes,
                         traktFetchedAt = o.traktFetchedAt,
+                        trailerKey = if (n.trailerChecked) n.trailerKey else o.trailerKey,
+                        trailerChecked = n.trailerChecked || o.trailerChecked,
                     )
                 }
                 items = merged
+                val withImdb = merged.count { it.imdbRating.isNotBlank() }
+                val withRt = merged.count { it.rtPercent >= 0 }
+                Log.i(TAG, "trending refresh done: ${merged.size} items, with IMDb $withImdb, with RT $withRt")
                 tmdbPrefs.edit {
                     putLong(KEY_FETCHED_AT, System.currentTimeMillis())
                     putString(KEY_ITEMS_JSON, itemsToJson(merged))
@@ -283,6 +332,7 @@ object TmdbTrending {
         try {
             val code = c.responseCode
             if (code !in 200..299) {
+                if (code == 429) markTmdbBlocked(c)
                 val retryAfter = c.getHeaderField("Retry-After")
                 throw IOException(
                     "HTTP $code" + if (code == 429 && !retryAfter.isNullOrBlank()) " Retry-After=$retryAfter" else "",
@@ -291,24 +341,31 @@ object TmdbTrending {
             val body = c.inputStream.use { it.readBytes().decodeToString() }
             val filtered = parseTrending(JSONObject(body))
             if (filtered.isEmpty()) throw IOException("no usable trending items")
-            return filtered.mapIndexed { index, item ->
+            var customBackdrop = 0
+            var withLogo = 0
+            val result = filtered.mapIndexed { index, item ->
                 currentCoroutineContext().ensureActive()
                 if (index > 0) delay(1000)
-                val (logo, bestBackdrop) = fetchImageDetails(key, item)
-                val providers = fetchProviderUrls(key, item)
+                val details = fetchDetails(key, item)
+                if (details.backdrop.isNotBlank()) customBackdrop++
+                if (details.logo.isNotBlank()) withLogo++
                 item.copy(
-                    logoUrl = logo,
-                    backdropUrl = bestBackdrop.ifBlank { item.backdropUrl },
-                    providerUrls = providers ?: emptyList(),
-                    providersFetched = providers != null,
+                    logoUrl = details.logo,
+                    backdropUrl = details.backdrop.ifBlank { item.backdropUrl },
+                    providerUrls = details.providers ?: emptyList(),
+                    providersFetched = details.providers != null,
+                    trailerKey = details.trailerKey,
+                    trailerChecked = details.fetched,
                 )
             }
+            Log.i(TAG, "trending fetch: ${result.size} items, custom backdrop $customBackdrop, with logo $withLogo")
+            return result
         } finally {
             c.disconnect()
         }
     }
 
-    private fun tmdbBlocked(): Boolean = System.currentTimeMillis() < tmdbBlockedUntil
+    private fun tmdbBlocked(): Boolean = tmdbBlockedRaw() || OmdbRatings.tmdbBlockedRaw()
 
     private fun markTmdbBlocked(c: HttpURLConnection) {
         val retryAfter = c.getHeaderField("Retry-After")?.toLongOrNull()?.coerceIn(1, 60) ?: 10
@@ -316,16 +373,24 @@ object TmdbTrending {
         Log.w(TAG, "TMDB 429, backing off ${retryAfter}s")
     }
 
-    private fun fetchImageDetails(key: String, item: TmdbItem): Pair<String, String> {
-        if (tmdbBlocked()) return Pair("", "")
+    private data class ItemDetails(
+        val logo: String = "",
+        val backdrop: String = "",
+        val providers: List<String>? = null,
+        val trailerKey: String = "",
+        val fetched: Boolean = false,
+    )
+
+    private fun fetchDetails(key: String, item: TmdbItem): ItemDetails {
+        if (tmdbBlocked()) return ItemDetails()
         return runCatching {
             val isV4 = key.startsWith("eyJ")
             val base = if (item.mediaType == "tv") {
-                "https://api.themoviedb.org/3/tv/${item.id}/images"
+                "https://api.themoviedb.org/3/tv/${item.id}"
             } else {
-                "https://api.themoviedb.org/3/movie/${item.id}/images"
+                "https://api.themoviedb.org/3/movie/${item.id}"
             }
-            val url = "$base?include_image_language=zh-CN,zh-SG,zh-HK,zh-TW,zh,en-US,en,null" +
+            val url = "$base?append_to_response=images,watch/providers,videos&include_image_language=zh-CN,zh-SG,zh-HK,zh-TW,zh,en-US,en,null" +
                 if (isV4) "" else "&api_key=${URLEncoder.encode(key, "UTF-8")}"
             val c = URL(url).openConnection() as HttpURLConnection
             c.connectTimeout = 5_000
@@ -336,42 +401,90 @@ object TmdbTrending {
                 val code = c.responseCode
                 if (code == 429) {
                     markTmdbBlocked(c)
-                    return Pair("", "")
+                    return ItemDetails()
                 }
                 if (code !in 200..299) {
-                    Log.w(TAG, "TMDB images HTTP $code")
-                    return Pair("", "")
+                    Log.w(TAG, "TMDB details HTTP $code")
+                    return ItemDetails()
                 }
                 val body = c.inputStream.use { it.readBytes().decodeToString() }
                 val root = JSONObject(body)
-                Pair(
-                    pickLogo(root.optJSONArray("logos")) ?: "",
-                    pickBackdrop(root.optJSONArray("backdrops")) ?: "",
+                val images = root.optJSONObject("images")
+                ItemDetails(
+                    logo = pickLogo(images?.optJSONArray("logos")) ?: "",
+                    backdrop = pickBackdrop(images?.optJSONArray("backdrops")) ?: "",
+                    providers = parseProviders(root.optJSONObject("watch/providers")),
+                    trailerKey = pickTrailer(root.optJSONObject("videos")?.optJSONArray("results")) ?: "",
+                    fetched = true,
                 )
             } finally {
                 c.disconnect()
             }
-        }.onFailure { Log.w(TAG, "TMDB images failed", it) }.getOrDefault(Pair("", ""))
+        }.onFailure { Log.w(TAG, "TMDB details failed", it) }.getOrDefault(ItemDetails())
+    }
+
+    private fun pickTrailer(videos: JSONArray?): String? {
+        if (videos == null) return null
+        val tiers = Array(3) { ArrayList<String>() }
+        val zhTiers = Array(3) { ArrayList<String>() }
+        for (i in 0 until videos.length()) {
+            val obj = videos.optJSONObject(i) ?: continue
+            if (obj.optString("site", "") != "YouTube") continue
+            val key = obj.optString("key", "")
+            if (key.isBlank()) continue
+            val tier = when (obj.optString("type", "")) {
+                "Trailer" -> if (obj.optBoolean("official", false)) 0 else 1
+                "Teaser" -> 2
+                else -> continue
+            }
+            tiers[tier].add(key)
+            if (obj.optString("iso_639_1", "") == "zh") zhTiers[tier].add(key)
+        }
+        for (t in 0..2) {
+            zhTiers[t].firstOrNull()?.let { return it }
+            tiers[t].firstOrNull()?.let { return it }
+        }
+        return null
     }
 
     private fun pickBackdrop(backdrops: JSONArray?): String? {
         if (backdrops == null) return null
         val allPaths = ArrayList<String>()
+        val fourKPaths = ArrayList<String>()
+        var noPath = 0
+        var hasLang = 0
+        var noSize = 0
+        var tooSmall = 0
+        var langSample = ""
+        var sizeSample = ""
         for (i in 0 until backdrops.length()) {
             val obj = backdrops.optJSONObject(i) ?: continue
             val path = obj.optString("file_path", "")
-            if (path.isBlank()) continue
+            if (path.isBlank()) { noPath++; continue }
             val lang = obj.optString("iso_639_1", "")
-            if (lang.isNotBlank() && !lang.equals("xx", ignoreCase = true)) continue
+            if (lang.isNotBlank() && !lang.equals("xx", ignoreCase = true) && !lang.equals("null", ignoreCase = true)) {
+                hasLang++
+                if (langSample.isEmpty()) langSample = lang
+                continue
+            }
             val w = obj.optInt("width", 0)
             val h = obj.optInt("height", 0)
-            if (w <= 0 || h <= 0) continue
+            if (w <= 0 || h <= 0) { noSize++; continue }
             val area = w.toLong() * h.toLong()
-            if (area < 2073600L) continue
+            if (area < 2073600L) {
+                tooSmall++
+                if (sizeSample.isEmpty()) sizeSample = "${w}x$h"
+                continue
+            }
             allPaths.add(path)
+            if (area >= 8294400L) fourKPaths.add(path)
         }
-        if (allPaths.isEmpty()) return null
-        return IMAGE_BASE + allPaths.random()
+        if (allPaths.isEmpty()) {
+            Log.d(TAG, "pickBackdrop: no qualified (total ${backdrops.length()}, noPath $noPath, hasLang $hasLang e.g. $langSample, noSize $noSize, tooSmall $tooSmall e.g. $sizeSample)")
+            return null
+        }
+        val pool = if (fourKPaths.isNotEmpty()) fourKPaths else allPaths
+        return IMAGE_BASE + pool.random()
     }
 
     private fun pickLogo(logos: JSONArray?): String? {
@@ -400,66 +513,37 @@ object TmdbTrending {
         return bestPath?.let { IMAGE_BASE + it }
     }
 
-    private fun fetchProviderUrls(key: String, item: TmdbItem): List<String>? {
-        if (tmdbBlocked()) return null
-        return runCatching {
-            val isV4 = key.startsWith("eyJ")
-            val base = if (item.mediaType == "tv") {
-                "https://api.themoviedb.org/3/tv/${item.id}/watch/providers"
-            } else {
-                "https://api.themoviedb.org/3/movie/${item.id}/watch/providers"
+    private fun parseProviders(providersRoot: JSONObject?): List<String>? {
+        val results = providersRoot?.optJSONObject("results") ?: return null
+        val best = HashMap<Int, Triple<String, Int, Int>>()
+        val countries = results.keys()
+        while (countries.hasNext()) {
+            val flatrate = results.optJSONObject(countries.next())?.optJSONArray("flatrate") ?: continue
+            for (i in 0 until flatrate.length()) {
+                val obj = flatrate.optJSONObject(i) ?: continue
+                val id = obj.optInt("provider_id", 0)
+                if (id == 0) continue
+                val canonicalId = when (id) {
+                    1796 -> 8
+                    10, 119, 2100 -> 9
+                    1899, 31 -> 384
+                    2 -> 350
+                    2303, 2616, 1770, 2304 -> 531
+                    387 -> 386
+                    else -> id
+                }
+                val path = obj.optString("logo_path", "")
+                if (path.isBlank()) continue
+                val priority = obj.optInt("display_priority", Int.MAX_VALUE)
+                val prev = best[canonicalId]
+                if (prev == null || priority < prev.second || (priority == prev.second && id < prev.third)) {
+                    best[canonicalId] = Triple(PROVIDER_BASE + path, priority, id)
+                }
             }
-            val url = base + if (isV4) "" else "?api_key=${URLEncoder.encode(key, "UTF-8")}"
-            val c = URL(url).openConnection() as HttpURLConnection
-            c.connectTimeout = 5_000
-            c.readTimeout = 5_000
-            c.setRequestProperty("Accept", "application/json")
-            if (isV4) c.setRequestProperty("Authorization", "Bearer $key")
-            try {
-                val code = c.responseCode
-                if (code == 429) {
-                    markTmdbBlocked(c)
-                    return null
-                }
-                if (code !in 200..299) {
-                    Log.w(TAG, "TMDB providers HTTP $code")
-                    return null
-                }
-                val body = c.inputStream.use { it.readBytes().decodeToString() }
-                val results = JSONObject(body).optJSONObject("results") ?: return emptyList()
-                val best = HashMap<Int, Triple<String, Int, Int>>()
-                val countries = results.keys()
-                while (countries.hasNext()) {
-                    val flatrate = results.optJSONObject(countries.next())?.optJSONArray("flatrate") ?: continue
-                    for (i in 0 until flatrate.length()) {
-                        val obj = flatrate.optJSONObject(i) ?: continue
-                        val id = obj.optInt("provider_id", 0)
-                        if (id == 0) continue
-                        val canonicalId = when (id) {
-                            1796 -> 8
-                            10, 119, 2100 -> 9
-                            1899, 31 -> 384
-                            2 -> 350
-                            2303, 2616, 1770, 2304 -> 531
-                            387 -> 386
-                            else -> id
-                        }
-                        val path = obj.optString("logo_path", "")
-                        if (path.isBlank()) continue
-                        val priority = obj.optInt("display_priority", Int.MAX_VALUE)
-                        val prev = best[canonicalId]
-                        if (prev == null || priority < prev.second || (priority == prev.second && id < prev.third)) {
-                            best[canonicalId] = Triple(PROVIDER_BASE + path, priority, id)
-                        }
-                    }
-                }
-                best.entries
-                    .sortedWith(compareBy({ it.value.second }, { it.key }))
-                    .map { it.value.first }
-            } finally {
-                c.disconnect()
-            }
-        }.onFailure { Log.w(TAG, "TMDB providers failed", it) }.getOrNull()
+        }
+        return best.entries
+            .sortedWith(compareBy({ it.value.second }, { it.key }))
+            .map { it.value.first }
     }
 
     private suspend fun backfillDetails(list: List<TmdbItem>): List<TmdbItem> {
@@ -471,18 +555,19 @@ object TmdbTrending {
             currentCoroutineContext().ensureActive()
             if (index > 0) delay(1000)
             var cur = item
-            if (cur.logoUrl.isBlank()) {
-                val (url, _) = fetchImageDetails(key, cur)
-                if (url.isNotBlank()) {
-                    changed = true
-                    cur = cur.copy(logoUrl = url)
-                }
-            }
-            if (!cur.providersFetched) {
-                val providers = fetchProviderUrls(key, cur)
-                if (providers != null) {
-                    changed = true
-                    cur = cur.copy(providerUrls = providers, providersFetched = true)
+            if (cur.logoUrl.isBlank() || !cur.providersFetched || !cur.trailerChecked) {
+                val details = fetchDetails(key, cur)
+                if (details.fetched) {
+                    var next = cur
+                    if (next.logoUrl.isBlank() && details.logo.isNotBlank()) next = next.copy(logoUrl = details.logo)
+                    if (!next.providersFetched && details.providers != null) {
+                        next = next.copy(providerUrls = details.providers, providersFetched = true)
+                    }
+                    if (!next.trailerChecked) next = next.copy(trailerKey = details.trailerKey, trailerChecked = true)
+                    if (next != cur) {
+                        changed = true
+                        cur = next
+                    }
                 }
             }
             cur
@@ -537,6 +622,8 @@ object TmdbTrending {
                     put("logo_url", item.logoUrl)
                     put("provider_urls", JSONArray(item.providerUrls))
                     put("providers_fetched", item.providersFetched)
+                    put("trailer_key", item.trailerKey)
+                    put("trailer_checked", item.trailerChecked)
                     put("imdb_id", item.imdbId)
                     put("imdb_rating", item.imdbRating)
                     put("rt_percent", item.rtPercent)
@@ -575,6 +662,8 @@ object TmdbTrending {
                         }
                     } ?: emptyList(),
                     providersFetched = obj.optBoolean("providers_fetched", false),
+                    trailerKey = obj.optString("trailer_key", ""),
+                    trailerChecked = obj.optBoolean("trailer_checked", false),
                     imdbId = obj.optString("imdb_id", ""),
                     imdbRating = obj.optString("imdb_rating", ""),
                     rtPercent = obj.optInt("rt_percent", -1),
@@ -617,7 +706,6 @@ internal object TrendingImages {
     fun init(context: Context) {
         if (app != null) return
         app = context.applicationContext
-        cache()
     }
 
     private fun cache(): SimpleCache? {
@@ -652,10 +740,10 @@ internal object TrendingImages {
                 .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
                 .createDataSource()
             val spec = DataSpec.Builder().setUri(Uri.parse(url)).setKey(url).build()
-            source.open(spec)
             val out = ByteArrayOutputStream()
             val buf = ByteArray(64 * 1024)
             try {
+                source.open(spec)
                 while (true) {
                     val n = source.read(buf, 0, buf.size)
                     if (n == C.RESULT_END_OF_INPUT) break
@@ -668,6 +756,13 @@ internal object TrendingImages {
         }.onFailure { Log.w(TAG, "trending image read failed: $url", it) }.getOrNull()
     }
 
+    @Volatile
+    private var activeWriter: CacheWriter? = null
+
+    fun cancelPrefetch() {
+        activeWriter?.cancel()
+    }
+
     fun prefetch(url: String) {
         if (url.isBlank()) return
         val cache = cache() ?: return
@@ -678,8 +773,14 @@ internal object TrendingImages {
                 .setUpstreamDataSourceFactory(http())
                 .setCacheWriteDataSinkFactory(CacheDataSink.Factory().setCache(cache))
             val spec = DataSpec.Builder().setUri(Uri.parse(url)).setKey(url).build()
-            CacheWriter(writer.createDataSource(), spec, null, null).cache()
-        }.onFailure { Log.w(TAG, "could not prefetch $url", it) }
+            val cacheWriter = CacheWriter(writer.createDataSource(), spec, null, null)
+            activeWriter = cacheWriter
+            try {
+                cacheWriter.cache()
+            } finally {
+                if (activeWriter === cacheWriter) activeWriter = null
+            }
+        }.onFailure { if (it !is InterruptedIOException) Log.w(TAG, "could not prefetch $url", it) }
     }
 
     fun prune(keepUrls: Set<String>) {
