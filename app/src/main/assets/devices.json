@@ -14,6 +14,11 @@
       "labels": {"0": "DTMB", "1": "ATV", "2": "AV", "6": "HDMI 2 (eARC)"}
     },
     {
+      "models": ["MiTV_ASTR0", "MiTV-ASTR0"],
+      "note": "Redmi A Pro 75 (blueplanet, Amlogic, Android 11): two HDMI ports on the set (the firmware's source_ports_list is source_list_tv_2hdmi), yet the TvInput HAL registers four, HW5-HW8 for HDMI 1-4 (#1517, the reporter's dumpsys tv_input; hidden 7 and 8 tried there, HDMI 1 and 2 still open).",
+      "hidden": [7, 8]
+    },
+    {
       "models": ["MiTV_MFFU1", "MiTV-MFFU1"],
       "note": "Redmi monitor G Pro 27U registers its DP port (HW9) and USB-C port (HW10) both as DisplayPort; tvplayer sources 29 and 30 (#62, its MonitorUtils). It also registers two tuners (HW0, HW1, reported connected) and a composite input (HW2) that a monitor does not have (#815; the same on the owner's MFFU1, OS3.0.120). The 2025 model has no USB-C either, but it shares the model name with the 2026 one, so HW10 stays.",
       "hidden": [0, 1, 2],
@@ -38,6 +43,12 @@
       "buildMajorBelow": 22,
       "note": "Mi TV 4, Amlogic, Android 6.0.1, older firmwares: HW7 is source 23 on some boards (#191, #313) and 25 on others (#492), which hdmi3_order tells apart; 23 is the fallback. Firmware 22.x follows the general rule (#375).",
       "xiaomiFallbackSources": {"7": 23}
+    },
+    {
+      "models": ["MiTV-ANSP0", "MiTV_ANSP0"],
+      "note": "Mi TV 5 Pro, Amlogic, Android 9, firmware 23.6.5.3226: like the Mi TV 4 from 22.8, HW7 is the port on the back marked HDMI 1, source 23 (#1487, the reporter set this profile and checked all three ports on 1.97).",
+      "labels": {"7": "HDMI 1", "6": "HDMI 2", "5": "HDMI 3"},
+      "xiaomiSources": {"7": 23, "6": 24, "5": 25}
     },
     {
       "models": ["MiTV_MFZP0", "MiTV-MFZP0"],
