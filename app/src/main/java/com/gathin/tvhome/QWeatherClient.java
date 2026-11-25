@@ -15,6 +15,7 @@ import java.util.Locale;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 import org.json.JSONObject;
 import org.json.JSONArray;
 
@@ -54,6 +55,7 @@ public final class QWeatherClient {
     }
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    private static final AtomicLong LOAD_SEQ = new AtomicLong();
 
     public interface Callback {
         void onResult(Result result);
@@ -63,6 +65,7 @@ public final class QWeatherClient {
     }
 
     public static void load(final Context context, final Callback callback) {
+        final long seq = LOAD_SEQ.incrementAndGet();
         EXECUTOR.execute(new Runnable() {
             @Override
             public final void run() {
@@ -72,6 +75,7 @@ public final class QWeatherClient {
                 } catch (Exception unused) {
                     holder[0] = null;
                 }
+                if (seq != LOAD_SEQ.get()) return;
                 MAIN.post(new Runnable() {
                     @Override
                     public final void run() {
@@ -226,15 +230,11 @@ public final class QWeatherClient {
 
     private static String skyconFor(String code, boolean isDay) {
         String suffix = isDay ? "_DAY" : "_NIGHT";
-        if ("100".equals(code) || "150".equals(code)) return "CLEAR" + suffix;
-        if ("101".equals(code) || "103".equals(code) || "151".equals(code) || "153".equals(code)) return "PARTLY_CLOUDY" + suffix;
-        if ("102".equals(code) || "152".equals(code)) return "LESS_CLOUDY" + suffix;
-        if ("104".equals(code) || "154".equals(code)) return "CLOUDY";
-        if ("200".equals(code) || "205".equals(code) || "206".equals(code) || "207".equals(code) || "208".equals(code) || "209".equals(code) || "210".equals(code)) return "WIND";
-        if ("201".equals(code) || "202".equals(code) || "203".equals(code) || "204".equals(code)) return "LIGHT_WIND";
-        if ("211".equals(code) || "213".equals(code)) return "TYPHOON";
-        if ("212".equals(code)) return "TORNADO";
-        if ("300".equals(code) || "301".equals(code) || "350".equals(code) || "351".equals(code)) return "SHOWER";
+        if ("100".equals(code)) return "CLEAR" + suffix;
+        if ("103".equals(code)) return "PARTLY_CLOUDY" + suffix;
+        if ("102".equals(code)) return "LESS_CLOUDY" + suffix;
+        if ("101".equals(code) || "104".equals(code)) return "CLOUDY";
+        if ("300".equals(code) || "301".equals(code)) return "SHOWER";
         if ("309".equals(code) || "399".equals(code)) return "LIGHT_RAIN";
         if ("302".equals(code) || "303".equals(code) || "304".equals(code)) return "THUNDER_SHOWER";
         if ("305".equals(code) || "314".equals(code)) return "LIGHT_RAIN";
@@ -268,7 +268,8 @@ public final class QWeatherClient {
                 long now = System.currentTimeMillis();
                 return now >= riseMs && now < setMs;
             }
-            int now = Calendar.getInstance().get(Calendar.HOUR_OF_DAY) * 60 + Calendar.getInstance().get(Calendar.MINUTE);
+            Calendar nowCal = Calendar.getInstance();
+            int now = nowCal.get(Calendar.HOUR_OF_DAY) * 60 + nowCal.get(Calendar.MINUTE);
             int riseMin = minutesOf(rise);
             int setMin = minutesOf(set);
             if (riseMin < 0 || setMin < 0) return true;

@@ -87,7 +87,6 @@ import com.gathin.tvhome.system.FrameStats
 import com.gathin.tvhome.wallpaper.ScreensaverMode
 import com.gathin.tvhome.system.SystemScreensaver
 import com.gathin.tvhome.system.Diagnostics
-import com.gathin.tvhome.system.MissingClipboard
 import com.gathin.tvhome.system.Sounds
 import com.gathin.tvhome.system.NetKind
 import com.gathin.tvhome.system.SystemProbe
@@ -131,9 +130,6 @@ class MainActivity : ComponentActivity() {
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = runOnUiThread { vm.refreshNetwork() }
     }
 
-    override fun getSystemService(name: String): Any? =
-        super.getSystemService(name) ?: if (name == CLIPBOARD_SERVICE) MissingClipboard.standIn else null
-
     private var locked = false
 
     private val unlocked = object : BroadcastReceiver() {
@@ -144,8 +140,13 @@ class MainActivity : ComponentActivity() {
         locked = true
         DiagLog.i("onCreate before the user is unlocked; showing the kept backdrop")
         val picture = Wallpapers.lockedBootBackdrop(this)?.takeIf { it.exists() }
-            ?.let { runCatching { BitmapFactory.decodeFile(it.path) }.getOrNull() }
-        window.setBackgroundDrawable(picture?.let { BitmapDrawable(resources, it) } ?: ColorDrawable(Color.BLACK))
+        window.setBackgroundDrawable(ColorDrawable(Color.BLACK))
+        if (picture != null) {
+            Thread {
+                val bitmap = runCatching { BitmapFactory.decodeFile(picture.path) }.getOrNull()
+                if (bitmap != null) runOnUiThread { window.setBackgroundDrawable(BitmapDrawable(resources, bitmap)) }
+            }.start()
+        }
         ContextCompat.registerReceiver(this, unlocked, IntentFilter(Intent.ACTION_USER_UNLOCKED), ContextCompat.RECEIVER_EXPORTED)
         if (GuardSetup.isUserUnlocked(this)) startReal(null)
     }
@@ -160,12 +161,12 @@ class MainActivity : ComponentActivity() {
             .map { it.activityInfo }
             .firstOrNull { it.packageName != packageName && it.name.endsWith(".FallbackHome") && it.name !in AOSP_FALLBACK_HOMES }
             ?: return false
-        handedOverAtBoot = true
         val started = runCatching {
             startActivity(home.setClassName(fallback.packageName, fallback.name).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }.isSuccess
         DiagLog.i("onCreate before the user is unlocked; ${if (started) "left to" else "could not start"} ${fallback.packageName}/${fallback.name}")
         if (started) {
+            handedOverAtBoot = true
             finish()
             watchHandOver(applicationContext)
         }
@@ -224,8 +225,7 @@ class MainActivity : ComponentActivity() {
         Updates.init(this)
         TmdbTrending.init(this)
         Ratings.init(this)
-        startClockTick()
-        startBiliHuyaTick()
+        startWeatherTick()
         Aerials.refreshIfStale(this)
         lifecycleScope.launch(Dispatchers.IO) { SelfCompile.init(this@MainActivity) }
         CustomIcons.init(this)
@@ -302,35 +302,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startClockTick() {
+    private fun startWeatherTick() {
         lifecycleScope.launch {
             while (true) {
                 val now = System.currentTimeMillis()
                 val next = ((now / CLOCK_TICK_MS) + 1) * CLOCK_TICK_MS
                 delay(next - now)
-                if (vm.resumed) {
-                    Weather.refreshClockTick()
-                }
-                if (TmdbTrending.trendingGateOpen()) {
-                    TmdbTrending.refreshClockTick()
-                }
-                if (Wallpapers.selectedId == Wallpapers.AUTO) {
-                    launch(Dispatchers.IO) { YoutubeSubs.refreshAllIfStale() }
-                }
-            }
-        }
-    }
-
-    private fun startBiliHuyaTick() {
-        lifecycleScope.launch {
-            while (true) {
-                val now = System.currentTimeMillis()
-                val next = ((now / BILI_HUYA_TICK_MS) + 1) * BILI_HUYA_TICK_MS
-                delay(next - now)
-                if (Wallpapers.selectedId == Wallpapers.AUTO) {
-                    launch(Dispatchers.IO) { BilibiliSubs.refreshAll() }
-                    launch(Dispatchers.IO) { HuyaSubs.refreshAll() }
-                }
+                Weather.refreshClockTick()
             }
         }
     }
@@ -355,6 +333,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         if (locked) runCatching { unregisterReceiver(unlocked) }
         runCatching { unregisterReceiver(screenOnReceiver) }
+        idleHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
 
@@ -774,7 +753,6 @@ class MainActivity : ComponentActivity() {
             else cm.registerNetworkCallback(NetworkRequest.Builder().removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(), networkCallback)
         }
         Weather.refreshIfStale()
-        TmdbTrending.refreshIfStale()
         Updates.checkIfStale()
     }
 
@@ -864,7 +842,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         if (HomeGuardService.isStockHome(app.packageName) &&
-            HomeGuardService.openStockLauncher(app.packageName) { startStockLauncher(app) }
+            HomeGuardService.openStockLauncher(app.packageName, this) { startStockLauncher(app) }
         ) return
         val options = bounds?.asFocusedTile()?.let {
             ActivityOptions.makeScaleUpAnimation(
@@ -885,7 +863,7 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             if (app.source != null && SystemProbe.openInputPicker(this)) return
             if (e is SecurityException && startStockLauncher(app)) {
-                if (isHomeApp(app.packageName)) HomeGuardService.allowStockLauncher()
+                if (isHomeApp(app.packageName)) HomeGuardService.allowStockLauncher(this)
                 return
             }
             Toast.makeText(this, getString(R.string.launch_failed, app.label), Toast.LENGTH_SHORT).show()
@@ -963,7 +941,6 @@ class MainActivity : ComponentActivity() {
         private const val SAVER_AHEAD_MS = 8_000L
 
         private const val CLOCK_TICK_MS = 30 * 60 * 1000L
-        private const val BILI_HUYA_TICK_MS = 10 * 60 * 1000L
 
         private var dreamFailsNow = false
 
@@ -989,6 +966,7 @@ class MainActivity : ComponentActivity() {
         private const val DREAM_BLACK_MS = 2_000L
 
         private fun noteDreamShown(context: Context) {
+            dreamFailsNow = false
             if (dreamFailCount(context) > 0) context.getSharedPreferences("system", MODE_PRIVATE).edit().remove(DREAM_FAILS).apply()
         }
 

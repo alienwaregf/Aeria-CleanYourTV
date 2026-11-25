@@ -185,7 +185,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             val started = SystemClock.uptimeMillis()
             val probing = async(Dispatchers.Default) { SystemProbe.sources(ctx) }
             val first: ((Set<String>) -> Set<String>)? = if (loaded) null else { installed -> store.leading(LEADING_TILES, installed) }
-            all = AppCatalog.load(ctx, first)
+            all = withContext(Dispatchers.Default) { AppCatalog.load(ctx, first) }
             val (from, queried, done) = AppCatalog.lastTiming
             val now = SystemClock.uptimeMillis()
             DiagLog.i("${all.size} apps in ${now - started} ms (wait ${from - started}, queries ${queried - from}, " +
@@ -202,7 +202,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             val waiting = all.count { it.art.placeholder }
             if (waiting > 0) {
                 val rest = SystemClock.uptimeMillis()
-                all = AppCatalog.load(ctx)
+                all = withContext(Dispatchers.Default) { AppCatalog.load(ctx) }
                 arrange()
                 prepareFaces()
                 DiagLog.i("$waiting more tiles in ${SystemClock.uptimeMillis() - rest} ms")
@@ -247,7 +247,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 val wait = at - SystemClock.elapsedRealtime()
                 if (wait <= 0) continue
                 delay(wait)
-                val again = AppCatalog.load(context)
+                val again = withContext(Dispatchers.Default) { AppCatalog.load(context) }
                 if (again.map { it.key }.toSet() == all.map { it.key }.toSet()) continue
                 DiagLog.i("${again.size - all.size} more apps a while into the boot")
                 all = again
@@ -404,10 +404,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refreshBrightness() {
         viewModelScope.launch {
+            if (SystemClock.elapsedRealtime() - brightnessActedAt < POLL_QUIET_MS) return@launch
             val (level, boost) = withContext(Dispatchers.Default) {
                 Brightness.level(context) to XgimiBoost.enabled()
             }
-            if (SystemClock.elapsedRealtime() - brightnessActedAt < POLL_QUIET_MS) return@launch
             brightness = level
             brightnessBoost = boost
         }

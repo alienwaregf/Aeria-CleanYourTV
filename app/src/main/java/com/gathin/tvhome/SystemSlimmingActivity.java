@@ -1,7 +1,6 @@
 package com.gathin.tvhome;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.BitmapDrawable;
@@ -19,7 +18,6 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
@@ -36,11 +34,6 @@ import java.util.zip.ZipInputStream;
 public final class SystemSlimmingActivity extends ComponentActivity {
     private static final String TAG = "TvHome.SystemSlimming";
     private static final String UPSTREAM_REPO = "Gathin23/cleanyourtv";
-
-    @Override
-    protected void attachBaseContext(android.content.Context base) {
-        super.attachBaseContext(base);
-    }
 
     private static final String EXAMPLES_API =
             "https://api.github.com/repos/" + UPSTREAM_REPO + "/contents/examples";
@@ -72,7 +65,6 @@ public final class SystemSlimmingActivity extends ComponentActivity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        cleanupLegacyState(this);
         SlimmingScreenKt.showSlimmingScreen(this, ui, new SlimmingCallbacks() {
             @Override public void onDailyToggle() { toggleDaily(); }
             @Override public void onPick() { showFolderPicker(); }
@@ -94,44 +86,20 @@ public final class SystemSlimmingActivity extends ComponentActivity {
         if (!showCached()) ui.setStatusText(getString(R.string.slimming_loading));
         loadAll();
         slimmingDailyCheckIfDue(this);
-        new Thread(() -> refreshSlimmingCache(getApplicationContext())).start();
-    }
-
-    private static void cleanupLegacyState(Context ctx) {
-        SharedPreferences p = Config.prefs(ctx);
-        if (p.getBoolean("cleanup_done_v13", false)) return;
-        p.edit()
-                .remove("tmdb_api_key").remove("tmdb_enabled")
-                .remove("theme_signature")
-                .remove("web_enabled").remove("web_token").remove("web_daily_check")
-                .remove("web_upstream_sha").remove("web_upstream_etag")
-                .remove("web_upstream_result").remove("web_last_check_at")
-                .putBoolean("cleanup_done_v13", true).apply();
-        File dir = ctx.getExternalFilesDir(null);
-        if (dir != null) {
-            deleteRecursive(new File(dir, "config.json"));
-            deleteRecursive(new File(dir, "wallpaper.jpg"));
-            deleteRecursive(new File(dir, "theme_revision"));
-            deleteRecursive(new File(dir, "wallpapers"));
-            deleteRecursive(new File(dir, ".backup"));
-            deleteRecursive(new File(dir, ".tmp-theme"));
-        }
-        deleteRecursive(new File(ctx.getFilesDir(), "config.json"));
-    }
-
-    private static void deleteRecursive(File f) {
-        if (f == null || !f.exists()) return;
-        if (f.isDirectory()) {
-            File[] kids = f.listFiles();
-            if (kids != null) for (File k : kids) deleteRecursive(k);
-        }
-        f.delete();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        adbAuthResumed = true;
+        checkAdbAuth();
         if (!ui.getRecommended().isEmpty() || !ui.getOptional().isEmpty()) refreshStates();
+    }
+
+    @Override
+    protected void onPause() {
+        adbAuthResumed = false;
+        super.onPause();
     }
 
     private void toggleDaily() {
@@ -227,6 +195,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
 
     private void loadList(String folder, boolean autoHigh) {
         pendingFolder = folder;
+        loading = true;
         loadGen++;
         final int gen = loadGen;
         new Thread(() -> {
@@ -328,10 +297,39 @@ public final class SystemSlimmingActivity extends ComponentActivity {
     }
 
     private volatile boolean busy;
+    private volatile boolean adbAuthWatching;
+    private volatile boolean adbAuthResumed;
 
     private void setBusy(boolean value) {
         busy = value;
         runOnUiThread(() -> ui.setBusy(value));
+    }
+
+    private void checkAdbAuth() {
+        if (adbAuthWatching) return;
+        adbAuthWatching = true;
+        new Thread(() -> {
+            while (!isFinishing() && !isDestroyed()) {
+                boolean ok = probeAdbAuth();
+                runOnUiThread(() -> ui.setAdbAuthorized(ok));
+                if (ok) break;
+                if (!adbAuthResumed) break;
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException e) {
+                    break;
+                }
+            }
+            adbAuthWatching = false;
+        }).start();
+    }
+
+    private boolean probeAdbAuth() {
+        try (Adb adb = Adb.connect(getApplicationContext(), 8000, null)) {
+            return true;
+        } catch (IOException | RuntimeException e) {
+            return false;
+        }
     }
 
     private Toast disableToast;
@@ -352,8 +350,8 @@ public final class SystemSlimmingActivity extends ComponentActivity {
     }
 
     private static int adbFailureRes(String msg) {
-        if (msg.contains("port 5555 closed")) return R.string.slimming_disable_no_adb;
-        if (msg.contains("wasn't accepted")) return R.string.slimming_disable_not_accepted;
+        if (msg.contains(Adb.MSG_PORT_CLOSED)) return R.string.slimming_disable_no_adb;
+        if (msg.contains(Adb.MSG_NOT_ACCEPTED)) return R.string.slimming_disable_not_accepted;
         return R.string.slimming_disable_failed;
     }
 
@@ -374,7 +372,6 @@ public final class SystemSlimmingActivity extends ComponentActivity {
             try {
                 int done = 0;
                 int skipped = 0;
-                boolean disconnected = false;
                 List<String> failed = new ArrayList<>();
                 try (Adb adb = Adb.connect(getApplicationContext(), 120_000, () ->
                         runOnUiThread(() -> ui.setStatusText(getString(R.string.slimming_disable_waiting))))) {
@@ -404,8 +401,6 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                             adb.shell("pm disable-user " + pkg);
                         } catch (IOException e) {
                             failed.add(pkg);
-                            disconnected = true;
-                            break;
                         }
                         boolean disabled = false;
                         try {
@@ -430,17 +425,13 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                 final int useDone = done;
                 final int useSkipped = skipped;
                 final int useFailed = failed.size();
-                final boolean useDisconnected = disconnected;
                 runOnUiThread(() -> {
-                    if (useDisconnected) {
-                        ui.setStatusText(getString(R.string.slimming_adb_disconnected));
-                    } else {
-                        ui.setStatusText(getString(R.string.slimming_disable_done, useDone, useSkipped, useFailed));
-                    }
+                    ui.setStatusText(getString(R.string.slimming_disable_done, useDone, useSkipped, useFailed));
                     refreshStates();
                 });
             } finally {
                 setBusy(false);
+                checkAdbAuth();
             }
         }).start();
     }
@@ -462,7 +453,6 @@ public final class SystemSlimmingActivity extends ComponentActivity {
             try {
                 int done = 0;
                 int skipped = 0;
-                boolean disconnected = false;
                 List<String> failed = new ArrayList<>();
                 try (Adb adb = Adb.connect(getApplicationContext(), 120_000, () ->
                         runOnUiThread(() -> ui.setStatusText(getString(R.string.slimming_disable_waiting))))) {
@@ -490,8 +480,6 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                             adb.shell("pm enable " + pkg);
                         } catch (IOException e) {
                             failed.add(pkg);
-                            disconnected = true;
-                            break;
                         }
                         boolean enabled = false;
                         try {
@@ -516,17 +504,13 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                 final int useDone = done;
                 final int useSkipped = skipped;
                 final int useFailed = failed.size();
-                final boolean useDisconnected = disconnected;
                 runOnUiThread(() -> {
-                    if (useDisconnected) {
-                        ui.setStatusText(getString(R.string.slimming_adb_disconnected));
-                    } else {
-                        ui.setStatusText(getString(R.string.slimming_restore_done, useDone, useSkipped, useFailed));
-                    }
+                    ui.setStatusText(getString(R.string.slimming_restore_done, useDone, useSkipped, useFailed));
                     refreshStates();
                 });
             } finally {
                 setBusy(false);
+                checkAdbAuth();
             }
         }).start();
     }
@@ -575,6 +559,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
                 runOnUiThread(() -> refreshStates());
             } finally {
                 setBusy(false);
+                checkAdbAuth();
             }
         }).start();
     }
@@ -784,6 +769,7 @@ public final class SystemSlimmingActivity extends ComponentActivity {
             if (tab > 0) s = s.substring(0, tab);
             if (isPackageName(s)) rec.add(s);
         }
+        opt.removeAll(rec);
         return new Debloat(new ArrayList<>(rec), new ArrayList<>(opt));
     }
 

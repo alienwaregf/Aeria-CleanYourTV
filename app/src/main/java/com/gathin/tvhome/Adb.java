@@ -28,6 +28,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
@@ -36,6 +37,8 @@ import javax.crypto.Cipher;
 
 final class Adb implements Closeable {
     private static final String TAG = "TvHome.Adb";
+    static final String MSG_PORT_CLOSED = "debugging is off on the TV (port 5555 closed)";
+    static final String MSG_NOT_ACCEPTED = "debugging permission wasn't accepted on the TV";
     private static final int CNXN = 0x4e584e43, AUTH = 0x48545541, OPEN = 0x4e45504f, OKAY = 0x59414b4f,
             CLSE = 0x45534c43, WRTE = 0x45545257, STLS = 0x534c5453;
     private static final int VERSION = 0x01000001, MAX_DATA = 256 * 1024;
@@ -65,9 +68,12 @@ final class Adb implements Closeable {
         Socket s = new Socket();
         try {
             s.connect(new InetSocketAddress("127.0.0.1", 5555), 3000);
+        } catch (SocketTimeoutException e) {
+            s.close();
+            throw new IOException("timed out connecting to the TV (port 5555)");
         } catch (IOException e) {
             s.close();
-            throw new IOException("debugging is off on the TV (port 5555 closed)");
+            throw new IOException(MSG_PORT_CLOSED);
         }
         Adb adb;
         try {
@@ -85,7 +91,7 @@ final class Adb implements Closeable {
                 try {
                     m = adb.read();
                 } catch (EOFException | SocketTimeoutException e) {
-                    throw new IOException(offeredKey ? "debugging permission wasn't accepted on the TV" : "the TV's ADB didn't respond");
+                    throw new IOException(offeredKey ? MSG_NOT_ACCEPTED : "the TV's ADB didn't respond");
                 }
                 if (m.command == CNXN) {
                     s.setSoTimeout(20_000);
@@ -106,7 +112,7 @@ final class Adb implements Closeable {
                         long until = SystemClock.elapsedRealtime() + approvalMs;
                         while (adb.in.available() == 0) {
                             if (SystemClock.elapsedRealtime() > until) {
-                                throw new IOException("debugging permission wasn't accepted on the TV");
+                                throw new IOException(MSG_NOT_ACCEPTED);
                             }
                             SystemClock.sleep(2000);
                             Adb fresh = signedIn(keys);
@@ -159,6 +165,7 @@ final class Adb implements Closeable {
             if (m.command == OKAY) {
                 remote = m.arg0;
             } else if (m.command == WRTE) {
+                if (result.size() + m.data.length > 1024 * 1024) throw new IOException("ADB output too large");
                 result.write(m.data);
                 send(OKAY, local, m.arg0, null);
             } else if (m.command == CLSE) {
@@ -209,8 +216,12 @@ final class Adb implements Closeable {
             KeyFactory factory = KeyFactory.getInstance("RSA");
             if (privateFile.exists() && publicFile.exists()) {
                 try {
-                    return new KeyPair(factory.generatePublic(new X509EncodedKeySpec(readFile(publicFile))),
-                            factory.generatePrivate(new PKCS8EncodedKeySpec(readFile(privateFile))));
+                    PublicKey pub = factory.generatePublic(new X509EncodedKeySpec(readFile(publicFile)));
+                    PrivateKey priv = factory.generatePrivate(new PKCS8EncodedKeySpec(readFile(privateFile)));
+                    if (((RSAPublicKey) pub).getModulus().equals(((RSAPrivateKey) priv).getModulus())) {
+                        return new KeyPair(pub, priv);
+                    }
+                    Log.w(TAG, "ADB key pair mismatched, generating a new one");
                 } catch (GeneralSecurityException | IOException e) {
                     Log.w(TAG, "ADB key unreadable, generating a new one");
                 }

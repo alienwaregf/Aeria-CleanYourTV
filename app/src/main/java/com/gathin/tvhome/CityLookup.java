@@ -42,7 +42,7 @@ public final class CityLookup {
         String strTrim = sharedPreferences.getString("weather_city", "").trim();
         if (!strTrim.isEmpty()) {
             String[] strArrCityEntry = cityEntry(context, strTrim);
-            return strArrCityEntry;
+            if (strArrCityEntry != null) return strArrCityEntry;
         }
         String[] strArrIpCityName = ipCityName();
         if (strArrIpCityName == null) {
