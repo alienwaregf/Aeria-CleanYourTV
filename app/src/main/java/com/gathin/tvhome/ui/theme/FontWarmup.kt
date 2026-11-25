@@ -5,14 +5,14 @@ import android.graphics.Typeface
 import android.text.TextPaint
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.createFontFamilyResolver
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 object FontWarmup {
-    @Volatile private var started = false
+    private val started = AtomicBoolean(false)
 
     fun start(context: Context) {
-        if (started) return
-        started = true
+        if (!started.compareAndSet(false, true)) return
         val app = context.applicationContext
         thread(name = "AerialFonts", priority = Thread.NORM_PRIORITY) {
             runCatching {
