@@ -111,7 +111,6 @@ class LiveFilm {
 @Composable
 fun LiveWallpaper(
     moving: Boolean,
-    followApp: Boolean = false,
     keep: Boolean,
     cover: Animatable<Float, *>,
     hold: Boolean,
@@ -291,15 +290,19 @@ fun LiveWallpaper(
                 ?: reader.frame(film, at, Wallpapers.screenW, Wallpapers.screenH, exact = false, nearest = true)
         }
         if (frame == null) {
+            // The picture as it was, of an earlier moment, rather than black; it catches up behind
+            // the app (LaunchedEffect(keep)).
             DiagLog.i("wallpaper film: no frame in time to leave on")
             if (fileFramesShut(context)) pictureStale = true
             cover.snapTo(0f)
             return
         }
-        Wallpapers.useLiveFrame(frame, film, at)
+        // Shown, then the decoder goes; kept and frosted after (1.4 s on MiTV-MFTR0).
+        Wallpapers.showLiveFrame(frame)
         cover.snapTo(0f)
         p.stop()
         DiagLog.i("wallpaper left on its frame in ${android.os.SystemClock.elapsedRealtime() - started} ms")
+        Wallpapers.useLiveFrame(frame, film, at)
     }
 
     var glassSample by remember { mutableStateOf<GlassSample?>(null) }
@@ -385,7 +388,7 @@ fun LiveWallpaper(
                 }
                 glassSample = null
                 var frame = if (pixelCopy == false) null else surface?.let { capture(it) }
-                if (frame == null && film != null && !followApp) {
+                if (frame == null && film != null) {
                     if (panelNow) delay(PANEL_IN_MS)
                     if (!live.stopped) reader.frame(film, at, 320, 180, exact = false)?.let {
                         Wallpapers.useLiveFrost(it)
@@ -819,31 +822,10 @@ internal suspend fun keyFrameDecodedInApp(context: android.content.Context, id: 
 }
 
 internal object SaverFrames {
-    class Picture(val film: String, val atMs: Long, val prepared: Wallpapers.PreparedFrame) {
-        fun recycle() {
-            prepared.frame.recycle()
-            prepared.frost.recycle()
-        }
-    }
+    class Picture(val film: String, val atMs: Long, val prepared: Wallpapers.PreparedFrame)
 
-    @Volatile private var startField: Picture? = null
-    @Volatile private var latestField: Picture? = null
-
-    var start: Picture?
-        get() = startField
-        set(value) {
-            val old = startField
-            startField = value
-            if (old !== value) old?.recycle()
-        }
-
-    var latest: Picture?
-        get() = latestField
-        set(value) {
-            val old = latestField
-            latestField = value
-            if (old !== value) old?.recycle()
-        }
+    @Volatile var start: Picture? = null
+    @Volatile var latest: Picture? = null
 
     fun clear() {
         start = null

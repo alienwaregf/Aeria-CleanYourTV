@@ -574,12 +574,9 @@ fun HomeScreen(
             ?: if (previewActive) apps.getOrNull(focusedIndex)?.source?.id else null
         val filmStandsIn = overlay == Overlay.None || overlay is Overlay.ControlCenter || overlay is Overlay.Wallpaper ||
             (overlay is Overlay.AppMenu && overlay.inFolder == null)
-        val followAppPause = focusedRow != 0 && apps.getOrNull(focusedIndex)?.source == null &&
-            !inGrid && !pastShelf && overlay == Overlay.None && moving == null
         when {
             !previewActive && (focusBg == null || shelfCardsData) && Wallpapers.selectedId == Wallpapers.LIVE -> LiveWallpaper(
                 moving = filmMoves && focusedRow == 0,
-                followApp = followAppPause,
                 keep = vm.filmFront && (!vm.screensaverVisible || filmSaver),
                 cover = filmCover,
                 hold = filmSaver && vm.filmFront,
@@ -593,7 +590,6 @@ fun HomeScreen(
             !previewActive && (focusBg == null || shelfCardsData) && Wallpapers.isVideo() -> key(Wallpapers.selectedId) {
                 VideoWallpaper(
                     moving = filmMoves && focusedRow == 0,
-                    followApp = followAppPause,
                     keep = vm.filmFront && (!vm.screensaverVisible || filmSaver),
                     hold = filmSaver && vm.filmFront,
                     home = homeVideo,
@@ -1018,6 +1014,9 @@ fun HomeScreen(
             )
         }
 
+        // Once per process, while Home is idle: Control Center, then Personalize, drawn for a few
+        // frames, nearly transparent, so that their first opening is not their first draw (see
+        // ControlCenter, WallpaperSheet).
         var ccWarm by remember { mutableStateOf(false) }
         LaunchedEffect(vm.loaded) {
             if (!vm.loaded || ControlCenterWarmed.done) return@LaunchedEffect

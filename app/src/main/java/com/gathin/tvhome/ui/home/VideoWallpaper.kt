@@ -95,7 +95,6 @@ internal object VideoSaverFrames {
 @Composable
 fun VideoWallpaper(
     moving: Boolean,
-    followApp: Boolean = false,
     keep: Boolean,
     hold: Boolean,
     home: HomeVideo,
@@ -176,8 +175,16 @@ fun VideoWallpaper(
 
                 override fun onPlayerError(error: PlaybackException) {
                     DiagLog.i("video wallpaper failed (${error.errorCodeName})")
+                    // Behind an app or a screensaver the decoder is theirs: no retry.
                     if (!keepNow) return
+                    // The picture rather than the black video plane until a frame comes again; the
+                    // film comes back in over it (LaunchedEffect(play)). Black for seconds after each
+                    // failure on Hisense VIDAA_TV MTK9652, until the next film played (issue #1251).
                     scope.launch { cover.snapTo(0f) }
+                    // The same film again, from where it was: the decoder fails at times as the film
+                    // moves again on that TV, and dropping the film for good on any error left the
+                    // owner fewer of their videos each time. The next one only after three in a
+                    // row (as LiveWallpaper); after six, the picture stays.
                     if (++failures >= 6) return
                     if (failures % 3 == 0 && mediaItemCount > 1) seekToNextMediaItem()
                     prepare()
@@ -227,11 +234,12 @@ fun VideoWallpaper(
         val at = p.currentPosition
         val started = android.os.SystemClock.elapsedRealtime()
         val frame = withTimeoutOrNull(LEAVE_FRAME_MS) { frameOf(film, at, held = true) } ?: return false
-        Wallpapers.useLiveFrame(frame.first, film, frame.second)
+        Wallpapers.showLiveFrame(frame.first)
         cover.snapTo(0f)
         release()
         Wallpapers.leaveVideo(film, at)
         DiagLog.i("video wallpaper left on its frame in ${android.os.SystemClock.elapsedRealtime() - started} ms")
+        Wallpapers.useLiveFrame(frame.first, film, frame.second)
         return true
     }
 
@@ -258,6 +266,8 @@ fun VideoWallpaper(
             Wallpapers.dropFilmFrost()
             if (p.playbackState == Player.STATE_IDLE) p.prepare()
             p.playWhenReady = true
+            // In over the picture each time frames come: at the start, and again after a failure
+            // took it down (onPlayerError).
             snapshotFlow { showing }.collect { if (it && cover.targetValue < 1f) cover.animateTo(1f, tween(1200, easing = Motion.EaseOut)) }
         } else {
             val p = player ?: return@LaunchedEffect
@@ -279,7 +289,7 @@ fun VideoWallpaper(
                     letGo()
                     return@LaunchedEffect
                 }
-                val frame = if (followApp) null else film?.let { frameOf(it, at, held = true) }
+                val frame = film?.let { frameOf(it, at, held = true) }
                 if (frame != null && film != null) Wallpapers.useLiveFrame(frame.first, film, frame.second)
                 if (quiet) DiagLog.i("video wallpaper picture takes over from the stopped film")
                 cover.animateTo(0f, tween(if (frame != null) 320 else 600, easing = Motion.EaseOut))
