@@ -963,7 +963,7 @@ class MainActivity : ComponentActivity() {
 
         private const val SAVER_AHEAD_MS = 8_000L
 
-        private const val CLOCK_TICK_MS = 30 * 60 * 1000L
+        private const val CLOCK_TICK_MS = 10 * 60 * 1000L
 
         private var dreamFailsNow = false
 
