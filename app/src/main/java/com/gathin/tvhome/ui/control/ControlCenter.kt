@@ -83,6 +83,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.gathin.tvhome.CcPage
+import com.gathin.tvhome.ControlCenterFocus
 import com.gathin.tvhome.HomeViewModel
 import com.gathin.tvhome.Overlay
 import com.gathin.tvhome.R
@@ -125,12 +126,14 @@ fun ControlCenter(
     onClose: () -> Unit,
     warm: Boolean = false,
     onShelf: Boolean = false,
+    focusInputSettings: Boolean = false,
+    focus: ControlCenterFocus = ControlCenterFocus.Default,
 ) {
     BackHandler(enabled = visible) {
         when (page) {
             CcPage.Main -> onClose()
             CcPage.Inputs -> vm.overlay = Overlay.ControlCenter(CcPage.Main)
-            CcPage.InputSettings -> vm.overlay = Overlay.ControlCenter(CcPage.Inputs)
+            CcPage.InputSettings -> vm.overlay = Overlay.ControlCenter(CcPage.Inputs, focusInputSettings = true)
             CcPage.Update, CcPage.Setup -> vm.overlay = Overlay.ControlCenter(CcPage.Main)
         }
     }
@@ -174,9 +177,9 @@ fun ControlCenter(
                 ) { p ->
                     Box(Modifier.padding(16.dp)) {
                         when (p) {
-                            CcPage.Main -> MainPage(vm, now, takeFocus = visible, poll = visible, onOpen = onOpen)
-                            CcPage.Inputs -> InputsPage(vm, visible, onOpen)
-                            CcPage.InputSettings -> InputSettingsPage(vm, visible)
+                            CcPage.Main -> MainPage(vm, now, takeFocus = visible, focus = focus, poll = visible, onOpen = onOpen)
+                            CcPage.Inputs -> InputsPage(vm, visible && page == p, focusInputSettings, onOpen)
+                            CcPage.InputSettings -> InputSettingsPage(vm, visible && page == p)
                             CcPage.Setup -> SetupPage(vm, visible, onOpen)
                             CcPage.Update -> UpdatePage(vm, visible)
                         }
@@ -193,6 +196,7 @@ private fun MainPage(
     vm: HomeViewModel,
     now: LocalDateTime,
     takeFocus: Boolean,
+    focus: ControlCenterFocus = ControlCenterFocus.Default,
     poll: Boolean,
     onOpen: (android.content.Intent) -> Unit,
 ) {
@@ -202,6 +206,7 @@ private fun MainPage(
     val showsBrightness = remember { OutputDevice.showsBrightness() && !SystemProbe.hidesBrightness(context) }
     PollBrightness(vm, laser, poll)
     val first = remember { FocusRequester() }
+    val personalizeFocus = remember { FocusRequester() }
     val networkFocus = remember { FocusRequester() }
     val settingsFocus = remember { FocusRequester() }
     var cameFrom by remember { mutableStateOf(first) }
@@ -212,10 +217,13 @@ private fun MainPage(
             delay(3000)
         }
     }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(takeFocus, focus) {
         if (!takeFocus) return@LaunchedEffect
         withFrameNanos { }
-        runCatching { first.requestFocus() }
+        runCatching {
+            if (focus == ControlCenterFocus.Personalize) personalizeFocus.requestFocus()
+            else first.requestFocus()
+        }
     }
 
     Column {
@@ -289,7 +297,8 @@ private fun MainPage(
         MenuRow(
             Glyph.Photo,
             stringResource(R.string.cc_personalize),
-            onClick = { vm.overlay = Overlay.Wallpaper },
+            focusRequester = personalizeFocus,
+            onClick = { vm.overlay = Overlay.Wallpaper() },
         )
         vm.bootTargetLabel()?.let { name ->
             MenuRow(
@@ -638,12 +647,19 @@ private fun BrightnessRow(vm: HomeViewModel, laser: Boolean) {
 }
 
 @Composable
-private fun InputsPage(vm: HomeViewModel, takeFocus: Boolean, onOpen: (android.content.Intent) -> Unit) {
+private fun InputsPage(
+    vm: HomeViewModel,
+    takeFocus: Boolean,
+    focusInputSettings: Boolean,
+    onOpen: (android.content.Intent) -> Unit,
+) {
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
+    val settings = remember { FocusRequester() }
+    LaunchedEffect(takeFocus, focusInputSettings) {
         if (!takeFocus) return@LaunchedEffect
         withFrameNanos { }
-        runCatching { first.requestFocus() }
+        val target = if ((focusInputSettings || vm.sources.isEmpty()) && vm.sources.isNotEmpty()) settings else first
+        runCatching { target.requestFocus() }
     }
     Column(Modifier.heightIn(max = 470.dp).verticalScroll(rememberScrollState())) {
         MenuRow(Glyph.ChevronLeft, stringResource(R.string.cc_inputs), onClick = { vm.overlay = Overlay.ControlCenter(CcPage.Main) })
@@ -670,7 +686,11 @@ private fun InputsPage(vm: HomeViewModel, takeFocus: Boolean, onOpen: (android.c
         }
         if (vm.sources.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
-            MenuRow(Glyph.Gear, stringResource(R.string.cc_inputs_settings), onClick = { vm.overlay = Overlay.ControlCenter(CcPage.InputSettings) })
+            MenuRow(
+                Glyph.Gear, stringResource(R.string.cc_inputs_settings),
+                onClick = { vm.overlay = Overlay.ControlCenter(CcPage.InputSettings) },
+                focusRequester = settings,
+            )
         }
     }
 }
@@ -678,14 +698,16 @@ private fun InputsPage(vm: HomeViewModel, takeFocus: Boolean, onOpen: (android.c
 @Composable
 private fun InputSettingsPage(vm: HomeViewModel, takeFocus: Boolean) {
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(takeFocus) {
         if (!takeFocus) return@LaunchedEffect
         withFrameNanos { }
         runCatching { first.requestFocus() }
     }
     fun name(source: com.gathin.tvhome.system.TvSource) = source.deviceName?.let { "${source.label} · $it" } ?: source.label
     Column(Modifier.heightIn(max = 470.dp).verticalScroll(rememberScrollState())) {
-        MenuRow(Glyph.ChevronLeft, stringResource(R.string.cc_inputs_settings), onClick = { vm.overlay = Overlay.ControlCenter(CcPage.Inputs) })
+        MenuRow(Glyph.ChevronLeft, stringResource(R.string.cc_inputs_settings), onClick = {
+            vm.overlay = Overlay.ControlCenter(CcPage.Inputs, focusInputSettings = true)
+        })
 
         Spacer(Modifier.height(10.dp))
         BasicText(stringResource(R.string.cc_inputs_pin), style = Type.Callout, modifier = Modifier.padding(start = 14.dp, bottom = 6.dp))
