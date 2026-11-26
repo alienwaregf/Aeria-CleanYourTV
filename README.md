@@ -11,7 +11,7 @@
 ![Android](https://img.shields.io/badge/Android%20TV-5.0%2B-3ddc84?style=flat-square&logo=android&logoColor=white)
 ![鸣谢](https://img.shields.io/badge/鸣谢-Aerial·CleanYourTV-555555?style=flat-square)
 
-![Aeria-CleanYourTV 主屏幕实拍：YouTube Top Shelf 大卡片](screenshot/TopShelf_YouTube.JPG)
+![Aeria-CleanYourTV 主屏幕实拍：YouTube Top Shelf 大卡片](screenshot/TopShelf_YouTube_115XR90M2.png)
 
 <p align="center"><em>索尼 KD-43X85K 电视实拍 —— 打开电视就是这样：Top Shelf 大卡片在上，玻璃底板在下</em></p>
 
@@ -34,10 +34,10 @@
 - **虎牙直播**：只上真正在播的房间，按当前人气取前 30
 - **资深影迷**：见下
 
-| ![YouTube Top Shelf 实拍](screenshot/TopShelf_YouTube.JPG) | ![哔哩 Top Shelf 实拍](screenshot/TopShelf_%E4%BA%91%E8%A7%86%E5%90%AC%E5%B0%8F%E7%94%B5%E8%A7%86.JPG) |
+| ![YouTube Top Shelf 实拍](screenshot/TopShelf_YouTube_115XR90M2.png) | ![哔哩 Top Shelf 实拍](screenshot/TopShelf_%E4%BA%91%E8%A7%86%E5%90%AC%E5%B0%8F%E7%94%B5%E8%A7%86_115XR90M2.png) |
 | :---: | :---: |
 | YouTube 订阅 | 哔哩热门 |
-| ![虎牙 Top Shelf 实拍](screenshot/TopShelf_%E4%BA%91%E8%A7%86%E5%90%AC%E8%99%8E%E7%94%B5%E7%AB%9E.JPG) | ![AfuseKtV Top Shelf 实拍](screenshot/TopShelf_AfuseKtV.JPG) |
+| ![虎牙 Top Shelf 实拍](screenshot/TopShelf_%E4%BA%91%E8%A7%86%E5%90%AC%E8%99%8E%E7%94%B5%E7%AB%9E_115XR90M2.png) | ![AfuseKtV Top Shelf 实拍](screenshot/TopShelf_AfuseKtV_115XR90M2.png) |
 | 虎牙直播 | AfuseKtV |
 
 ### 🎬 资深影迷：今日趋势 + 预告片
@@ -50,7 +50,7 @@ TMDB 今日趋势，电影和电视剧，20 部轮播，8 秒换一张：
 - 平台图标按优先级排，最多显示 9 个，多出折成 +N
 - 屏保里也是它，全屏轮播，左右可切
 
-| ![资深影迷壁纸实拍](screenshot/%E8%B5%84%E6%B7%B1%E5%BD%B1%E8%BF%B7%E5%A3%81%E7%BA%B8.JPG) | ![资深影迷屏保实拍](screenshot/%E8%B5%84%E6%B7%B1%E5%BD%B1%E8%BF%B7%E5%B1%8F%E4%BF%9D.JPG) |
+| ![资深影迷壁纸实拍](screenshot/%E8%B5%84%E6%B7%B1%E5%BD%B1%E8%BF%B7%E5%A3%81%E7%BA%B8_115XR90M2.png) | ![资深影迷屏保实拍](screenshot/%E8%B5%84%E6%B7%B1%E5%BD%B1%E8%BF%B7%E5%B1%8F%E4%BF%9D_115XR90M2.png) |
 | :---: | :---: |
 | 桌面：带 Dock 与状态胶囊 | 屏保：全屏轮播 |
 
@@ -66,7 +66,7 @@ TMDB 今日趋势，电影和电视剧，20 部轮播，8 秒换一张：
 - 页面直接显示 ADB 授权状态，没授权时按钮不可点，并告诉你去哪开
 - 后悔了可以恢复
 
-![系统瘦身页实拍](screenshot/%E7%B3%BB%E7%BB%9F%E7%98%A6%E8%BA%AB%E9%A1%B5.JPG)
+![系统瘦身页实拍](screenshot/%E7%B3%BB%E7%BB%9F%E7%98%A6%E8%BA%AB%E9%A1%B5_115XR90M2.png)
 
 <p align="center"><em>按型号现拉的清单：建议停用 31 个、自选 22 个，一键停用，后悔药一键恢复</em></p>
 
@@ -90,7 +90,7 @@ TMDB 今日趋势，电影和电视剧，20 部轮播，8 秒换一张：
 - **天气**：和风 + 默认源，emoji 显示；今天、明天、后天、大后天预报 + 天气预警
 - **屏保**：航拍、视频、资深影迷、待机显示（纯黑时钟，白天纯白、夜里 18:00–06:00 暗红）
 
-| ![航拍壁纸实拍](screenshot/%E8%88%AA%E6%8B%8D%E5%A3%81%E7%BA%B8.JPG) | ![航拍屏保实拍](screenshot/%E8%88%AA%E6%8B%8D%E5%B1%8F%E4%BF%9D.JPG) |
+| ![航拍壁纸实拍](screenshot/%E8%88%AA%E6%8B%8D%E5%A3%81%E7%BA%B8_115XR90M2.png) | ![航拍屏保实拍](screenshot/%E8%88%AA%E6%8B%8D%E5%B1%8F%E4%BF%9D_115XR90M2.png) |
 | :---: | :---: |
 | 航拍壁纸：俯瞰地球 | 航拍屏保：途经太平洋上空 |
 
@@ -104,7 +104,7 @@ TMDB 今日趋势，电影和电视剧，20 部轮播，8 秒换一张：
 
 先看一眼换桌面之前和之后：
 
-| ![电视原装首页实拍](screenshot/%E8%87%AA%E5%B8%A6%E6%A1%8C%E9%9D%A2.JPG) | ![Aeria-CleanYourTV 主屏幕实拍](screenshot/%E8%88%AA%E6%8B%8D%E5%A3%81%E7%BA%B8.JPG) |
+| ![电视原装首页实拍](screenshot/%E8%87%AA%E5%B8%A6%E6%A1%8C%E9%9D%A2_115XR90M2.png) | ![Aeria-CleanYourTV 主屏幕实拍](screenshot/%E8%88%AA%E6%8B%8D%E5%A3%81%E7%BA%B8_115XR90M2.png) |
 | :---: | :---: |
 | 电视原装首页 | Aeria-CleanYourTV |
 
