@@ -86,7 +86,7 @@ object TmdbTrending {
     const val KEY_TMDB_KEY = "tmdb_key"
     private const val KEY_FETCHED_AT = "fetched_at"
     private const val KEY_ITEMS_JSON = "items_json"
-    private const val TTL_MS = 10 * 60_000L
+    private const val TTL_MS = 30 * 60_000L
     private const val RETRY_MS = 3 * 60 * 1000L
     private const val MAX_ITEMS = 20
     private const val IMAGE_BASE = "https://image.tmdb.org/t/p/original"
