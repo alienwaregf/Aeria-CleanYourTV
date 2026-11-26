@@ -55,15 +55,24 @@ private const val POLL_QUIET_MS = 400L
 
 sealed interface Overlay {
     data object None : Overlay
-    data class ControlCenter(val page: CcPage = CcPage.Main) : Overlay
+    data class ControlCenter(
+        val page: CcPage = CcPage.Main,
+        /** Return from Input settings to its row in the input list. */
+        val focusInputSettings: Boolean = false,
+        val focus: ControlCenterFocus = ControlCenterFocus.Default,
+    ) : Overlay
     data class AppMenu(val key: String, val anchor: Rect, val inFolder: String? = null) : Overlay
     data class Folder(val id: String) : Overlay
     data object HiddenApps : Overlay
-    data object Wallpaper : Overlay
+    data class Wallpaper(val focus: WallpaperFocus = WallpaperFocus.Default) : Overlay
     data class Pin(val mode: PinMode, val onDone: () -> Unit) : Overlay
 }
 
 enum class CcPage { Main, Inputs, InputSettings, Setup, Update }
+
+enum class ControlCenterFocus { Default, Personalize }
+
+enum class WallpaperFocus { Default, HiddenApps }
 
 private const val LEADING_TILES = 13
 
