@@ -409,6 +409,12 @@ fun HeroRow(
                     style = Type.Body.copy(color = Palette.SecondaryLabel),
                     modifier = Modifier.graphicsLayer { alpha = overviewAlpha },
                 )
+                Spacer(Modifier.height(6.dp))
+                BasicText(
+                    stringResource(R.string.trailer_hint),
+                    style = Type.Callout.copy(color = Palette.Label),
+                    modifier = Modifier.graphicsLayer { alpha = overviewAlpha },
+                )
             }
         }
     }
