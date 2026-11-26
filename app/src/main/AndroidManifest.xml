@@ -36,6 +36,9 @@
         <package android:name="com.skyworth.tv" />
         <provider android:authorities="com.skyworth.tv.sdk.provider" />
         <package android:name="com.coocaa.os.ccosservice" />
+        <!-- SystemProbe.tclQuickPanel: TCL Google TV (G10) firmware opens com.tcl.suspension's Quick
+             Panel on the input key; without this the Android 11 visibility filter hides its service. -->
+        <package android:name="com.tcl.suspension" />
         <package android:name="com.skyworth.setting" />
         <intent>
             <action android:name="coocaa.intent.action.SOURCE_DIALOG" />
