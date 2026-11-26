@@ -76,9 +76,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.gathin.tvhome.CcPage
+import com.gathin.tvhome.ControlCenterFocus
 import com.gathin.tvhome.apps.SourceLooks
 import com.gathin.tvhome.HomeViewModel
 import com.gathin.tvhome.Overlay
+import com.gathin.tvhome.WallpaperFocus
 import com.gathin.tvhome.R
 import com.gathin.tvhome.settings.AerialSettings
 import androidx.compose.foundation.layout.width
@@ -233,7 +235,9 @@ fun HomeScreen(
     val heroRequester = remember { FocusRequester() }
     val appContext = LocalContext.current
     val firmwareInputPanel = remember {
-        SystemProbe.tclInputPanel(appContext) != null || SystemProbe.coocaaInputPanel(appContext)
+        SystemProbe.tclInputPanel(appContext) != null || SystemProbe.coocaaInputPanel(appContext) ||
+            SystemProbe.tianciInputPanel(appContext) || SystemProbe.tclSourceManagerPanel(appContext) ||
+            SystemProbe.tclQuickPanel(appContext)
     }
 
     var focusedKey by remember { mutableStateOf<String?>(null) }
@@ -1044,6 +1048,8 @@ fun HomeScreen(
             onClose = { vm.overlay = Overlay.None },
             warm = ccWarm,
             onShelf = !pastShelf,
+            focusInputSettings = (overlay as? Overlay.ControlCenter)?.focusInputSettings == true,
+            focus = (overlay as? Overlay.ControlCenter)?.focus ?: ControlCenterFocus.Default,
         )
 
         FolderView(
@@ -1130,16 +1136,18 @@ fun HomeScreen(
             apps = vm.hiddenApps,
             onUnhide = { key ->
                 vm.unhide(key)
-                if (vm.hiddenApps.isEmpty()) vm.overlay = Overlay.Wallpaper
+                if (vm.hiddenApps.isEmpty()) vm.overlay = Overlay.Wallpaper(WallpaperFocus.HiddenApps)
             },
-            onDismiss = { vm.overlay = Overlay.Wallpaper },
+            // Hidden apps are reached from Personalization, and Back returns there.
+            onDismiss = { vm.overlay = Overlay.Wallpaper(WallpaperFocus.HiddenApps) },
         )
 
         WallpaperSheet(
             visible = overlay is Overlay.Wallpaper,
+            focusTarget = (overlay as? Overlay.Wallpaper)?.focus ?: WallpaperFocus.Default,
             onSettled = { sheetIn = it },
             warm = sheetWarm,
-            onDismiss = { vm.overlay = Overlay.ControlCenter() },
+            onDismiss = { vm.overlay = Overlay.ControlCenter(CcPage.Main, focus = ControlCenterFocus.Personalize) },
             hiddenCount = vm.hiddenApps.size,
             onHiddenApps = { vm.whenUnlocked { vm.overlay = Overlay.HiddenApps } },
             onStartScreensaver = {
@@ -1147,8 +1155,8 @@ fun HomeScreen(
                 onStartScreensaver()
             },
             onPin = { on ->
-                if (on) vm.overlay = Overlay.Pin(PinMode.Create) { vm.overlay = Overlay.Wallpaper }
-                else vm.whenUnlocked { AerialSettings.choosePin(null); vm.overlay = Overlay.Wallpaper }
+                if (on) vm.overlay = Overlay.Pin(PinMode.Create) { vm.overlay = Overlay.Wallpaper() }
+                else vm.whenUnlocked { AerialSettings.choosePin(null); vm.overlay = Overlay.Wallpaper() }
             },
             homeStatus = vm.homeStatus,
             onUpdate = { vm.overlay = Overlay.ControlCenter(CcPage.Update) },
