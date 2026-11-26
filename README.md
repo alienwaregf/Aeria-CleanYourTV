@@ -11,6 +11,10 @@
 ![Android](https://img.shields.io/badge/Android%20TV-5.0%2B-3ddc84?style=flat-square&logo=android&logoColor=white)
 ![鸣谢](https://img.shields.io/badge/鸣谢-Aerial·CleanYourTV-555555?style=flat-square)
 
+![Aeria-CleanYourTV 主屏幕实拍：YouTube Top Shelf 大卡片](screenshot/TopShelf_YouTube.JPG)
+
+<p align="center"><em>索尼 KD-43X85K 电视实拍 —— 打开电视就是这样：Top Shelf 大卡片在上，玻璃底板在下</em></p>
+
 ---
 
 ## 独占功能
@@ -30,6 +34,12 @@
 - **虎牙直播**：只上真正在播的房间，按当前人气取前 30
 - **资深影迷**：见下
 
+| ![YouTube Top Shelf 实拍](screenshot/TopShelf_YouTube.JPG) | ![哔哩 Top Shelf 实拍](screenshot/TopShelf_%E4%BA%91%E8%A7%86%E5%90%AC%E5%B0%8F%E7%94%B5%E8%A7%86.JPG) |
+| :---: | :---: |
+| YouTube 订阅 | 哔哩热门 |
+| ![虎牙 Top Shelf 实拍](screenshot/TopShelf_%E4%BA%91%E8%A7%86%E5%90%AC%E8%99%8E%E7%94%B5%E7%AB%9E.JPG) | ![AfuseKtV Top Shelf 实拍](screenshot/TopShelf_AfuseKtV.JPG) |
+| 虎牙直播 | AfuseKtV |
+
 ### 🎬 资深影迷：今日趋势 + 预告片
 
 TMDB 今日趋势，电影和电视剧，20 部轮播，8 秒换一张：
@@ -39,6 +49,10 @@ TMDB 今日趋势，电影和电视剧，20 部轮播，8 秒换一张：
 - 评分两路：IMDb 分（OMDb）+ 烂番茄影评人分 / 观众分（Trakt）
 - 平台图标按优先级排，最多显示 9 个，多出折成 +N
 - 屏保里也是它，全屏轮播，左右可切
+
+| ![资深影迷壁纸实拍](screenshot/%E8%B5%84%E6%B7%B1%E5%BD%B1%E8%BF%B7%E5%A3%81%E7%BA%B8.JPG) | ![资深影迷屏保实拍](screenshot/%E8%B5%84%E6%B7%B1%E5%BD%B1%E8%BF%B7%E5%B1%8F%E4%BF%9D.JPG) |
+| :---: | :---: |
+| 桌面：带 Dock 与状态胶囊 | 屏保：全屏轮播 |
 
 ### 📡 信号源：不用切就能看
 
@@ -51,6 +65,10 @@ TMDB 今日趋势，电影和电视剧，20 部轮播，8 秒换一张：
 - 清单按电视型号联网现拉
 - 页面直接显示 ADB 授权状态，没授权时按钮不可点，并告诉你去哪开
 - 后悔了可以恢复
+
+![系统瘦身页实拍](screenshot/%E7%B3%BB%E7%BB%9F%E7%98%A6%E8%BA%AB%E9%A1%B5.JPG)
+
+<p align="center"><em>按型号现拉的清单：建议停用 31 个、自选 22 个，一键停用，后悔药一键恢复</em></p>
 
 ### 📦 两个包 + 软件内更新
 
@@ -72,6 +90,10 @@ TMDB 今日趋势，电影和电视剧，20 部轮播，8 秒换一张：
 - **天气**：和风 + 默认源，emoji 显示；今天、明天、后天、大后天预报 + 天气预警
 - **屏保**：航拍、视频、资深影迷、待机显示（纯黑时钟，白天纯白、夜里 18:00–06:00 暗红）
 
+| ![航拍壁纸实拍](screenshot/%E8%88%AA%E6%8B%8D%E5%A3%81%E7%BA%B8.JPG) | ![航拍屏保实拍](screenshot/%E8%88%AA%E6%8B%8D%E5%B1%8F%E4%BF%9D.JPG) |
+| :---: | :---: |
+| 航拍壁纸：俯瞰地球 | 航拍屏保：途经太平洋上空 |
+
 ### 📺 机型适配
 
 微鲸 CEC 唤醒、创维剪贴板替身、各品牌设置页与 Home 键修法……持续跟原版同步，覆盖越来越多机型。
@@ -79,6 +101,12 @@ TMDB 今日趋势，电影和电视剧，20 部轮播，8 秒换一张：
 ---
 
 ## 对比
+
+先看一眼换桌面之前和之后：
+
+| ![电视原装首页实拍](screenshot/%E8%87%AA%E5%B8%A6%E6%A1%8C%E9%9D%A2.JPG) | ![Aeria-CleanYourTV 主屏幕实拍](screenshot/%E8%88%AA%E6%8B%8D%E5%A3%81%E7%BA%B8.JPG) |
+| :---: | :---: |
+| 电视原装首页 | Aeria-CleanYourTV |
 
 |  | Aeria-CleanYourTV（我们） | Aerial | CleanYourTV |
 |---|---|---|---|
@@ -139,3 +167,5 @@ adb -s <电视IP>:5555 install -r Aeria-CleanYourTV.apk
 - **Flow Launcher**：Top Shelf 大卡片的灵感来源（闭源，仅 Releases 发 APK）。
 - **Hume Launcher**：TMDB「资深影迷」轮播的灵感来源。
 - 壁纸与航拍影片来自 Apple TV 与必应，版权归各自所有者。
+
+<p align="center"><em>本页所有界面均为索尼 KD-43X85K 电视实拍</em></p>
