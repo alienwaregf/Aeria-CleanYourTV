@@ -49,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.gathin.tvhome.BuildConfig
+import com.gathin.tvhome.WallpaperFocus
 import com.gathin.tvhome.R
 import com.gathin.tvhome.SystemSlimmingActivity
 import com.gathin.tvhome.settings.AerialSettings
@@ -112,6 +114,7 @@ import androidx.compose.ui.geometry.Size
 @Composable
 fun WallpaperSheet(
     visible: Boolean,
+    focusTarget: WallpaperFocus = WallpaperFocus.Default,
     onDismiss: () -> Unit,
     hiddenCount: Int,
     onHiddenApps: () -> Unit,
@@ -123,6 +126,7 @@ fun WallpaperSheet(
     warm: Boolean = false,
 ) {
     val context = LocalContext.current
+    val hiddenAppsFocus = remember { FocusRequester() }
     var phoneUrl by remember { mutableStateOf<String?>(null) }
     var qr by remember { mutableStateOf<ImageBitmap?>(null) }
 
@@ -139,6 +143,13 @@ fun WallpaperSheet(
     shown.targetState = visible
     val settled = shown.isIdle && shown.currentState
     LaunchedEffect(settled) { onSettled(settled) }
+
+    // Hidden apps return to this sheet; wait until its entrance has settled before requesting focus.
+    LaunchedEffect(visible, focusTarget, settled) {
+        if (!visible || !settled || focusTarget != WallpaperFocus.HiddenApps) return@LaunchedEffect
+        withFrameNanos { }
+        runCatching { hiddenAppsFocus.requestFocus() }
+    }
 
     AnimatedVisibility(visible = visible, enter = fadeIn(tween(220, easing = Motion.EaseOut)), exit = fadeOut(tween(180, easing = Motion.EaseOut)), modifier = Modifier.fillMaxSize()) {
         Box(
@@ -164,7 +175,7 @@ fun WallpaperSheet(
                 BasicText(stringResource(R.string.wp_title), style = Type.LargeTitle)
                 Spacer(Modifier.height(16.dp))
                 SectionTitle(R.string.wp_wallpaper)
-                WallpaperRows(takeFocus)
+                WallpaperRows(takeFocus && focusTarget == WallpaperFocus.Default)
                 if (Wallpapers.items.any { it.kind == WallpaperKind.Source }) Group { note ->
                     Choices(
                         R.string.st_source_sound, null, note,
@@ -213,6 +224,7 @@ fun WallpaperSheet(
                             if (hiddenCount == 0) stringResource(R.string.st_hidden_none) else stringResource(R.string.st_hidden_count, hiddenCount),
                             Glyph.ChevronRight,
                             onHiddenApps,
+                            focusRequester = hiddenAppsFocus,
                         )
                     }
                 }
@@ -242,45 +254,53 @@ fun WallpaperSheet(
                 Spacer(Modifier.height(10.dp))
                 Group { note ->
                     Choices(
-                        R.string.st_focus_style,
-                        stringResource(if (AerialSettings.focusStyle == FocusStyle.HighContrast) R.string.st_focus_high_hint else R.string.st_focus_standard_hint),
-                        note,
+                        R.string.st_focus_style, null, note,
                         listOf(FocusStyle.HighContrast to R.string.st_focus_high, FocusStyle.Standard to R.string.st_focus_standard),
                         AerialSettings.focusStyle, AerialSettings::chooseFocusStyle, first = true,
+                        hintOf = { stringResource(if (it == FocusStyle.HighContrast) R.string.st_focus_high_hint else R.string.st_focus_standard_hint) },
                     )
                     Choices(
-                        R.string.st_sounds,
-                        stringResource(if (AerialSettings.uiSounds == UiSounds.Tv) R.string.st_sounds_tv_hint else R.string.st_sounds_hint),
-                        note,
+                        R.string.st_sounds, null, note,
                         listOf(UiSounds.Tv to R.string.st_sounds_tv, UiSounds.Aerial to R.string.st_sounds_aerial, UiSounds.Off to R.string.st_off),
                         AerialSettings.uiSounds, { AerialSettings.chooseUiSounds(it); Sounds.prepare() },
+                        hintOf = {
+                            when (it) {
+                                UiSounds.Tv -> stringResource(R.string.st_sounds_tv_hint)
+                                UiSounds.Aerial -> stringResource(R.string.st_sounds_hint)
+                                UiSounds.Off -> null
+                            }
+                        },
                     )
                     Choices(
-                        R.string.st_effects,
-                        stringResource(
-                            if (AerialSettings.effects == Effects.Auto && AerialSettings.lowEnd) R.string.st_effects_auto_lite_hint
-                            else R.string.st_effects_hint,
-                        ),
-                        note,
+                        R.string.st_effects, null, note,
                         listOf(Effects.Auto to R.string.st_effects_auto, Effects.Full to R.string.st_effects_full, Effects.Lite to R.string.st_effects_lite),
                         AerialSettings.effects, AerialSettings::chooseEffects,
+                        hintOf = {
+                            stringResource(
+                                if (it == Effects.Auto && AerialSettings.lowEnd) R.string.st_effects_auto_lite_hint
+                                else R.string.st_effects_hint,
+                            )
+                        },
                     )
                 }
 
                 Spacer(Modifier.height(22.dp))
                 SectionTitle(R.string.wp_screensaver)
                 Group { note ->
+                    // The note is the focused chip's (the chosen one's on "Start Now"), issue #1782.
+                    var focusedMode by remember { mutableStateOf<ScreensaverMode?>(null) }
+                    val mode = focusedMode ?: Wallpapers.screensaver
                     SettingRow(
                         R.string.ss_kind,
                         when {
-                            Wallpapers.screensaver == ScreensaverMode.Videos -> stringResource(R.string.ss_videos_hint)
-                            Wallpapers.screensaver == ScreensaverMode.Trending -> stringResource(R.string.ss_trending_hint)
-                            Wallpapers.screensaver == ScreensaverMode.System -> stringResource(R.string.ss_system_hint)
+                            mode == ScreensaverMode.Videos -> stringResource(R.string.ss_videos_hint)
+                            mode == ScreensaverMode.Trending -> stringResource(R.string.ss_trending_hint)
+                            mode == ScreensaverMode.System -> stringResource(R.string.ss_system_hint)
                             AerialSettings.backStartsScreensaver -> stringResource(R.string.ss_back_hint)
                             else -> null
                         },
                         note, first = true,
-                    ) { ScreensaverChoice(onStartScreensaver) }
+                    ) { ScreensaverChoice(onStartScreensaver, onFocusMode = { focusedMode = it }) }
                     val qualities = remember { AerialFormats.supported(context) }
                     if (qualities.size > 1) {
                         val keeps = stringResource(
@@ -333,7 +353,8 @@ fun WallpaperSheet(
                         ActionChip(
                             stringResource(R.string.slimming_open),
                             Glyph.ChevronRight,
-                        ) { context.startActivity(Intent(context, SystemSlimmingActivity::class.java)) }
+                            onClick = { context.startActivity(Intent(context, SystemSlimmingActivity::class.java)) },
+                        )
                     }
                 }
                 Spacer(Modifier.height(22.dp))
@@ -505,8 +526,11 @@ private fun SectionTitle(title: Int) {
 @Composable
 private fun PinChoice(onPin: (on: Boolean) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        listOf(false to R.string.st_pin_off, true to R.string.st_pin_on).forEach { (on, label) ->
-            Chip(stringResource(label), on = AerialSettings.pinSet == on) {
+        listOf(false to R.string.st_pin_off, true to R.string.st_pin_on).forEachIndexed { index, (on, label) ->
+            Chip(
+                stringResource(label), on = AerialSettings.pinSet == on,
+                rowStart = index == 0, rowEnd = index == 1,
+            ) {
                 if (AerialSettings.pinSet != on) onPin(on)
             }
         }
@@ -550,18 +574,26 @@ private fun WeatherValue() {
 }
 
 @Composable
-private fun ScreensaverChoice(onStart: () -> Unit) {
+private fun ScreensaverChoice(onStart: () -> Unit, onFocusMode: (ScreensaverMode?) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         listOf(
             ScreensaverMode.Aerial to R.string.ss_aerial,
             ScreensaverMode.Videos to R.string.ss_videos,
             ScreensaverMode.Trending to R.string.ss_trending,
             ScreensaverMode.System to R.string.ss_system,
-        ).forEach { (mode, label) ->
-            Chip(stringResource(label), on = Wallpapers.screensaver == mode) { Wallpapers.chooseScreensaver(mode) }
+        ).forEachIndexed { index, (mode, label) ->
+            Chip(
+                stringResource(label), on = Wallpapers.screensaver == mode,
+                onFocused = { onFocusMode(mode) },
+                rowStart = index == 0,
+            ) { Wallpapers.chooseScreensaver(mode) }
         }
         Spacer(Modifier.width(6.dp))
-        Pressable(onClick = onStart, focusedScale = 1.06f) { state ->
+        Pressable(
+            onClick = onStart, focusedScale = 1.06f,
+            modifier = Modifier.focusProperties { right = FocusRequester.Cancel },
+        ) { state ->
+            LaunchedEffect(state.focused) { if (state.focused) onFocusMode(null) }
             val bg by animateColorAsState(if (state.focused) Palette.Focus else Palette.FillStrong, tween(140, easing = Motion.EaseOut), label = "ss-start")
             val fg = if (state.focused) Palette.OnFocus else Palette.Label
             Row(
