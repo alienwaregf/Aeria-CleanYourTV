@@ -166,6 +166,7 @@
     <string name="hero_tv">TV Series</string>
     <string name="trailer_none">No trailer for this title</string>
     <string name="trailer_no_youtube">YouTube is not installed</string>
+    <string name="trailer_hint">Press 🆗 to play the trailer</string>
 
     <string name="st_plate">Top Row</string>
     <string name="st_plate_hint">A plate of frosted glass under the top row, as on Apple TV, or the apps straight on the wallpaper.</string>
