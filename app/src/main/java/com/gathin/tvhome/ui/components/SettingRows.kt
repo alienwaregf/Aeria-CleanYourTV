@@ -26,6 +26,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
@@ -69,15 +71,27 @@ fun Group(note: String? = null, rows: @Composable ColumnScope.(note: (String?) -
     }
 }
 
+/**
+ * One row: the setting's name on the left, its control on the right, a hairline above all but the first.
+ * The note follows [hint] while the row has focus: a hint that describes one option changes as
+ * focus moves along the chips or a chip is chosen (issue #1782: it stayed the one from when the
+ * row took focus).
+ */
 @Composable
 fun SettingRow(label: Int, hint: String?, note: (String?) -> Unit, first: Boolean = false, control: @Composable () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(focused, hint) { if (focused) note(hint) }
     if (!first) Box(Modifier.padding(start = 18.dp).fillMaxWidth().height(1.dp).background(Palette.Hairline))
     Row(
         Modifier
             .fillMaxWidth()
             .height(58.dp)
             .padding(start = 18.dp, end = 10.dp)
-            .onFocusChanged { if (it.hasFocus) note(hint) },
+            .onFocusChanged {
+                // At once as well, so the row above's note does not show for a frame under this row.
+                if (it.hasFocus && !focused) note(hint)
+                focused = it.hasFocus
+            },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicText(stringResource(label), style = Type.Body, modifier = Modifier.weight(1f), maxLines = 1)
@@ -85,6 +99,10 @@ fun SettingRow(label: Int, hint: String?, note: (String?) -> Unit, first: Boolea
     }
 }
 
+/**
+ * A row of chips for one of a few values. With [hintOf], the note is the focused chip's (the
+ * chosen one's before a chip has focus), not one for the row.
+ */
 @Composable
 fun <T> Choices(
     label: Int,
@@ -94,19 +112,43 @@ fun <T> Choices(
     current: T,
     choose: (T) -> Unit,
     first: Boolean = false,
+    hintOf: (@Composable (T) -> String?)? = null,
 ) {
-    SettingRow(label, hint, note, first) {
+    var focusedValue by remember { mutableStateOf<T?>(null) }
+    val rowHint = if (hintOf != null) hintOf(focusedValue ?: current) else hint
+    SettingRow(label, rowHint, note, first) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            options.forEach { (value, text) ->
-                Chip(if (text is Int) stringResource(text) else text.toString(), on = current == value) { choose(value) }
+            options.forEachIndexed { index, (value, text) ->
+                Chip(
+                    if (text is Int) stringResource(text) else text.toString(),
+                    on = current == value,
+                    onFocused = if (hintOf != null) ({ focusedValue = value }) else null,
+                    rowStart = index == 0,
+                    rowEnd = index == options.lastIndex,
+                ) { choose(value) }
             }
         }
     }
 }
 
+/** A pill to pick one of a few options: a check on the chosen one, white when focused. */
+/** A pill to pick one of a few options: a check on the chosen one, white when focused. */
 @Composable
-fun Chip(label: String, on: Boolean, onFocused: (() -> Unit)? = null, onClick: () -> Unit) {
-    Pressable(onClick = onClick, focusedScale = 1.06f) { state ->
+fun Chip(
+    label: String,
+    on: Boolean,
+    onFocused: (() -> Unit)? = null,
+    rowStart: Boolean = false,
+    rowEnd: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Pressable(
+        onClick = onClick, focusedScale = 1.06f,
+        modifier = Modifier.focusProperties {
+            if (rowStart) left = FocusRequester.Cancel
+            if (rowEnd) right = FocusRequester.Cancel
+        },
+    ) { state ->
         if (onFocused != null) LaunchedEffect(state.focused) { if (state.focused) onFocused() }
         val bg by animateColorAsState(
             when {
@@ -128,9 +170,16 @@ fun Chip(label: String, on: Boolean, onFocused: (() -> Unit)? = null, onClick: (
     }
 }
 
+/** A pill that does something rather than choosing a value: white when focused, a glyph after its label. */
 @Composable
-fun ActionChip(label: String, glyph: Glyph, onClick: () -> Unit) {
-    Pressable(onClick = onClick, focusedScale = 1.06f) { state ->
+fun ActionChip(label: String, glyph: Glyph, onClick: () -> Unit, focusRequester: FocusRequester? = null) {
+    Pressable(
+        onClick = onClick, focusRequester = focusRequester, focusedScale = 1.06f,
+        modifier = Modifier.focusProperties {
+            left = FocusRequester.Cancel
+            right = FocusRequester.Cancel
+        },
+    ) { state ->
         val bg by animateColorAsState(if (state.focused) Palette.Focus else Palette.FillStrong, tween(140, easing = Motion.EaseOut), label = "action-bg")
         val fg = if (state.focused) Palette.OnFocus else Palette.Label
         Row(
