@@ -125,6 +125,7 @@ fun Screensaver(visible: Boolean, apps: List<AppEntry>, now: LocalDateTime, skip
             when (Wallpapers.screensaver) {
                 ScreensaverMode.Aerial -> if (aerialFailed) ClockSaver(apps, now) else AerialSaver(
                     now, skips.steps, onUnavailable = { aerialFailed = true }, startAt = remember {
+                        // A paused wallpaper film still holds the decoder (one 4K decoder, MiTV-MFTR0).
                         LiveFilm.onHome?.letDecoderGo()
                         AerialStart.start(context)
                     },
@@ -735,6 +736,11 @@ private fun TrendingSaver(now: LocalDateTime, skips: ScreensaverSkips) {
                 BasicText(
                     displayedItem.overview,
                     style = Type.Body.copy(color = Palette.SecondaryLabel),
+                )
+                Spacer(Modifier.height(6.dp))
+                BasicText(
+                    stringResource(R.string.trailer_hint),
+                    style = Type.Callout.copy(color = Palette.Label),
                 )
             }
             Spacer(Modifier.height(12.dp))
