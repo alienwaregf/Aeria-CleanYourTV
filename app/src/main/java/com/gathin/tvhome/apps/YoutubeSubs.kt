@@ -639,14 +639,17 @@ object YoutubeSubs {
         val out = HashMap<String, String>()
         val idPattern = Regex("\"contentId\":\"([A-Za-z0-9_-]{11})\"")
         val titlePattern = Regex("\"lockupMetadataViewModel\":\\{\"title\":\\{\"content\":\"((?:[^\"\\\\]|\\\\.)*)\"")
+        // Titles sit before their video id in the page JSON (about 5k chars ahead),
+        // so pair each id with the nearest title BEFORE it, not the next one after it.
+        val titles = titlePattern.findAll(page).toList()
         var from = 0
         while (from < page.length) {
             val idMatch = idPattern.find(page, from) ?: break
             val id = idMatch.groupValues[1]
             from = idMatch.range.last + 1
             if (id in out) continue
-            val end = minOf(page.length, idMatch.range.last + 15000)
-            val titleMatch = titlePattern.find(page, idMatch.range.first)?.takeIf { it.range.first < end } ?: continue
+            val start = maxOf(0, idMatch.range.first - 15000)
+            val titleMatch = titles.lastOrNull { it.range.first in start until idMatch.range.first } ?: continue
             val title = unescapeJson(titleMatch.groupValues[1])
             if (title.isNotBlank()) out[id] = title
         }
